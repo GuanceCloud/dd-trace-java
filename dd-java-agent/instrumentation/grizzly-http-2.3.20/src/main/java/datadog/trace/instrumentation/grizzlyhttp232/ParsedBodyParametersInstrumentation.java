@@ -7,13 +7,12 @@ import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
 
 import com.google.auto.service.AutoService;
 import datadog.trace.agent.tooling.Instrumenter;
-import datadog.trace.agent.tooling.muzzle.IReferenceMatcher;
 import datadog.trace.agent.tooling.muzzle.Reference;
-import datadog.trace.agent.tooling.muzzle.ReferenceMatcher;
 import datadog.trace.api.function.BiFunction;
 import datadog.trace.api.gateway.CallbackProvider;
 import datadog.trace.api.gateway.Flow;
 import datadog.trace.api.gateway.RequestContext;
+import datadog.trace.api.gateway.RequestContextSlot;
 import datadog.trace.bootstrap.CallDepthThreadLocalMap;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.api.AgentTracer;
@@ -38,15 +37,14 @@ public class ParsedBodyParametersInstrumentation extends Instrumenter.AppSec
     return "org.glassfish.grizzly.http.util.Parameters";
   }
 
-  private static final ReferenceMatcher PARAM_HASH_VALUES_HASH_MAP_REFERENCE_MATCHER =
-      new ReferenceMatcher(
-          new Reference.Builder("org.glassfish.grizzly.http.util.Parameters")
-              .withField(new String[0], 0, "paramHashValues", "Ljava/util/LinkedHashMap;")
-              .build());
+  private static final Reference PARAM_HASH_VALUES_HASH_MAP_REFERENCE =
+      new Reference.Builder("org.glassfish.grizzly.http.util.Parameters")
+          .withField(new String[0], 0, "paramHashValues", "Ljava/util/LinkedHashMap;")
+          .build();
 
-  private IReferenceMatcher postProcessReferenceMatcher(final ReferenceMatcher origMatcher) {
-    return new IReferenceMatcher.ConjunctionReferenceMatcher(
-        origMatcher, PARAM_HASH_VALUES_HASH_MAP_REFERENCE_MATCHER);
+  @Override
+  public Reference[] additionalMuzzleReferences() {
+    return new Reference[] {PARAM_HASH_VALUES_HASH_MAP_REFERENCE};
   }
 
   @Override
@@ -97,10 +95,10 @@ public class ParsedBodyParametersInstrumentation extends Instrumenter.AppSec
           return;
         }
 
-        CallbackProvider cbp = AgentTracer.get().instrumentationGateway();
-        BiFunction<RequestContext<Object>, Object, Flow<Void>> callback =
+        CallbackProvider cbp = AgentTracer.get().getCallbackProvider(RequestContextSlot.APPSEC);
+        BiFunction<RequestContext, Object, Flow<Void>> callback =
             cbp.getCallback(EVENTS.requestBodyProcessed());
-        RequestContext<Object> requestContext = agentSpan.getRequestContext();
+        RequestContext requestContext = agentSpan.getRequestContext();
         if (requestContext == null || callback == null) {
           return;
         }

@@ -59,6 +59,8 @@ public final class ProfilingConfig {
   public static final String PROFILING_AUXILIARY_TYPE = "profiling.auxiliary";
   public static final String PROFILING_AUXILIARY_TYPE_DEFAULT = "none";
 
+  public static final String PROFILING_ASYNC_ENABLED = "profiling.async.enabled";
+  public static final boolean PROFILING_ASYNC_ENABLED_DEFAULT = false;
   public static final String PROFILING_ASYNC_LIBPATH = "profiling.async.lib";
   public static final String PROFILING_ASYNC_ALLOC_ENABLED = "profiling.async.alloc.enabled";
   public static final boolean PROFILING_ASYNC_ALLOC_ENABLED_DEFAULT = false;
@@ -100,6 +102,12 @@ public final class ProfilingConfig {
   public static final int PROFILING_TRACING_CONTEXT_MAX_SIZE_DEFAULT =
       20_000; // 20k bytes is the default
 
+  public static final String PROFILING_TRACING_CONTEXT_SPAN_INACTIVITY_CHECK =
+      "profiling.tracing_context.span_inactivity_check.ms";
+
+  public static final int PROFILING_TRACING_CONTEXT_SPAN_INACTIVITY_CHECK_DEFAULT =
+      5_000; // 5 secs default
+
   public static final String PROFILING_LEGACY_TRACING_INTEGRATION =
       "profiling.legacy.tracing.integration";
   public static final boolean PROFILING_LEGACY_TRACING_INTEGRATION_DEFAULT = true;
@@ -111,8 +119,7 @@ public final class ProfilingConfig {
   public static final String PROFILING_CHECKPOINTS_SAMPLER_WINDOW_MS =
       "profiling.checkpoints.sampler.sliding-window.ms";
   public static final int PROFILING_CHECKPOINTS_SAMPLER_WINDOW_MS_DEFAULT = 5000;
-  public static final String PROFILING_CHECKPOINTS_SAMPLER_LIMIT =
-      "profiling.checkpoints.sampler.limit";
+  public static final String PROFILING_CHECKPOINTS_SAMPLER_LIMIT = "profiling.checkpoints.limit";
   public static final int PROFILING_CHECKPOINTS_SAMPLER_LIMIT_DEFAULT = 500_000;
   public static final String PROFILING_ENDPOINT_COLLECTION_ENABLED =
       "profiling.endpoint.collection.enabled";

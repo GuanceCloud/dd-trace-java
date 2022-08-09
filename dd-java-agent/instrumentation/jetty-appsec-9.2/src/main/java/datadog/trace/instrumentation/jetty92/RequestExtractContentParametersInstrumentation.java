@@ -7,13 +7,12 @@ import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
 
 import com.google.auto.service.AutoService;
 import datadog.trace.agent.tooling.Instrumenter;
-import datadog.trace.agent.tooling.muzzle.IReferenceMatcher;
 import datadog.trace.agent.tooling.muzzle.Reference;
-import datadog.trace.agent.tooling.muzzle.ReferenceMatcher;
 import datadog.trace.api.function.BiFunction;
 import datadog.trace.api.gateway.CallbackProvider;
 import datadog.trace.api.gateway.Flow;
 import datadog.trace.api.gateway.RequestContext;
+import datadog.trace.api.gateway.RequestContextSlot;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.api.AgentTracer;
 import net.bytebuddy.asm.Advice;
@@ -40,16 +39,15 @@ public class RequestExtractContentParametersInstrumentation extends Instrumenter
         getClass().getName() + "$ExtractContentParametersAdvice");
   }
 
-  private static final ReferenceMatcher REQUEST_REFERENCE_MATCHER =
-      new ReferenceMatcher(
-          new Reference.Builder("org.eclipse.jetty.server.Request")
-              .withMethod(new String[0], 0, "extractContentParameters", MULTI_MAP_INTERNAL_NAME)
-              .withField(new String[0], 0, "_contentParameters", MULTI_MAP_INTERNAL_NAME)
-              .build());
+  private static final Reference REQUEST_REFERENCE =
+      new Reference.Builder("org.eclipse.jetty.server.Request")
+          .withMethod(new String[0], 0, "extractContentParameters", MULTI_MAP_INTERNAL_NAME)
+          .withField(new String[0], 0, "_contentParameters", MULTI_MAP_INTERNAL_NAME)
+          .build();
 
-  private IReferenceMatcher postProcessReferenceMatcher(final ReferenceMatcher origMatcher) {
-    return new IReferenceMatcher.ConjunctionReferenceMatcher(
-        origMatcher, REQUEST_REFERENCE_MATCHER);
+  @Override
+  public Reference[] additionalMuzzleReferences() {
+    return new Reference[] {REQUEST_REFERENCE};
   }
 
   public static class ExtractContentParametersAdvice {
@@ -64,10 +62,10 @@ public class RequestExtractContentParametersInstrumentation extends Instrumenter
         return;
       }
 
-      CallbackProvider cbp = AgentTracer.get().instrumentationGateway();
-      BiFunction<RequestContext<Object>, Object, Flow<Void>> callback =
+      CallbackProvider cbp = AgentTracer.get().getCallbackProvider(RequestContextSlot.APPSEC);
+      BiFunction<RequestContext, Object, Flow<Void>> callback =
           cbp.getCallback(EVENTS.requestBodyProcessed());
-      RequestContext<Object> requestContext = agentSpan.getRequestContext();
+      RequestContext requestContext = agentSpan.getRequestContext();
       if (requestContext == null || callback == null) {
         return;
       }

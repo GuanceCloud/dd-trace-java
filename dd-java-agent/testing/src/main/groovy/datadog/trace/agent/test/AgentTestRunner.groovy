@@ -9,10 +9,10 @@ import datadog.trace.agent.test.asserts.ListWriterAssert
 import datadog.trace.agent.test.checkpoints.TimelineCheckpointer
 import datadog.trace.agent.test.datastreams.MockFeaturesDiscovery
 import datadog.trace.agent.test.datastreams.RecordingDatastreamsPayloadWriter
-import datadog.trace.agent.tooling.bytebuddy.matcher.GlobalIgnores
 import datadog.trace.agent.tooling.AgentInstaller
 import datadog.trace.agent.tooling.Instrumenter
 import datadog.trace.agent.tooling.TracerInstaller
+import datadog.trace.agent.tooling.bytebuddy.matcher.GlobalIgnores
 import datadog.trace.api.Checkpointer
 import datadog.trace.api.Config
 import datadog.trace.api.DDId
@@ -20,8 +20,8 @@ import datadog.trace.api.Platform
 import datadog.trace.api.StatsDClient
 import datadog.trace.api.WellKnownTags
 import datadog.trace.api.config.TracerConfig
-import datadog.trace.api.time.TimeSource
 import datadog.trace.api.time.SystemTimeSource
+import datadog.trace.api.time.TimeSource
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan
 import datadog.trace.bootstrap.instrumentation.api.AgentTracer.TracerAPI
 import datadog.trace.common.metrics.EventListener
@@ -32,6 +32,7 @@ import datadog.trace.core.DDSpan
 import datadog.trace.core.PendingTrace
 import datadog.trace.core.datastreams.DataStreamsCheckpointer
 import datadog.trace.core.datastreams.DatastreamsPayloadWriter
+import datadog.trace.core.datastreams.StubDataStreamsCheckpointer
 import datadog.trace.test.util.DDSpecification
 import de.thetaphi.forbiddenapis.SuppressForbidden
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings
@@ -133,6 +134,13 @@ abstract class AgentTestRunner extends DDSpecification implements AgentBuilder.L
   @Shared
   ClassFileTransformer activeTransformer
 
+  @Shared
+  boolean isLatestDepTest = Boolean.getBoolean('test.dd.latestDepTest')
+
+  protected boolean isDataStreamsEnabled() {
+    return false
+  }
+
   private static void configureLoggingLevels() {
     final Logger rootLogger = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME)
     if (!rootLogger.iteratorForAppenders().hasNext()) {
@@ -146,6 +154,7 @@ abstract class AgentTestRunner extends DDSpecification implements AgentBuilder.L
 
     rootLogger.setLevel(Level.WARN)
     ((Logger) LoggerFactory.getLogger("datadog")).setLevel(Level.DEBUG)
+    ((Logger) LoggerFactory.getLogger("org.testcontainers")).setLevel(Level.DEBUG)
   }
 
   @SuppressForbidden
@@ -161,10 +170,11 @@ abstract class AgentTestRunner extends DDSpecification implements AgentBuilder.L
 
     Sink sink = new Sink() {
         void accept(int messageCount, ByteBuffer buffer) {}
+
         void register(EventListener listener) {}
       }
-    DataStreamsCheckpointer dataStreamsCheckpointer = null
-    if (Platform.isJavaVersionAtLeast(8)) {
+    DataStreamsCheckpointer dataStreamsCheckpointer = new StubDataStreamsCheckpointer()
+    if (Platform.isJavaVersionAtLeast(8) && isDataStreamsEnabled()) {
       try {
         // Fast enough so tests don't take forever
         long bucketDuration = TimeUnit.MILLISECONDS.toNanos(50)
@@ -178,7 +188,6 @@ abstract class AgentTestRunner extends DDSpecification implements AgentBuilder.L
         e.printStackTrace()
       }
     }
-
     TEST_WRITER = new ListWriter()
     TEST_TRACER =
       Spy(
@@ -318,6 +327,7 @@ abstract class AgentTestRunner extends DDSpecification implements AgentBuilder.L
 
   protected static final Comparator<List<DDSpan>> SORT_TRACES_BY_ID = ListWriterAssert.SORT_TRACES_BY_ID
   protected static final Comparator<List<DDSpan>> SORT_TRACES_BY_START = ListWriterAssert.SORT_TRACES_BY_START
+  protected static final Comparator<List<DDSpan>> SORT_TRACES_BY_NAMES = ListWriterAssert.SORT_TRACES_BY_NAMES
 
   void assertTraces(
     final int size,

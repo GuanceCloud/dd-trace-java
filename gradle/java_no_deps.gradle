@@ -8,6 +8,11 @@ apply from: "$rootDir/gradle/spotless.gradle"
 apply from: "$rootDir/gradle/spotbugs.gradle"
 apply from: "$rootDir/gradle/repositories.gradle"
 
+// Only run one testcontainers test at a time
+ext.testcontainersLimit = gradle.sharedServices.registerIfAbsent("testcontainersLimit", BuildService) {
+  maxParallelUsages = 1
+}
+
 // Task for tests that want to run forked in their own separate JVM
 tasks.register('forkedTest', Test) {
 }
@@ -206,6 +211,10 @@ project.afterEvaluate {
           // Disable jacoco for additional JVM tests to speed things up a bit
           enabled = false
         }
+      }
+      if (metadata.languageVersion.asInt() >= 16) {
+        // temporary workaround when using Java16+: some tests require reflective access to java.lang/java.util
+        jvmArgs += ['--add-opens=java.base/java.lang=ALL-UNNAMED', '--add-opens=java.base/java.util=ALL-UNNAMED']
       }
     } else {
       def name = it.name

@@ -1,6 +1,6 @@
 package datadog.trace.agent.tooling.context;
 
-import static datadog.trace.agent.tooling.context.ShouldInjectFieldsMatcher.hasInjectedField;
+import static datadog.trace.agent.tooling.context.ShouldInjectFieldsState.hasInjectedField;
 import static datadog.trace.bootstrap.FieldBackedContextStores.getContextStoreId;
 import static datadog.trace.util.Strings.getInternalName;
 
@@ -501,7 +501,7 @@ final class FieldBackedContextInjector implements AsmVisitorWrapper {
               null,
               computeSVUID());
         } catch (final Exception e) {
-          log.debug("Failed to add serialVersionUID to {}", instrumentedType.getActualName(), e);
+          log.debug("Failed to add serialVersionUID to {}", instrumentedType.getName(), e);
         }
       }
     }

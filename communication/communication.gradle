@@ -6,9 +6,10 @@ dependencies {
   implementation project(':internal-api')
   implementation project(':utils:container-utils')
   implementation project(':utils:socket-utils')
+  implementation project(':utils:version-utils')
 
   api deps.okhttp
-  api group: 'com.squareup.moshi', name: 'moshi', version: '1.9.2'
+  api group: 'com.squareup.moshi', name: 'moshi', version: versions.moshi
   implementation group: 'com.datadoghq', name: 'java-dogstatsd-client', version: "${versions.dogstatsd}"
 
   testImplementation project(':utils:test-utils')
@@ -23,6 +24,7 @@ ext {
   excludedClassesCoverage = [
     'datadog.communication.ddagent.ExternalAgentLauncher',
     'datadog.communication.http.OkHttpUtils',
+    'datadog.communication.http.OkHttpUtils.1',
     'datadog.communication.http.OkHttpUtils.ByteBufferRequestBody',
     'datadog.communication.http.OkHttpUtils.GZipByteBufferRequestBody',
     'datadog.communication.monitor.DDAgentStatsDConnection',

@@ -6,8 +6,9 @@ import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonList;
 import static net.bytebuddy.matcher.ElementMatchers.isSynthetic;
 
-import datadog.trace.agent.tooling.muzzle.IReferenceMatcher;
 import datadog.trace.agent.tooling.muzzle.Reference;
+import datadog.trace.agent.tooling.muzzle.ReferenceMatcher;
+import datadog.trace.agent.tooling.muzzle.ReferenceProvider;
 import datadog.trace.api.Config;
 import datadog.trace.util.Strings;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -47,12 +48,18 @@ public interface Instrumenter {
     TRACING,
     PROFILING,
     APPSEC,
+    IAST,
     CIVISIBILITY
   }
 
   /** Instrumentation that only matches a single named type. */
   interface ForSingleType {
     String instrumentedType();
+  }
+
+  /** Instrumentation that matches a type configured at runtime. */
+  interface ForConfiguredType {
+    String configuredMatchingType();
   }
 
   /** Instrumentation that can match a series of named types. */
@@ -149,7 +156,7 @@ public interface Instrumenter {
        * prevents unnecessary loading of muzzle references during agentBuilder
        * setup.
        */
-      final IReferenceMatcher muzzle = getInstrumentationMuzzle();
+      final ReferenceMatcher muzzle = getInstrumentationMuzzle();
       if (null != muzzle) {
         final boolean isMatch = muzzle.matches(classLoader);
         if (!isMatch) {
@@ -190,7 +197,7 @@ public interface Instrumenter {
      *
      * <p>{@see datadog.trace.agent.tooling.muzzle.MuzzleGradlePlugin}
      */
-    protected IReferenceMatcher getInstrumentationMuzzle() {
+    protected ReferenceMatcher getInstrumentationMuzzle() {
       return null;
     }
 
@@ -202,6 +209,16 @@ public interface Instrumenter {
     /* Classes that the muzzle plugin assumes will be injected */
     public String[] muzzleIgnoredClassNames() {
       return helperClassNames();
+    }
+
+    /** Override this to supply additional Muzzle references at build time. */
+    public Reference[] additionalMuzzleReferences() {
+      return null;
+    }
+
+    /** Override this to supply additional Muzzle references during startup. */
+    public ReferenceProvider runtimeMuzzleReferences() {
+      return null;
     }
 
     /**
@@ -292,6 +309,18 @@ public interface Instrumenter {
     @Override
     public boolean isApplicable(Set<TargetSystem> enabledSystems) {
       return enabledSystems.contains(TargetSystem.APPSEC);
+    }
+  }
+
+  /** Parent class for all IAST related instrumentations */
+  abstract class Iast extends Default {
+    public Iast(String instrumentationName, String... additionalNames) {
+      super(instrumentationName, additionalNames);
+    }
+
+    @Override
+    public boolean isApplicable(Set<TargetSystem> enabledSystems) {
+      return enabledSystems.contains(TargetSystem.IAST);
     }
   }
 

@@ -11,6 +11,7 @@ ext {
     // jacoco does not allow per-method excludes so, here we go
     "com.datadog.profiling.context.ProfilerTracingContextTrackerFactory*",
     "com.datadog.profiling.context.ProfilerTracingContextTracker.TimeTicksProvider*",
+    "com.datadog.profiling.context.StatsDAccessor"
   ]
 }
 
@@ -26,7 +27,7 @@ dependencies {
   implementation deps.slf4j
   main_java11CompileOnly deps.slf4j
   implementation sourceSets.main_java11.output
-  implementation group: 'org.jctools', name: 'jctools-core', version: '3.3.0'
+  implementation deps.jctools
 
   testImplementation deps.junit5
   testImplementation deps.mockito
