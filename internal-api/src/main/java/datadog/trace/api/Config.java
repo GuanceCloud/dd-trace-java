@@ -70,6 +70,7 @@ import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_METHODS;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_RATE_LIMIT;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_REPORT_HOSTNAME;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_RESOLVER_ENABLED;
+import static datadog.trace.api.ConfigDefaults.DEFAULT_JDBC_SQL_OBFUSCATION;
 import static datadog.trace.api.DDTags.HOST_TAG;
 import static datadog.trace.api.DDTags.INTERNAL_HOST_NAME;
 import static datadog.trace.api.DDTags.LANGUAGE_TAG_KEY;
@@ -215,6 +216,7 @@ import static datadog.trace.api.config.TraceInstrumentationConfig.INTEGRATIONS_E
 import static datadog.trace.api.config.TraceInstrumentationConfig.INTEGRATION_SYNAPSE_LEGACY_OPERATION_NAME;
 import static datadog.trace.api.config.TraceInstrumentationConfig.JDBC_CONNECTION_CLASS_NAME;
 import static datadog.trace.api.config.TraceInstrumentationConfig.JDBC_PREPARED_STATEMENT_CLASS_NAME;
+import static datadog.trace.api.config.TraceInstrumentationConfig.JDBC_SQL_OBFUSCATION;
 import static datadog.trace.api.config.TraceInstrumentationConfig.JMS_PROPAGATION_DISABLED_QUEUES;
 import static datadog.trace.api.config.TraceInstrumentationConfig.JMS_PROPAGATION_DISABLED_TOPICS;
 import static datadog.trace.api.config.TraceInstrumentationConfig.KAFKA_CLIENT_BASE64_DECODING_ENABLED;
@@ -578,6 +580,7 @@ public class Config {
   private final String jdbcPreparedStatementClassName;
   private final String jdbcConnectionClassName;
 
+  private final boolean jdbcSqlObfuscation;
   private final Set<String> grpcIgnoredInboundMethods;
   private final Set<String> grpcIgnoredOutboundMethods;
   private final boolean grpcServerTrimPackageResource;
@@ -1120,6 +1123,8 @@ public class Config {
         configProvider.getString(JDBC_PREPARED_STATEMENT_CLASS_NAME, "");
 
     jdbcConnectionClassName = configProvider.getString(JDBC_CONNECTION_CLASS_NAME, "");
+
+    jdbcSqlObfuscation = configProvider.getBoolean(JDBC_SQL_OBFUSCATION,DEFAULT_JDBC_SQL_OBFUSCATION);
 
     awsPropagationEnabled = isPropagationEnabled(true, "aws");
     sqsPropagationEnabled = awsPropagationEnabled && isPropagationEnabled(true, "sqs");
@@ -1947,6 +1952,11 @@ public class Config {
 
   public String getJdbcConnectionClassName() {
     return jdbcConnectionClassName;
+  }
+
+  public boolean getJdbcSqlObfuscation() {
+    System.out.println("default val = "+jdbcSqlObfuscation);
+    return jdbcSqlObfuscation;
   }
 
   public Set<String> getGrpcIgnoredInboundMethods() {

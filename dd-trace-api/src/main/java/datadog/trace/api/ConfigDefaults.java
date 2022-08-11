@@ -112,5 +112,7 @@ public final class ConfigDefaults {
 
   static final boolean DEFAULT_TELEMETRY_ENABLED = false;
 
+  static final boolean DEFAULT_JDBC_SQL_OBFUSCATION = false;
+
   private ConfigDefaults() {}
 }
