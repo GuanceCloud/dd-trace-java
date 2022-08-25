@@ -1,6 +1,5 @@
 package datadog.trace.api
 
-
 import datadog.trace.api.env.FixedCapturedEnvironment
 import datadog.trace.bootstrap.config.provider.ConfigConverter
 import datadog.trace.bootstrap.config.provider.ConfigProvider
@@ -24,11 +23,9 @@ import static datadog.trace.api.config.DebuggerConfig.DEBUGGER_DIAGNOSTICS_INTER
 import static datadog.trace.api.config.DebuggerConfig.DEBUGGER_ENABLED
 import static datadog.trace.api.config.DebuggerConfig.DEBUGGER_EXCLUDE_FILE
 import static datadog.trace.api.config.DebuggerConfig.DEBUGGER_INSTRUMENT_THE_WORLD
-import static datadog.trace.api.config.DebuggerConfig.DEBUGGER_MAX_PAYLOAD_SIZE
 import static datadog.trace.api.config.DebuggerConfig.DEBUGGER_METRICS_ENABLED
 import static datadog.trace.api.config.DebuggerConfig.DEBUGGER_POLL_INTERVAL
 import static datadog.trace.api.config.DebuggerConfig.DEBUGGER_PROBE_FILE_LOCATION
-import static datadog.trace.api.config.DebuggerConfig.DEBUGGER_PROBE_URL
 import static datadog.trace.api.config.DebuggerConfig.DEBUGGER_SNAPSHOT_URL
 import static datadog.trace.api.config.DebuggerConfig.DEBUGGER_UPLOAD_BATCH_SIZE
 import static datadog.trace.api.config.DebuggerConfig.DEBUGGER_UPLOAD_FLUSH_INTERVAL
@@ -74,6 +71,10 @@ import static datadog.trace.api.config.ProfilingConfig.PROFILING_UPLOAD_COMPRESS
 import static datadog.trace.api.config.ProfilingConfig.PROFILING_UPLOAD_PERIOD
 import static datadog.trace.api.config.ProfilingConfig.PROFILING_UPLOAD_TIMEOUT
 import static datadog.trace.api.config.ProfilingConfig.PROFILING_URL
+import static datadog.trace.api.config.RemoteConfigConfig.REMOTE_CONFIG_ENABLED
+import static datadog.trace.api.config.RemoteConfigConfig.REMOTE_CONFIG_INITIAL_POLL_INTERVAL
+import static datadog.trace.api.config.RemoteConfigConfig.REMOTE_CONFIG_MAX_PAYLOAD_SIZE
+import static datadog.trace.api.config.RemoteConfigConfig.REMOTE_CONFIG_URL
 import static datadog.trace.api.config.TraceInstrumentationConfig.DB_CLIENT_HOST_SPLIT_BY_INSTANCE
 import static datadog.trace.api.config.TraceInstrumentationConfig.DB_CLIENT_HOST_SPLIT_BY_INSTANCE_TYPE_SUFFIX
 import static datadog.trace.api.config.TraceInstrumentationConfig.HTTP_CLIENT_HOST_SPLIT_BY_DOMAIN
@@ -105,6 +106,7 @@ import static datadog.trace.api.config.TracerConfig.TRACE_SAMPLE_RATE
 import static datadog.trace.api.config.TracerConfig.TRACE_SAMPLING_OPERATION_RULES
 import static datadog.trace.api.config.TracerConfig.TRACE_SAMPLING_SERVICE_RULES
 import static datadog.trace.api.config.TracerConfig.WRITER_TYPE
+import static datadog.trace.api.config.TracerConfig.TRACE_X_DATADOG_TAGS_MAX_LENGTH
 
 class ConfigTest extends DDSpecification {
 
@@ -138,6 +140,7 @@ class ConfigTest extends DDSpecification {
   private static final DD_PROFILING_API_KEY_VERY_OLD_ENV = "DD_PROFILING_APIKEY"
   private static final DD_PROFILING_TAGS_ENV = "DD_PROFILING_TAGS"
   private static final DD_PROFILING_PROXY_PASSWORD_ENV = "DD_PROFILING_PROXY_PASSWORD"
+  private static final DD_TRACE_X_DATADOG_TAGS_MAX_LENGTH = "DD_TRACE_X_DATADOG_TAGS_MAX_LENGTH"
 
   def "specify overrides via properties"() {
     setup:
@@ -202,14 +205,17 @@ class ConfigTest extends DDSpecification {
     prop.setProperty(PROFILING_EXCEPTION_HISTOGRAM_MAX_COLLECTION_SIZE, "1122")
     prop.setProperty(PROFILING_AGENTLESS, "true")
 
+    prop.setProperty(REMOTE_CONFIG_ENABLED, "true")
+    prop.setProperty(REMOTE_CONFIG_URL, "remote config url")
+    prop.setProperty(REMOTE_CONFIG_INITIAL_POLL_INTERVAL, "3")
+    prop.setProperty(REMOTE_CONFIG_MAX_PAYLOAD_SIZE, "2")
+
     prop.setProperty(DEBUGGER_ENABLED, "true")
     prop.setProperty(DEBUGGER_SNAPSHOT_URL, "snapshot url")
-    prop.setProperty(DEBUGGER_PROBE_URL, "probe url")
     prop.setProperty(DEBUGGER_PROBE_FILE_LOCATION, "file location")
     prop.setProperty(DEBUGGER_UPLOAD_TIMEOUT, "10")
     prop.setProperty(DEBUGGER_UPLOAD_FLUSH_INTERVAL, "1000")
     prop.setProperty(DEBUGGER_UPLOAD_BATCH_SIZE, "200")
-    prop.setProperty(DEBUGGER_MAX_PAYLOAD_SIZE, "2")
     prop.setProperty(DEBUGGER_METRICS_ENABLED, "false")
     prop.setProperty(DEBUGGER_CLASSFILE_DUMP_ENABLED, "true")
     prop.setProperty(DEBUGGER_POLL_INTERVAL, "10")
@@ -217,6 +223,7 @@ class ConfigTest extends DDSpecification {
     prop.setProperty(DEBUGGER_VERIFY_BYTECODE, "true")
     prop.setProperty(DEBUGGER_INSTRUMENT_THE_WORLD, "true")
     prop.setProperty(DEBUGGER_EXCLUDE_FILE, "exclude file")
+    prop.setProperty(TRACE_X_DATADOG_TAGS_MAX_LENGTH, "128")
 
     when:
     Config config = Config.get(prop)
@@ -283,14 +290,17 @@ class ConfigTest extends DDSpecification {
     config.profilingExceptionHistogramMaxCollectionSize == 1122
     config.profilingAgentless == true
 
+    config.remoteConfigEnabled == true
+    config.finalRemoteConfigUrl == 'remote config url'
+    config.remoteConfigInitialPollInterval == 3
+    config.remoteConfigMaxPayloadSizeBytes == 2048
+
     config.debuggerEnabled == true
-    config.getFinalDebuggerProbeUrl() == "probe url"
     config.getFinalDebuggerSnapshotUrl() == "snapshot url"
     config.debuggerProbeFileLocation == "file location"
     config.debuggerUploadTimeout == 10
     config.debuggerUploadFlushInterval == 1000
     config.debuggerUploadBatchSize == 200
-    config.debuggerMaxPayloadSize == 2048
     config.debuggerMetricsEnabled == false
     config.debuggerClassFileDumpEnabled == true
     config.debuggerPollInterval == 10
@@ -298,6 +308,8 @@ class ConfigTest extends DDSpecification {
     config.debuggerVerifyByteCode == true
     config.debuggerInstrumentTheWorld == true
     config.debuggerExcludeFile == "exclude file"
+
+    config.xDatadogTagsMaxLength == 128
   }
 
   def "specify overrides via system properties"() {
@@ -362,14 +374,18 @@ class ConfigTest extends DDSpecification {
     System.setProperty(PREFIX + PROFILING_EXCEPTION_HISTOGRAM_MAX_COLLECTION_SIZE, "1122")
     System.setProperty(PREFIX + PROFILING_AGENTLESS, "true")
 
+    System.setProperty(PREFIX + REMOTE_CONFIG_ENABLED, "true")
+    System.setProperty(PREFIX + REMOTE_CONFIG_URL, "remote config url")
+    System.setProperty(PREFIX + REMOTE_CONFIG_INITIAL_POLL_INTERVAL, "3")
+    System.setProperty(PREFIX + REMOTE_CONFIG_MAX_PAYLOAD_SIZE, "2")
+
     System.setProperty(PREFIX + DEBUGGER_ENABLED, "true")
     System.setProperty(PREFIX + DEBUGGER_SNAPSHOT_URL, "snapshot url")
-    System.setProperty(PREFIX + DEBUGGER_PROBE_URL, "probe url")
     System.setProperty(PREFIX + DEBUGGER_PROBE_FILE_LOCATION, "file location")
     System.setProperty(PREFIX + DEBUGGER_UPLOAD_TIMEOUT, "10")
     System.setProperty(PREFIX + DEBUGGER_UPLOAD_FLUSH_INTERVAL, "1000")
     System.setProperty(PREFIX + DEBUGGER_UPLOAD_BATCH_SIZE, "200")
-    System.setProperty(PREFIX + DEBUGGER_MAX_PAYLOAD_SIZE, "2")
+    System.setProperty(PREFIX + REMOTE_CONFIG_MAX_PAYLOAD_SIZE, "2")
     System.setProperty(PREFIX + DEBUGGER_METRICS_ENABLED, "false")
     System.setProperty(PREFIX + DEBUGGER_CLASSFILE_DUMP_ENABLED, "true")
     System.setProperty(PREFIX + DEBUGGER_POLL_INTERVAL, "10")
@@ -377,6 +393,7 @@ class ConfigTest extends DDSpecification {
     System.setProperty(PREFIX + DEBUGGER_VERIFY_BYTECODE, "true")
     System.setProperty(PREFIX + DEBUGGER_INSTRUMENT_THE_WORLD, "true")
     System.setProperty(PREFIX + DEBUGGER_EXCLUDE_FILE, "exclude file")
+    System.setProperty(PREFIX + TRACE_X_DATADOG_TAGS_MAX_LENGTH, "128")
 
     when:
     Config config = new Config()
@@ -441,14 +458,16 @@ class ConfigTest extends DDSpecification {
     config.profilingExceptionHistogramMaxCollectionSize == 1122
     config.profilingAgentless == true
 
+    config.remoteConfigEnabled == true
+    config.finalRemoteConfigUrl == 'remote config url'
+    config.remoteConfigInitialPollInterval == 3
+    config.remoteConfigMaxPayloadSizeBytes == 2 * 1024
+
     config.debuggerEnabled == true
-    config.getFinalDebuggerProbeUrl() == "probe url"
-    config.getFinalDebuggerSnapshotUrl() == "snapshot url"
     config.debuggerProbeFileLocation == "file location"
     config.debuggerUploadTimeout == 10
     config.debuggerUploadFlushInterval == 1000
     config.debuggerUploadBatchSize == 200
-    config.debuggerMaxPayloadSize == 2048
     config.debuggerMetricsEnabled == false
     config.debuggerClassFileDumpEnabled == true
     config.debuggerPollInterval == 10
@@ -456,6 +475,8 @@ class ConfigTest extends DDSpecification {
     config.debuggerVerifyByteCode == true
     config.debuggerInstrumentTheWorld == true
     config.debuggerExcludeFile == "exclude file"
+
+    config.xDatadogTagsMaxLength == 128
   }
 
   def "specify overrides via env vars"() {
@@ -469,6 +490,7 @@ class ConfigTest extends DDSpecification {
     environmentVariables.set(DD_PROPAGATION_STYLE_INJECT, "Datadog B3")
     environmentVariables.set(DD_JMXFETCH_METRICS_CONFIGS_ENV, "some/file")
     environmentVariables.set(DD_TRACE_REPORT_HOSTNAME, "true")
+    environmentVariables.set(DD_TRACE_X_DATADOG_TAGS_MAX_LENGTH, "42")
 
     when:
     def config = new Config()
@@ -482,6 +504,7 @@ class ConfigTest extends DDSpecification {
     config.propagationStylesToInject.toList() == [PropagationStyle.DATADOG, PropagationStyle.B3]
     config.jmxFetchMetricsConfigs == ["some/file"]
     config.reportHostName == true
+    config.xDatadogTagsMaxLength == 42
   }
 
   def "sys props override env vars"() {

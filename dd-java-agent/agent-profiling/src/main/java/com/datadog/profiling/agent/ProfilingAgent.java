@@ -4,8 +4,9 @@ import static datadog.trace.api.config.ProfilingConfig.PROFILING_START_FORCE_FIR
 import static datadog.trace.api.config.ProfilingConfig.PROFILING_START_FORCE_FIRST_DEFAULT;
 import static datadog.trace.util.AgentThreadFactory.AGENT_THREAD_GROUP;
 
+import com.datadog.profiling.context.AsyncProfilerTracingContextTrackerFactory;
 import com.datadog.profiling.context.JfrTimestampPatch;
-import com.datadog.profiling.context.ProfilerTracingContextTrackerFactory;
+import com.datadog.profiling.context.PerSpanTracingContextTrackerFactory;
 import com.datadog.profiling.controller.ConfigurationException;
 import com.datadog.profiling.controller.Controller;
 import com.datadog.profiling.controller.ControllerFactory;
@@ -18,6 +19,7 @@ import datadog.trace.bootstrap.config.provider.ConfigProvider;
 import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
@@ -69,7 +71,11 @@ public class ProfilingAgent {
       try {
         final Controller controller = ControllerFactory.createController(configProvider);
 
-        ProfilerTracingContextTrackerFactory.register(configProvider);
+        if (AsyncProfilerTracingContextTrackerFactory.isEnabled(configProvider)) {
+          AsyncProfilerTracingContextTrackerFactory.register(configProvider);
+        } else if (PerSpanTracingContextTrackerFactory.isEnabled(configProvider)) {
+          PerSpanTracingContextTrackerFactory.register(configProvider);
+        }
 
         uploader = new ProfileUploader(config, configProvider);
 
@@ -121,14 +127,18 @@ public class ProfilingAgent {
     shutdown(profiler, uploader, snapshot);
   }
 
+  private static final AtomicBoolean shutDownFlag = new AtomicBoolean();
+
   private static void shutdown(
       ProfilingSystem profiler, ProfileUploader uploader, boolean snapshot) {
-    if (profiler != null) {
-      profiler.shutdown(snapshot);
-    }
+    if (shutDownFlag.compareAndSet(false, true)) {
+      if (profiler != null) {
+        profiler.shutdown(snapshot);
+      }
 
-    if (uploader != null) {
-      uploader.shutdown();
+      if (uploader != null) {
+        uploader.shutdown();
+      }
     }
   }
 

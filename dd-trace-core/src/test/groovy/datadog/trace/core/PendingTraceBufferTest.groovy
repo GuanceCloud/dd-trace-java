@@ -5,17 +5,16 @@ import datadog.trace.SamplingPriorityMetadataChecker
 import datadog.trace.api.DDId
 import datadog.trace.api.StatsDClient
 import datadog.trace.api.sampling.PrioritySampling
-import datadog.trace.api.sampling.SamplingMechanism
 import datadog.trace.api.time.SystemTimeSource
 import datadog.trace.bootstrap.instrumentation.api.AgentTracer.NoopPathwayContext
 import datadog.trace.bootstrap.instrumentation.api.ScopeSource
 import datadog.trace.context.TraceScope
+import datadog.trace.core.propagation.DatadogTags
 import datadog.trace.core.scopemanager.ContinuableScopeManager
 import datadog.trace.test.util.DDSpecification
 import spock.lang.Subject
 import spock.lang.Timeout
 import spock.util.concurrent.PollingConditions
-
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -84,6 +83,8 @@ class PendingTraceBufferTest extends DDSpecification {
     _ * tracer.getPartialFlushMinSpans() >> 10
     1 * tracer.getTimeWithNanoTicks(_)
     1 * tracer.onFinish(span)
+    1 * tracer.onStartWork(span)
+    1 * tracer.onFinishWork(span)
     0 * _
 
     when:
@@ -155,8 +156,6 @@ class PendingTraceBufferTest extends DDSpecification {
     }
     0 *  _
     metadataChecker.hasSamplingPriority
-
-
   }
 
   def "buffer full yields immediate write"() {
@@ -176,6 +175,8 @@ class PendingTraceBufferTest extends DDSpecification {
     _ * tracer.onStart(_)
     _ * tracer.getTimeWithNanoTicks(_)
     _ * tracer.onFinish(_)
+    _ * tracer.onStartWork(_)
+    _ * tracer.onFinishWork(_)
     0 * _
 
     when:
@@ -191,6 +192,8 @@ class PendingTraceBufferTest extends DDSpecification {
     1 * tracer.onStart(_)
     2 * tracer.getTimeWithNanoTicks(_)
     1 * tracer.onFinish(_)
+    _ * tracer.onStartWork(_)
+    _ * tracer.onFinishWork(_)
     0 * _
     pendingTrace.isEnqueued == 0
   }
@@ -376,6 +379,8 @@ class PendingTraceBufferTest extends DDSpecification {
     _ * tracer.onStart(_)
     _ * tracer.getTimeWithNanoTicks(_)
     _ * tracer.onFinish(_)
+    _ * tracer.onStartWork(_)
+    _ * tracer.onFinishWork(_)
     0 * _
 
     when: "process the buffer"
@@ -408,7 +413,6 @@ class PendingTraceBufferTest extends DDSpecification {
       "fakeOperation",
       "fakeResource",
       samplingPriority,
-      SamplingMechanism.UNKNOWN,
       null,
       Collections.emptyMap(),
       false,
@@ -416,8 +420,10 @@ class PendingTraceBufferTest extends DDSpecification {
       0,
       trace,
       null,
+      null,
       NoopPathwayContext.INSTANCE,
-      false)
+      false,
+      DatadogTags.factory().empty())
     return DDSpan.create(0, context)
   }
 
@@ -432,7 +438,6 @@ class PendingTraceBufferTest extends DDSpecification {
       "fakeOperation",
       "fakeResource",
       PrioritySampling.UNSET,
-      SamplingMechanism.UNKNOWN,
       null,
       Collections.emptyMap(),
       false,
@@ -440,8 +445,10 @@ class PendingTraceBufferTest extends DDSpecification {
       0,
       trace,
       null,
+      null,
       NoopPathwayContext.INSTANCE,
-      false)
+      false,
+      DatadogTags.factory().empty())
     return DDSpan.create(0, context)
   }
 }

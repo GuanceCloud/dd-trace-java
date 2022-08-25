@@ -7,8 +7,10 @@ import datadog.trace.api.DDId;
 import datadog.trace.api.PropagationStyle;
 import datadog.trace.api.SpanCheckpointer;
 import datadog.trace.api.function.Consumer;
-import datadog.trace.api.gateway.InstrumentationGateway;
+import datadog.trace.api.gateway.CallbackProvider;
 import datadog.trace.api.gateway.RequestContext;
+import datadog.trace.api.gateway.RequestContextSlot;
+import datadog.trace.api.gateway.SubscriptionService;
 import datadog.trace.api.interceptor.TraceInterceptor;
 import datadog.trace.api.sampling.PrioritySampling;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan.Context;
@@ -177,7 +179,11 @@ public class AgentTracer {
      */
     void registerCheckpointer(Checkpointer checkpointer);
 
-    InstrumentationGateway instrumentationGateway();
+    SubscriptionService getSubscriptionService(RequestContextSlot slot);
+
+    CallbackProvider getCallbackProvider(RequestContextSlot slot);
+
+    CallbackProvider getUniversalCallbackProvider();
 
     void setDataStreamCheckpoint(AgentSpan span, List<String> tags);
 
@@ -321,6 +327,21 @@ public class AgentTracer {
     public void registerCheckpointer(Checkpointer checkpointer) {}
 
     @Override
+    public SubscriptionService getSubscriptionService(RequestContextSlot slot) {
+      return SubscriptionService.SubscriptionServiceNoop.INSTANCE;
+    }
+
+    @Override
+    public CallbackProvider getCallbackProvider(RequestContextSlot slot) {
+      return CallbackProvider.CallbackProviderNoop.INSTANCE;
+    }
+
+    @Override
+    public CallbackProvider getUniversalCallbackProvider() {
+      return CallbackProvider.CallbackProviderNoop.INSTANCE;
+    }
+
+    @Override
     public AgentScope.Continuation capture() {
       return null;
     }
@@ -335,10 +356,12 @@ public class AgentTracer {
     public <C> void inject(AgentSpan span, C carrier, Setter<C> setter, PropagationStyle style) {}
 
     @Override
-    public <C> void injectBinaryPathwayContext(AgentSpan span, C carrier, BinarySetter<C> setter) {}
+    public <C> void injectBinaryPathwayContext(
+        AgentSpan span, C carrier, BinarySetter<C> setter, List<String> edgeTags) {}
 
     @Override
-    public <C> void injectPathwayContext(AgentSpan span, C carrier, Setter<C> setter) {}
+    public <C> void injectPathwayContext(
+        AgentSpan span, C carrier, Setter<C> setter, List<String> edgeTags) {}
 
     @Override
     public <C> Context.Extracted extract(final C carrier, final ContextVisitor<C> getter) {
@@ -382,11 +405,6 @@ public class AgentTracer {
 
     @Override
     public void onRootSpanStarted(AgentSpan root) {}
-
-    @Override
-    public InstrumentationGateway instrumentationGateway() {
-      return null;
-    }
 
     @Override
     public void setDataStreamCheckpoint(AgentSpan span, List<String> tags) {}
@@ -527,10 +545,13 @@ public class AgentTracer {
     public void finishThreadMigration() {}
 
     @Override
+    public void startWork() {}
+
+    @Override
     public void finishWork() {}
 
     @Override
-    public RequestContext<Object> getRequestContext() {
+    public RequestContext getRequestContext() {
       return null;
     }
 
@@ -749,10 +770,12 @@ public class AgentTracer {
     public <C> void inject(AgentSpan span, C carrier, Setter<C> setter, PropagationStyle style) {}
 
     @Override
-    public <C> void injectBinaryPathwayContext(AgentSpan span, C carrier, BinarySetter<C> setter) {}
+    public <C> void injectBinaryPathwayContext(
+        AgentSpan span, C carrier, BinarySetter<C> setter, List<String> edgeTags) {}
 
     @Override
-    public <C> void injectPathwayContext(AgentSpan span, C carrier, Setter<C> setter) {}
+    public <C> void injectPathwayContext(
+        AgentSpan span, C carrier, Setter<C> setter, List<String> edgeTags) {}
 
     @Override
     public <C> Context.Extracted extract(final C carrier, final ContextVisitor<C> getter) {
