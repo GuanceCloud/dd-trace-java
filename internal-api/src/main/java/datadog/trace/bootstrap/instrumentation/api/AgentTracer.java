@@ -8,6 +8,7 @@ import datadog.trace.api.PropagationStyle;
 import datadog.trace.api.SpanCheckpointer;
 import datadog.trace.api.function.Consumer;
 import datadog.trace.api.gateway.CallbackProvider;
+import datadog.trace.api.gateway.Flow;
 import datadog.trace.api.gateway.RequestContext;
 import datadog.trace.api.gateway.RequestContextSlot;
 import datadog.trace.api.gateway.SubscriptionService;
@@ -17,7 +18,7 @@ import datadog.trace.bootstrap.instrumentation.api.AgentSpan.Context;
 import datadog.trace.context.ScopeListener;
 import java.io.IOException;
 import java.util.Collections;
-import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class AgentTracer {
@@ -185,7 +186,7 @@ public class AgentTracer {
 
     CallbackProvider getUniversalCallbackProvider();
 
-    void setDataStreamCheckpoint(AgentSpan span, List<String> tags);
+    void setDataStreamCheckpoint(AgentSpan span, LinkedHashMap<String, String> sortedTags);
 
     AgentSpan.Context notifyExtensionStart(Object event);
 
@@ -357,11 +358,14 @@ public class AgentTracer {
 
     @Override
     public <C> void injectBinaryPathwayContext(
-        AgentSpan span, C carrier, BinarySetter<C> setter, List<String> edgeTags) {}
+        AgentSpan span,
+        C carrier,
+        BinarySetter<C> setter,
+        LinkedHashMap<String, String> sortedTags) {}
 
     @Override
     public <C> void injectPathwayContext(
-        AgentSpan span, C carrier, Setter<C> setter, List<String> edgeTags) {}
+        AgentSpan span, C carrier, Setter<C> setter, LinkedHashMap<String, String> sortedTags) {}
 
     @Override
     public <C> Context.Extracted extract(final C carrier, final ContextVisitor<C> getter) {
@@ -407,7 +411,7 @@ public class AgentTracer {
     public void onRootSpanStarted(AgentSpan root) {}
 
     @Override
-    public void setDataStreamCheckpoint(AgentSpan span, List<String> tags) {}
+    public void setDataStreamCheckpoint(AgentSpan span, LinkedHashMap<String, String> sortedTags) {}
 
     @Override
     public AgentSpan.Context notifyExtensionStart(Object event) {
@@ -436,6 +440,14 @@ public class AgentTracer {
     @Override
     public AgentSpan setTag(final String key, final boolean value) {
       return this;
+    }
+
+    @Override
+    public void setRequestBlockingAction(Flow.Action.RequestBlockingAction rba) {}
+
+    @Override
+    public Flow.Action.RequestBlockingAction getRequestBlockingAction() {
+      return null;
     }
 
     @Override
@@ -771,11 +783,14 @@ public class AgentTracer {
 
     @Override
     public <C> void injectBinaryPathwayContext(
-        AgentSpan span, C carrier, BinarySetter<C> setter, List<String> edgeTags) {}
+        AgentSpan span,
+        C carrier,
+        BinarySetter<C> setter,
+        LinkedHashMap<String, String> sortedTags) {}
 
     @Override
     public <C> void injectPathwayContext(
-        AgentSpan span, C carrier, Setter<C> setter, List<String> edgeTags) {}
+        AgentSpan span, C carrier, Setter<C> setter, LinkedHashMap<String, String> sortedTags) {}
 
     @Override
     public <C> Context.Extracted extract(final C carrier, final ContextVisitor<C> getter) {
@@ -942,7 +957,8 @@ public class AgentTracer {
     }
 
     @Override
-    public void setCheckpoint(List<String> tags, Consumer<StatsPoint> pointConsumer) {}
+    public void setCheckpoint(
+        LinkedHashMap<String, String> sortedTags, Consumer<StatsPoint> pointConsumer) {}
 
     @Override
     public byte[] encode() throws IOException {

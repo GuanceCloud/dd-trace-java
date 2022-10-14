@@ -14,6 +14,10 @@ gradlePlugin {
       id = "muzzle"
       implementationClass = "MuzzlePlugin"
     }
+    create("call-site-instrumentation-plugin") {
+      id = "call-site-instrumentation"
+      implementationClass = "CallSiteInstrumentationPlugin"
+    }
   }
 }
 
@@ -27,7 +31,7 @@ dependencies {
   implementation(gradleApi())
   implementation(localGroovy())
 
-  implementation("net.bytebuddy", "byte-buddy-gradle-plugin", "1.12.12")
+  implementation("net.bytebuddy", "byte-buddy-gradle-plugin", "1.12.17")
 
   implementation("org.eclipse.aether", "aether-connector-basic", "1.1.0")
   implementation("org.eclipse.aether", "aether-transport-http", "1.1.0")
@@ -43,4 +47,5 @@ dependencies {
 
 tasks.test {
   useJUnitPlatform()
+  dependsOn(":call-site-instrumentation-plugin:build")
 }

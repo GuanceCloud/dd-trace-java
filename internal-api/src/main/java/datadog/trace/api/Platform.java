@@ -9,6 +9,16 @@ public final class Platform {
   private static final Version JAVA_VERSION = parseJavaVersion(System.getProperty("java.version"));
   private static final JvmRuntime RUNTIME = new JvmRuntime();
 
+  public static boolean hasJfr() {
+    /* Check only for the open-sources JFR implementation.
+     * If it is ever needed to support also the closed sourced JDK 8 version the check should be
+     * enhanced.
+     * Need this custom check because ClassLoaderMatchers.hasClassNamed() does not support bootstrap class loader yet.
+     * Note: the downside of this is that we load some JFR classes at startup.
+     */
+    return ClassLoader.getSystemClassLoader().getResource("jdk/jfr/Event.class") != null;
+  }
+
   /* The method splits java version string by digits. Delimiters are: dot, underscore and plus */
   private static List<Integer> splitDigits(String str) {
     List<Integer> results = new ArrayList<>();
@@ -114,12 +124,22 @@ public final class Platform {
     public final String patches;
 
     public JvmRuntime() {
-      String rtVer = System.getProperty("java.runtime.version");
-      String javaVer = System.getProperty("java.version");
-      this.name = System.getProperty("java.runtime.name");
-      this.vendor = System.getProperty("java.vm.vendor");
+      this(
+          System.getProperty("java.version"),
+          System.getProperty("java.runtime.version"),
+          System.getProperty("java.runtime.name"),
+          System.getProperty("java.vm.vendor"));
+    }
+
+    // Only visible for testing
+    JvmRuntime(String javaVer, String rtVer, String name, String vendor) {
+      this.name = name == null ? "" : name;
+      this.vendor = vendor == null ? "" : vendor;
+      javaVer = javaVer == null ? "" : javaVer;
       this.version = javaVer;
-      this.patches = rtVer.substring(javaVer.length() + 1);
+      rtVer = javaVer.isEmpty() || rtVer == null ? javaVer : rtVer;
+      int patchStart = javaVer.length() + 1;
+      this.patches = (patchStart >= rtVer.length()) ? "" : rtVer.substring(javaVer.length() + 1);
     }
   }
 
@@ -194,6 +214,10 @@ public final class Platform {
     return JAVA_VERSION.isBetween(fromMajor, fromMinor, fromUpdate, toMajor, toMinor, toUpdate);
   }
 
+  public static boolean isLinux() {
+    return System.getProperty("os.name").toLowerCase().contains("linux");
+  }
+
   public static boolean isWindows() {
     // https://mkyong.com/java/how-to-detect-os-in-java-systemgetpropertyosname/
     final String os = System.getProperty("os.name").toLowerCase();
@@ -209,6 +233,10 @@ public final class Platform {
     return isJavaVersion(8)
         && RUNTIME.vendor.contains("Oracle")
         && !RUNTIME.name.contains("OpenJDK");
+  }
+
+  public static boolean isJ9() {
+    return System.getProperty("java.vm.name").contains("J9");
   }
 
   public static String getLangVersion() {

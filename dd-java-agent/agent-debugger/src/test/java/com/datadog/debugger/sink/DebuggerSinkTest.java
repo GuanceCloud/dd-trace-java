@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static utils.TestHelper.getFixtureContent;
 
+import com.datadog.debugger.agent.JsonSnapshotSerializer;
 import com.datadog.debugger.uploader.BatchUploader;
 import com.datadog.debugger.util.DebuggerMetrics;
 import datadog.trace.api.Config;
@@ -51,6 +52,7 @@ public class DebuggerSinkTest {
 
   @BeforeEach
   void setUp() {
+    DebuggerContext.initSnapshotSerializer(new JsonSnapshotSerializer());
     when(config.getHostName()).thenReturn("host-name");
     when(config.getServiceName()).thenReturn("service-name");
     when(config.getEnv()).thenReturn("test");
@@ -72,7 +74,7 @@ public class DebuggerSinkTest {
     sink.flush(sink);
     verify(batchUploader).upload(payloadCaptor.capture(), matches(EXPECTED_SNAPSHOT_TAGS));
     String strPayload = new String(payloadCaptor.getValue(), StandardCharsets.UTF_8);
-    assertTrue(strPayload.matches(regex));
+    assertTrue(strPayload.matches(regex), strPayload);
   }
 
   @Test
@@ -86,7 +88,7 @@ public class DebuggerSinkTest {
     sink.flush(sink);
     verify(batchUploader).upload(payloadCaptor.capture(), matches(EXPECTED_SNAPSHOT_TAGS));
     String strPayload = new String(payloadCaptor.getValue(), StandardCharsets.UTF_8);
-    assertTrue(strPayload.matches(regex));
+    assertTrue(strPayload.matches(regex), strPayload);
   }
 
   @Test
@@ -174,7 +176,7 @@ public class DebuggerSinkTest {
   public void splitDiagnosticsBatch() {
     when(config.getDebuggerUploadBatchSize()).thenReturn(100);
     DebuggerSink sink = new DebuggerSink(config, batchUploader);
-    StringBuilder largeMessageBuilder = new StringBuilder();
+    StringBuilder largeMessageBuilder = new StringBuilder(100_001);
     for (int i = 0; i < 100_000; i++) {
       largeMessageBuilder.append("f");
     }
@@ -193,7 +195,7 @@ public class DebuggerSinkTest {
   public void tooLargeDiagnostic() {
     when(config.getDebuggerUploadBatchSize()).thenReturn(100);
     DebuggerSink sink = new DebuggerSink(config, batchUploader);
-    StringBuilder tooLargeMessageBuilder = new StringBuilder();
+    StringBuilder tooLargeMessageBuilder = new StringBuilder(MAX_PAYLOAD + 1);
     for (int i = 0; i < MAX_PAYLOAD; i++) {
       tooLargeMessageBuilder.append("f");
     }
@@ -207,8 +209,8 @@ public class DebuggerSinkTest {
   public void tooLargeUTF8Diagnostic() {
     when(config.getDebuggerUploadBatchSize()).thenReturn(100);
     DebuggerSink sink = new DebuggerSink(config, batchUploader);
-    StringBuilder tooLargeMessageBuilder = new StringBuilder();
-    for (int i = 0; i < MAX_PAYLOAD / 2; i++) {
+    StringBuilder tooLargeMessageBuilder = new StringBuilder(MAX_PAYLOAD + 4);
+    for (int i = 0; i < MAX_PAYLOAD; i += 4) {
       tooLargeMessageBuilder.append("\uD80C\uDCF0"); // 4 bytes
     }
     String tooLargeMessage = tooLargeMessageBuilder.toString();
@@ -268,7 +270,7 @@ public class DebuggerSinkTest {
           Snapshot.CapturedValue.of("dd.trace_id", "java.lang.String", "123"),
           Snapshot.CapturedValue.of("dd.span_id", "java.lang.String", "456"),
         });
-    SNAPSHOT.getCaptures().setEntry(entry);
+    SNAPSHOT.setEntry(entry);
     sink.addSnapshot(SNAPSHOT);
     String fixtureContent =
         getFixtureContent(SINK_FIXTURE_PREFIX + "/snapshotWithCorrelationIdsRegex.txt");

@@ -2,7 +2,7 @@
 
 # This file lists classes that are globally ignored for matching/transformation
 # Use 0 to allow transformation of packages or classes beneath ignored packages
-# Wildcard lines end with '.' or '$' and match any sub-packages/nested-classes
+# End lines with '.*' to match any sub-package or '$*' to match nested-classes
 
 # system-level ignores are classes that are unsafe or pointless to transform
 
@@ -40,10 +40,13 @@
 1 io.micrometer.*
 1 io.micronaut.tracing.*
 1 java.*
+# allow exceptions for IAST. This is the only way to use existing infrastructure to detect the vulnerability without call site instrumentation.
+0 java.security.MessageDigest
 # allow exception profiling instrumentation
 0 java.lang.Throwable
 0 java.net.HttpURLConnection
 0 java.net.URL
+0 java.nio.DirectByteBuffer
 0 java.rmi.*
 0 java.util.concurrent.*
 1 java.util.concurrent.ConcurrentHashMap*

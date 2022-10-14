@@ -7,8 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import com.datadog.debugger.util.MoshiHelper;
 import com.squareup.moshi.JsonAdapter;
 import com.squareup.moshi.Types;
-import datadog.trace.bootstrap.debugger.FieldExtractor;
-import datadog.trace.bootstrap.debugger.ValueConverter;
+import datadog.trace.bootstrap.debugger.Limits;
 import java.io.IOException;
 import java.lang.reflect.ParameterizedType;
 import java.util.ArrayList;
@@ -23,6 +22,62 @@ public class ConfigurationTest {
     String buffer = serialize();
     System.out.println(buffer);
     deserialize(buffer);
+  }
+
+  @Test
+  public void captureDeserialization() throws IOException {
+    doCaptureDeserialization(
+        "{\"maxReferenceDepth\":3,\"maxCollectionSize\":123,\"maxLength\":242,\"maxFieldCount\":2}",
+        3,
+        123,
+        242,
+        2);
+    doCaptureDeserialization(
+        "{\"maxReferenceDepth\":3}",
+        3,
+        Limits.DEFAULT_COLLECTION_SIZE,
+        Limits.DEFAULT_LENGTH,
+        Limits.DEFAULT_FIELD_COUNT);
+    doCaptureDeserialization(
+        "{\"maxCollectionSize\":123}",
+        Limits.DEFAULT_REFERENCE_DEPTH,
+        123,
+        Limits.DEFAULT_LENGTH,
+        Limits.DEFAULT_FIELD_COUNT);
+    doCaptureDeserialization(
+        "{\"maxLength\":242}",
+        Limits.DEFAULT_REFERENCE_DEPTH,
+        Limits.DEFAULT_COLLECTION_SIZE,
+        242,
+        Limits.DEFAULT_FIELD_COUNT);
+    doCaptureDeserialization(
+        "{\"maxFieldDepth\":7}",
+        Limits.DEFAULT_REFERENCE_DEPTH,
+        Limits.DEFAULT_COLLECTION_SIZE,
+        Limits.DEFAULT_LENGTH,
+        Limits.DEFAULT_FIELD_COUNT);
+    doCaptureDeserialization(
+        "{\"maxFieldCount\":2}",
+        Limits.DEFAULT_REFERENCE_DEPTH,
+        Limits.DEFAULT_COLLECTION_SIZE,
+        Limits.DEFAULT_LENGTH,
+        2);
+  }
+
+  private void doCaptureDeserialization(
+      String json,
+      int expectedMaxRef,
+      int expectedMaxCol,
+      int expectedMaxLen,
+      int expectedMaxFieldCount)
+      throws IOException {
+    JsonAdapter<SnapshotProbe.Capture> adapter =
+        MoshiHelper.createMoshiConfig().adapter(SnapshotProbe.Capture.class);
+    SnapshotProbe.Capture capture = adapter.fromJson(json);
+    assertEquals(expectedMaxRef, capture.getMaxReferenceDepth());
+    assertEquals(expectedMaxCol, capture.getMaxCollectionSize());
+    assertEquals(expectedMaxLen, capture.getMaxLength());
+    assertEquals(expectedMaxFieldCount, capture.getMaxFieldCount());
   }
 
   private String serialize() throws IOException {
@@ -103,11 +158,10 @@ public class ConfigurationTest {
         .active(true)
         .where(typeName, methodName, signature)
         .capture(
-            ValueConverter.DEFAULT_REFERENCE_DEPTH,
-            ValueConverter.DEFAULT_COLLECTION_SIZE,
-            ValueConverter.DEFAULT_LENGTH,
-            FieldExtractor.DEFAULT_FIELD_DEPTH,
-            FieldExtractor.DEFAULT_FIELD_COUNT)
+            Limits.DEFAULT_REFERENCE_DEPTH,
+            Limits.DEFAULT_COLLECTION_SIZE,
+            Limits.DEFAULT_LENGTH,
+            Limits.DEFAULT_FIELD_COUNT)
         .tags("tag1:value1", "tag2:value2")
         .build();
   }

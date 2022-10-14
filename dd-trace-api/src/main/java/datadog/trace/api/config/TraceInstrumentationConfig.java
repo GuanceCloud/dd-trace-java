@@ -77,7 +77,6 @@ public final class TraceInstrumentationConfig {
 
   public static final String IGNITE_CACHE_INCLUDE_KEYS = "ignite.cache.include_keys";
 
-  public static final String OSGI_SEARCH_DEPTH = "osgi.search.depth";
   public static final String OBFUSCATION_QUERY_STRING_REGEXP = "obfuscation.query.string.regexp";
 
   public static final String PLAY_REPORT_HTTP_STATUS = "trace.play.report-http-status";
@@ -87,8 +86,6 @@ public final class TraceInstrumentationConfig {
 
   public static final String SERVLET_ROOT_CONTEXT_SERVICE_NAME =
       "trace.servlet.root-context.service.name";
-
-  public static final String TEMP_JARS_CLEAN_ON_BOOT = "temp.jars.clean.on.boot";
 
   public static final String RESOLVER_OUTLINE_POOL_ENABLED = "resolver.outline.pool.enabled";
   public static final String RESOLVER_OUTLINE_POOL_SIZE = "resolver.outline.pool.size";

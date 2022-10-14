@@ -35,14 +35,12 @@ public class DebuggerAgent {
 
   public static synchronized void run(
       Instrumentation instrumentation, SharedCommunicationObjects sco) {
-
     Config config = Config.get();
-
     if (!config.isDebuggerEnabled()) {
       log.info("Debugger agent disabled");
       return;
     }
-
+    log.info("Starting Dynamic Instrumentation");
     String finalDebuggerSnapshotUrl = config.getFinalDebuggerSnapshotUrl();
     String agentUrl = config.getAgentUrl();
     boolean isSnapshotUploadThroughAgent = Objects.equals(finalDebuggerSnapshotUrl, agentUrl);
@@ -72,6 +70,7 @@ public class DebuggerAgent {
     StatsdMetricForwarder statsdMetricForwarder = new StatsdMetricForwarder(config);
     DebuggerContext.init(sink, configurationUpdater, statsdMetricForwarder);
     DebuggerContext.initClassFilter(new DenyListHelper(null)); // default hard coded deny list
+    DebuggerContext.initSnapshotSerializer(new JsonSnapshotSerializer());
     if (config.isDebuggerInstrumentTheWorld()) {
       setupInstrumentTheWorldTransformer(config, instrumentation, sink, statsdMetricForwarder);
     }
@@ -87,7 +86,6 @@ public class DebuggerAgent {
     configurationPoller = (ConfigurationPoller) sco.configurationPoller(config);
     if (configurationPoller != null) {
       subscribeConfigurationPoller(configurationUpdater);
-      configurationPoller.start();
 
       try {
         /*
@@ -99,6 +97,8 @@ public class DebuggerAgent {
       } catch (final IllegalStateException ex) {
         // The JVM is already shutting down.
       }
+    } else {
+      log.debug("No configuration poller available from SharedCommunicationObjects");
     }
   }
 
@@ -129,15 +129,9 @@ public class DebuggerAgent {
     configurationPoller.addListener(
         Product.LIVE_DEBUGGING,
         ConfigurationDeserializer.INSTANCE,
-        (configKey, newConfig, hinter) -> configurationUpdater.accept(newConfig));
-
-    configurationPoller.addFeaturesListener(
-        // what is live debugger feature name?
-        "live_debugging",
-        DebuggerFeaturesDeserializer.INSTANCE,
-        (prod, newConfig, hinter) -> {
+        (configKey, newConfig, hinter) -> {
+          configurationUpdater.accept(newConfig);
           // TODO: disable debugger
-          return true;
         });
   }
 

@@ -20,6 +20,7 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.Task
 import org.gradle.api.model.ObjectFactory
+import org.gradle.api.tasks.SourceSet
 
 import java.lang.reflect.Method
 import java.security.SecureClassLoader
@@ -81,8 +82,8 @@ class MuzzlePlugin implements Plugin<Project> {
           final ClassLoader userCL = createCompileDepsClassLoader(project, bootstrapProject)
           final ClassLoader instrumentationCL = createInstrumentationClassloader(project, toolingProject)
           Method assertionMethod = instrumentationCL.loadClass('datadog.trace.agent.tooling.muzzle.MuzzleVersionScanPlugin')
-            .getMethod('assertInstrumentationMuzzled', ClassLoader.class, ClassLoader.class, boolean.class)
-          assertionMethod.invoke(null, instrumentationCL, userCL, true)
+            .getMethod('assertInstrumentationMuzzled', ClassLoader.class, ClassLoader.class, boolean.class, String.class)
+          assertionMethod.invoke(null, instrumentationCL, userCL, true, null)
         }
         println "Muzzle executing for $project"
       }
@@ -97,7 +98,11 @@ class MuzzlePlugin implements Plugin<Project> {
         assertionMethod.invoke(null, instrumentationCL)
       }
     }
-    [bootstrapProject, toolingProject]*.afterEvaluate {
+    bootstrapProject.afterEvaluate {
+      compileMuzzle.dependsOn it.tasks.compileJava
+      compileMuzzle.dependsOn it.tasks.compileMain_java11Java
+    }
+    toolingProject.afterEvaluate {
       compileMuzzle.dependsOn it.tasks.compileJava
     }
     muzzle.dependsOn(compileMuzzle)
@@ -229,9 +234,13 @@ class MuzzlePlugin implements Plugin<Project> {
       userUrls.add(jarFile.toURI().toURL())
     }
 
-    for (File f : bootstrapProject.sourceSets.main.runtimeClasspath.getFiles()) {
-      project.getLogger().info("-- Added to instrumentation bootstrap classpath: $f")
-      userUrls.add(f.toURI().toURL())
+    for (SourceSet sourceSet: bootstrapProject.sourceSets) {
+      if (sourceSet.name.startsWith('main')) {
+        for (File f : sourceSet.runtimeClasspath.getFiles()) {
+          project.getLogger().info("-- Added to instrumentation bootstrap classpath: $f")
+          userUrls.add(f.toURI().toURL())
+        }
+      }
     }
     return new URLClassLoader(userUrls.toArray(new URL[0]), (ClassLoader) null)
   }
@@ -382,8 +391,8 @@ class MuzzlePlugin implements Plugin<Project> {
         try {
           // find all instrumenters, get muzzle, and assert
           Method assertionMethod = instrumentationCL.loadClass('datadog.trace.agent.tooling.muzzle.MuzzleVersionScanPlugin')
-            .getMethod('assertInstrumentationMuzzled', ClassLoader.class, ClassLoader.class, boolean.class)
-          assertionMethod.invoke(null, instrumentationCL, userCL, muzzleDirective.assertPass)
+            .getMethod('assertInstrumentationMuzzled', ClassLoader.class, ClassLoader.class, boolean.class, String.class)
+          assertionMethod.invoke(null, instrumentationCL, userCL, muzzleDirective.assertPass, muzzleDirective.name ?: muzzleDirective.module)
         } finally {
           Thread.currentThread().contextClassLoader = ccl
         }

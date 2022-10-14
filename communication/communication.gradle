@@ -14,6 +14,8 @@ dependencies {
   implementation group: 'com.datadoghq', name: 'java-dogstatsd-client', version: "${versions.dogstatsd}"
 
   testImplementation project(':utils:test-utils')
+  testImplementation deps.junit4
+  testImplementation deps.truth
   testImplementation deps.bytebuddy
   testImplementation group: 'org.msgpack', name: 'msgpack-core', version: '0.8.20'
   testImplementation group: 'org.msgpack', name: 'jackson-dataformat-msgpack', version: '0.8.20'
@@ -24,6 +26,8 @@ ext {
   minimumInstructionCoverage = 0.8
   excludedClassesCoverage = [
     'datadog.communication.ddagent.ExternalAgentLauncher',
+    'datadog.communication.ddagent.SharedCommunicationObjects.FixedConfigUrlSupplier',
+    'datadog.communication.ddagent.SharedCommunicationObjects.RetryConfigUrlSupplier',
     'datadog.communication.http.OkHttpUtils',
     'datadog.communication.http.OkHttpUtils.1',
     'datadog.communication.http.OkHttpUtils.ByteBufferRequestBody',

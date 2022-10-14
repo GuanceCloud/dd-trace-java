@@ -55,6 +55,7 @@ import java.lang.instrument.Instrumentation
 import java.lang.reflect.InvocationTargetException
 import java.nio.ByteBuffer
 import java.nio.file.Files
+import java.security.ProtectionDomain
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicInteger
@@ -147,7 +148,11 @@ abstract class AgentTestRunner extends DDSpecification implements AgentBuilder.L
   }
 
   private static void configureLoggingLevels() {
-    final Logger rootLogger = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME)
+    def logger = LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME)
+    if (!(logger instanceof Logger)) {
+      return
+    }
+    final Logger rootLogger = logger
     if (!rootLogger.iteratorForAppenders().hasNext()) {
       try {
         // previous test wiped out the logging config bring it back for the next test
@@ -227,7 +232,7 @@ abstract class AgentTestRunner extends DDSpecification implements AgentBuilder.L
   }
 
   private void enableAppSec() {
-    if (Config.get().isAppSecEnabled()) {
+    if (Config.get().getAppSecEnabledConfig()) {
       return
     }
 
@@ -242,7 +247,12 @@ abstract class AgentTestRunner extends DDSpecification implements AgentBuilder.L
       .type(named("datadog.trace.api.Config"))
       .transform(new AgentBuilder.Transformer() {
         @Override
-        DynamicType.Builder<?> transform(DynamicType.Builder<?> builder, TypeDescription typeDescription, ClassLoader classLoader, JavaModule module) {
+        DynamicType.Builder<?> transform(
+          DynamicType.Builder<?> builder,
+          TypeDescription typeDescription,
+          ClassLoader classLoader,
+          JavaModule module,
+          ProtectionDomain pd) {
           builder.method(named("isAppSecEnabled")).intercept(FixedValue.value(true))
         }
       }).installOn(INSTRUMENTATION)

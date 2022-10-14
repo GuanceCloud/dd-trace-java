@@ -2,6 +2,7 @@ package com.datadog.debugger.agent;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.junit.jupiter.api.condition.JRE.JAVA_11;
 import static org.junit.jupiter.api.condition.JRE.JAVA_8;
 import static org.mockito.ArgumentMatchers.any;
@@ -13,6 +14,7 @@ import static org.mockito.Mockito.verify;
 import com.datadog.debugger.util.RemoteConfigHelper;
 import datadog.common.container.ContainerInfo;
 import datadog.communication.ddagent.SharedCommunicationObjects;
+import datadog.remoteconfig.ConfigurationPoller;
 import datadog.trace.api.Config;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -86,10 +88,10 @@ public class DebuggerAgentTest {
   public void runDisabled() {
     setFieldInConfig(Config.get(), "debuggerEnabled", false);
     URL probeDefinitionUrl = DebuggerAgentTest.class.getResource("/test_probe.json");
-    System.setProperty("dd.debugger.config-file", probeDefinitionUrl.getFile());
+    System.setProperty("dd.dynamic.instrumentation.config-file", probeDefinitionUrl.getFile());
     DebuggerAgent.run(inst, new SharedCommunicationObjects());
     verify(inst, never()).addTransformer(any(), eq(true));
-    System.clearProperty("dd.debugger.config-file");
+    System.clearProperty("dd.dynamic.instrumentation.config-file");
   }
 
   @Test
@@ -119,7 +121,11 @@ public class DebuggerAgentTest {
     } catch (IOException e) {
       e.printStackTrace();
     }
-    DebuggerAgent.run(inst, new SharedCommunicationObjects());
+    SharedCommunicationObjects sharedCommunicationObjects = new SharedCommunicationObjects();
+    DebuggerAgent.run(inst, sharedCommunicationObjects);
+    ConfigurationPoller configurationPoller =
+        (ConfigurationPoller) sharedCommunicationObjects.configurationPoller(Config.get());
+    configurationPoller.start();
     RecordedRequest request = datadogAgentServer.takeRequest(5, TimeUnit.SECONDS);
     assertNotNull(request);
     assertEquals("/info", request.getPath());
@@ -157,6 +163,8 @@ public class DebuggerAgentTest {
     String infoContent =
         "{\"endpoints\": [\"v0.4/traces\", \"debugger/v1/input\", \"v0.7/config\"] }";
     server.enqueue(new MockResponse().setResponseCode(200).setBody(infoContent));
+    // sometimes this test fails because getAllLoadedClasses returns null
+    assumeTrue(inst.getAllLoadedClasses() != null);
     DebuggerAgent.run(inst, new SharedCommunicationObjects());
     verify(inst, atLeastOnce()).addTransformer(any(), eq(true));
   }

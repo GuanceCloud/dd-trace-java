@@ -10,13 +10,18 @@ import spock.lang.IgnoreIf
 class IastSpringBootSmokeTest extends AbstractServerSmokeTest {
 
   @Override
+  def logLevel() {
+    return "debug"
+  }
+
+  @Override
   ProcessBuilder createProcessBuilder() {
     String springBootShadowJar = System.getProperty("datadog.smoketest.springboot.shadowJar.path")
 
     List<String> command = new ArrayList<>()
     command.add(javaPath())
     command.addAll(defaultJavaProperties)
-    command.addAll(["-Ddd.appsec.enabled=true", "-Ddd.iast.enabled=true"])
+    command.addAll(["-Ddd.appsec.enabled=true", "-Ddd.iast.enabled=true", "-Ddd.iast-request-sampling=100"])
     command.addAll((String[]) ["-jar", springBootShadowJar, "--server.port=${httpPort}"])
     ProcessBuilder processBuilder = new ProcessBuilder(command)
     processBuilder.directory(new File(buildDirectory))
@@ -41,6 +46,11 @@ class IastSpringBootSmokeTest extends AbstractServerSmokeTest {
       if (it.contains("IAST is starting")) {
         startMsg = it
       }
+      // Check that there's no logged exception about missing classes from Datadog.
+      // We had this problem before with JDK9StackWalker.
+      if (it.contains("java.lang.ClassNotFoundException: datadog/")) {
+        errorMsg = it
+      }
     }
 
     then: 'there are no errors in the log and IAST has started'
@@ -63,7 +73,26 @@ class IastSpringBootSmokeTest extends AbstractServerSmokeTest {
     responseBodyStr.contains("Sup Dawg")
     response.body().contentType().toString().contains("text/plain")
     response.code() == 200
+
     checkLog()
     !logHasErrors
+  }
+
+  def "iast.enabled tag is present"() {
+    setup:
+    String url = "http://localhost:${httpPort}/greeting"
+    def request = new Request.Builder().url(url).get().build()
+
+    when:
+    client.newCall(request).execute()
+
+    then:
+    Boolean foundEnabledTag = false
+    checkLog {
+      if (it.contains("_dd.iast.enabled=1")) {
+        foundEnabledTag = true
+      }
+    }
+    foundEnabledTag
   }
 }
