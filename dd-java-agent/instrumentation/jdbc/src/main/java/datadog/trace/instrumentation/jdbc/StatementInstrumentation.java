@@ -20,10 +20,12 @@ import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.jdbc.DBInfo;
 import datadog.trace.bootstrap.instrumentation.jdbc.DBQueryInfo;
+
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Map;
+
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.matcher.ElementMatcher;
@@ -53,8 +55,8 @@ public final class StatementInstrumentation extends Instrumenter.Tracing
 
   @Override
   public String[] helperClassNames() {
-    return new String[] {
-      packageName + ".JDBCDecorator",
+    return new String[]{
+        packageName + ".JDBCDecorator",
     };
   }
 
@@ -76,6 +78,7 @@ public final class StatementInstrumentation extends Instrumenter.Tracing
         return null;
       }
       try {
+        System.out.println("--------into--------StatementAdvice-------------------------");
         final Connection connection = statement.getConnection();
         final AgentSpan span = startSpan(DATABASE_QUERY);
         DECORATE.afterStart(span);

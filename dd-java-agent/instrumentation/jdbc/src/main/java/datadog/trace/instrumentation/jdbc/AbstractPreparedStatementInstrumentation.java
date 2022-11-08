@@ -17,11 +17,13 @@ import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.jdbc.DBInfo;
 import datadog.trace.bootstrap.instrumentation.jdbc.DBQueryInfo;
+
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashMap;
 import java.util.Map;
+
 import net.bytebuddy.asm.Advice;
 
 public abstract class AbstractPreparedStatementInstrumentation extends Instrumenter.Tracing {
@@ -33,8 +35,8 @@ public abstract class AbstractPreparedStatementInstrumentation extends Instrumen
 
   @Override
   public String[] helperClassNames() {
-    return new String[] {
-      packageName + ".JDBCDecorator",
+    return new String[]{
+        packageName + ".JDBCDecorator",
     };
   }
 
@@ -51,6 +53,18 @@ public abstract class AbstractPreparedStatementInstrumentation extends Instrumen
     transformation.applyAdvice(
         nameStartsWith("execute").and(takesArguments(0)).and(isPublic()),
         AbstractPreparedStatementInstrumentation.class.getName() + "$PreparedStatementAdvice");
+    transformation.applyAdvice(
+        nameStartsWith("setString").and(takesArguments(2)).and(isPublic()),
+        AbstractPreparedStatementInstrumentation.class.getName() + "$SetStringAdvice");
+  }
+
+  public static class SetStringAdvice {
+    @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
+    public static void stopSpan(
+        @Advice.This final Statement statement, @Advice.Thrown final Throwable throwable) {
+      System.out.println("-------------into-----------------");
+      System.out.println("--------------SetStringAdvice----------------");
+    }
   }
 
   public static class PreparedStatementAdvice {
@@ -61,6 +75,7 @@ public abstract class AbstractPreparedStatementInstrumentation extends Instrumen
       if (depth > 0) {
         return null;
       }
+      System.out.println("---------into-------PreparedStatementAdvice-------------------------");
       try {
         Connection connection = statement.getConnection();
         DBQueryInfo queryInfo =
