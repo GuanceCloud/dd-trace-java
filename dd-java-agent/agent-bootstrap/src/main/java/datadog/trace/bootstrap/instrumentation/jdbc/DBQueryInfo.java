@@ -51,11 +51,11 @@ public final class DBQueryInfo {
 
     if (SqlObfuscation) {
       this.originSql = UTF8BytesString.create(sql.getBytes(UTF_8));
-      this.vals = new HashMap<>();
     } else {
       this.originSql = UTF8BytesString.EMPTY;
     }
-
+    
+    this.vals = new HashMap<>();
     this.operation = UTF8BytesString.create(extractOperation(this.sql));
   }
 

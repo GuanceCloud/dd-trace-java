@@ -60,7 +60,7 @@ public abstract class AbstractPreparedStatementInstrumentation extends Instrumen
   public static class SetStringAdvice {
     @Advice.OnMethodEnter(suppress = Throwable.class)
     public static void StartSetString(
-        @Advice.Argument(0) final int index, @Advice.Argument(1) final Object arg,
+        @Advice.Argument(0) final int index, @Advice.Argument(1) final String arg,
         @Advice.This final PreparedStatement statement) {
       System.out.println("-------------into-----------------");
       System.out.println("--------------SetStringAdvice----------------");
