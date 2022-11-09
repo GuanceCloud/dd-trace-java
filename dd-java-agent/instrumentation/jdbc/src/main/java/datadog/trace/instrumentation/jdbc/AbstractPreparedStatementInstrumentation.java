@@ -19,6 +19,7 @@ import datadog.trace.bootstrap.instrumentation.jdbc.DBInfo;
 import datadog.trace.bootstrap.instrumentation.jdbc.DBQueryInfo;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashMap;
@@ -59,18 +60,18 @@ public abstract class AbstractPreparedStatementInstrumentation extends Instrumen
   }
 
   public static class SetStringAdvice {
-//    @Advice.OnMethodEnter(suppress = Throwable.class)
-//    public static void StartSetString(
-//        @Advice.Argument(0) final int index, @Advice.Argument(1) final String arg,
-//        @Advice.This final Statement statement, @Advice.Thrown final Throwable throwable) {
-//      System.out.println("-------------into-----------------");
-//      System.out.println("--------------SetStringAdvice----------------");
-//      System.out.println("--------------" + index + "----------------");
-//      System.out.println("--------------" + arg + "----------------");
-//      System.out.println("--------------SetStringAdvice----------------");
-//      System.out.println("set args to context");
-//
-//    }
+    @Advice.OnMethodEnter(suppress = Throwable.class)
+    public static void StartSetString(
+        @Advice.Argument(0) final int index, @Advice.Argument(1) final String arg,
+        @Advice.This final PreparedStatement statement) {
+      System.out.println("-------------into-----------------");
+      System.out.println("--------------SetStringAdvice----------------");
+      System.out.println("--------------" + index + "----------------");
+      System.out.println("--------------" + arg + "----------------");
+      System.out.println("--------------SetStringAdvice----------------");
+      System.out.println("set args to context");
+
+    }
 
     @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
     public static void stopSpan(
