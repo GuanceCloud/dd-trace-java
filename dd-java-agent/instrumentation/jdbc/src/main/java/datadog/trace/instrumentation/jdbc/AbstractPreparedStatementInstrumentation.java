@@ -71,6 +71,15 @@ public abstract class AbstractPreparedStatementInstrumentation extends Instrumen
       System.out.println("set args to context");
 
     }
+
+    @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
+    public static void stopSpan(
+        @Advice.Thrown final Throwable throwable) {
+      System.out.println("-------------into-----------------");
+      System.out.println("--------------SetStringAdvice----------------");
+      System.out.println("--------------SetStringAdvice----------------");
+      System.out.println("set args to context");
+    }
   }
 
   public static class PreparedStatementAdvice {
