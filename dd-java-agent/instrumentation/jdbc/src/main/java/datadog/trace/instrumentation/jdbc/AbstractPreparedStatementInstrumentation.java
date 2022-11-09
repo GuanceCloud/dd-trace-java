@@ -12,6 +12,7 @@ import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
 
 import datadog.trace.agent.tooling.Instrumenter;
 import datadog.trace.bootstrap.CallDepthThreadLocalMap;
+import datadog.trace.bootstrap.ContextStore;
 import datadog.trace.bootstrap.InstrumentationContext;
 import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
@@ -70,6 +71,23 @@ public abstract class AbstractPreparedStatementInstrumentation extends Instrumen
       System.out.println("--------------" + arg + "----------------");
       System.out.println("--------------SetStringAdvice----------------");
       System.out.println("set args to context");
+      int depth = CallDepthThreadLocalMap.incrementCallDepth(Statement.class);
+      if (depth > 0) {
+        return;
+      }
+      try {
+        ContextStore<Statement, DBQueryInfo> contextStore = InstrumentationContext.get(Statement.class, DBQueryInfo.class);
+        DBQueryInfo queryInfo = contextStore.get(statement);
+        if (null == queryInfo) {
+          logMissingQueryInfo(statement);
+          return;
+        }
+        queryInfo.setVal(index, arg);
+        contextStore.put(statement, queryInfo);
+        System.out.println("----------------------------put----------------------");
+      } catch (SQLException e) {
+        return;
+      }
 
     }
 

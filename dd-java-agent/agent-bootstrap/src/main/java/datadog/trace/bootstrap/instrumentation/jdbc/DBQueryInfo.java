@@ -6,6 +6,9 @@ import datadog.trace.api.function.Function;
 import datadog.trace.api.normalize.SQLNormalizer;
 import datadog.trace.bootstrap.instrumentation.api.UTF8BytesString;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public final class DBQueryInfo {
 
   private static final int MAX_SQL_LENGTH_TO_CACHE = 4096;
@@ -34,15 +37,30 @@ public final class DBQueryInfo {
   }
 
   private final UTF8BytesString operation;
+
+  private Map<Integer, String> vals;
   private final UTF8BytesString sql;
 
   public DBQueryInfo(String sql) {
     this.sql = SQLNormalizer.normalize(sql);
     this.operation = UTF8BytesString.create(extractOperation(this.sql));
+    this.vals = new HashMap<>();
   }
 
   public UTF8BytesString getOperation() {
     return operation;
+  }
+
+  public Map<Integer, String> getVals() {
+    if (this.vals == null) {
+      this.vals = new HashMap<Integer, String>();
+      return this.vals;
+    }
+    return this.vals;
+  }
+
+  public void setVal(int index, String val) {
+    this.vals.put(index, val);
   }
 
   public UTF8BytesString getSql() {
