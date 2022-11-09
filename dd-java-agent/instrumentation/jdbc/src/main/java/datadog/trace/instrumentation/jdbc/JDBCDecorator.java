@@ -17,7 +17,6 @@ import java.sql.DatabaseMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.*;
-import java.util.stream.Collectors;
 
 import static datadog.trace.bootstrap.instrumentation.api.Tags.DB_OPERATION;
 
@@ -181,19 +180,38 @@ public class JDBCDecorator extends DatabaseClientDecorator<DBInfo> {
       if (!originSlq.equals("")) {
         Map<Integer, String> map = info.getVals();
         // sort map
-        HashMap<Integer, String> resource = map.entrySet()
+      /*  HashMap<Integer, String> resource = map.entrySet()
             .stream()
             .sorted(Map.Entry.comparingByKey())
             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue,
-                (k, v) -> k, LinkedHashMap::new));
+                (k, v) -> k, LinkedHashMap::new));*/
+        //将keySet放入list
+        ArrayList<Integer> list = new ArrayList<>(map.keySet());
+        //调用sort方法并重写比较器进行升/降序
+        Collections.sort(list, new Comparator<Integer>() {
+          @Override
+          public int compare(Integer o1, Integer o2) {
+            return o1 > o2 ? 1 : -1;
+          }
+        });
 
+        Iterator<Integer> iterator = list.iterator();
         StringBuilder params = new StringBuilder();
+        while ((iterator.hasNext())) {
+          Integer key = iterator.next();
+          String value = map.get(key);
+          System.out.print(key + "=" + value + ",");
 
-        for (int key : resource.keySet()) {
+          System.out.println("Key: " + key + " Value: " + value);
+          params.append(value).append(", ");
+          originSlq = originSlq.replaceFirst("\\?", value);
+        }
+
+   /*     for (int key : resource.keySet()) {
           System.out.println("Key: " + key + " Value: " + resource.get(key));
           params.append(resource.get(key)).append(", ");
           originSlq = originSlq.replaceFirst("\\?", resource.get(key));
-        }
+        }*/
 
         span.setTag("sql.params", params.toString());
         span.setTag("db.sql.origin", originSlq);
