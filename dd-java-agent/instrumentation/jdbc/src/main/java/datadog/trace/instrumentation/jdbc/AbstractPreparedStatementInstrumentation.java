@@ -69,23 +69,29 @@ public abstract class AbstractPreparedStatementInstrumentation extends Instrumen
       System.out.println("--------------SetStringAdvice----------------");
       System.out.println("--------------" + index + "----------------");
       System.out.println("--------------" + arg + "----------------");
-      System.out.println("--------------SetStringAdvice----------------");
       System.out.println("set args to context");
-      int depth = CallDepthThreadLocalMap.incrementCallDepth(Statement.class);
-      if (depth > 0) {
-        return;
-      }
+//      int depth = CallDepthThreadLocalMap.incrementCallDepth(Statement.class);
+//      if (depth > 0) {
+//        return;
+//      }
       try {
         ContextStore<Statement, DBQueryInfo> contextStore = InstrumentationContext.get(Statement.class, DBQueryInfo.class);
+        if (contextStore == null) {
+          System.out.println("------------------(contextStore == null)--------------------------------");
+          return;
+        }
+
         DBQueryInfo queryInfo = contextStore.get(statement);
         if (null == queryInfo) {
           logMissingQueryInfo(statement);
+          System.out.println("------------------MissingQueryInfo--------------------------------");
           return;
         }
         queryInfo.setVal(index, arg);
         contextStore.put(statement, queryInfo);
-        System.out.println("----------------------------put----------------------");
+        System.out.println("----------------------------put---------out-------------");
       } catch (SQLException e) {
+        System.out.println("----------------------------put error----------------------" + e);
         return;
       }
 
@@ -94,10 +100,7 @@ public abstract class AbstractPreparedStatementInstrumentation extends Instrumen
     @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
     public static void stopSpan(
         @Advice.Thrown final Throwable throwable) {
-      System.out.println("-------------into-----------------");
-      System.out.println("--------------SetStringAdvice----------------");
-      System.out.println("--------------SetStringAdvice----------------");
-      System.out.println("set args to context");
+      System.out.println("-------------into--------OnMethodExit---------");
     }
   }
 
