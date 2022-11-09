@@ -53,7 +53,7 @@ public abstract class AbstractPreparedStatementInstrumentation extends Instrumen
         nameStartsWith("execute").and(takesArguments(0)).and(isPublic()),
         AbstractPreparedStatementInstrumentation.class.getName() + "$PreparedStatementAdvice");
     transformation.applyAdvice(
-        nameStartsWith("set").and(takesArguments(2)).and(isPublic()),
+        nameStartsWith("setString").and(takesArguments(2)).and(isPublic()),
         AbstractPreparedStatementInstrumentation.class.getName() + "$SetStringAdvice");
   }
 
