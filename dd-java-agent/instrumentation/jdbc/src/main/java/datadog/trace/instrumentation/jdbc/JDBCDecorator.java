@@ -16,8 +16,8 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
 
 import static datadog.trace.bootstrap.instrumentation.api.Tags.DB_OPERATION;
 
@@ -62,7 +62,7 @@ public class JDBCDecorator extends DatabaseClientDecorator<DBInfo> {
 
   @Override
   protected String[] instrumentationNames() {
-    return new String[] {"jdbc"};
+    return new String[]{"jdbc"};
   }
 
   @Override
@@ -176,10 +176,27 @@ public class JDBCDecorator extends DatabaseClientDecorator<DBInfo> {
     if (null != info) {
       span.setResourceName(info.getSql());
       span.setTag(DB_OPERATION, info.getOperation());
+
       String originSlq = info.getOriginSql().toString();
       if (!originSlq.equals("")) {
-        //  span.setTag("db.sql.origin", originSlq);
-        span.setTag("db.sql.origin", info.getOriginSql());
+        Map<Integer, String> map = info.getVals();
+        // sort map
+        HashMap<Integer, String> resource = map.entrySet()
+            .stream()
+            .sorted(Map.Entry.comparingByKey())
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue,
+                (k, v) -> k, LinkedHashMap::new));
+
+        StringBuilder params = new StringBuilder();
+
+        for (int key : resource.keySet()) {
+          System.out.println("Key: " + key + " Value: " + resource.get(key));
+          params.append(resource.get(key)).append(", ");
+          originSlq = originSlq.replaceFirst("\\?", resource.get(key));
+        }
+
+        span.setTag("sql.params", params.toString());
+        span.setTag("db.sql.origin", originSlq);
       }
     } else {
       span.setResourceName(DB_QUERY);

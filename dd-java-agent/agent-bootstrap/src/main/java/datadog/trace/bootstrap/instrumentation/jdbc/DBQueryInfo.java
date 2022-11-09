@@ -7,6 +7,9 @@ import datadog.trace.api.function.Function;
 import datadog.trace.api.normalize.SQLNormalizer;
 import datadog.trace.bootstrap.instrumentation.api.UTF8BytesString;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 public final class DBQueryInfo {
@@ -38,7 +41,7 @@ public final class DBQueryInfo {
 
   private final UTF8BytesString operation;
   private final UTF8BytesString sql;
-
+  private Map<Integer, String> vals;
   private UTF8BytesString originSql;
 
   public boolean SqlObfuscation = Config.get().getJdbcSqlObfuscation();
@@ -48,6 +51,7 @@ public final class DBQueryInfo {
 
     if (SqlObfuscation) {
       this.originSql = UTF8BytesString.create(sql.getBytes(UTF_8));
+      this.vals = new HashMap<>();
     } else {
       this.originSql = UTF8BytesString.EMPTY;
     }
@@ -57,6 +61,20 @@ public final class DBQueryInfo {
 
   public UTF8BytesString getOperation() {
     return operation;
+  }
+
+  public Map<Integer, String> getVals() {
+    if (this.vals == null) {
+      this.vals = new HashMap<Integer, String>();
+      return this.vals;
+    }
+    return this.vals;
+  }
+
+  public void setVal(int index, String val) {
+    if (SqlObfuscation) {
+      this.vals.put(index, val);
+    }
   }
 
   public UTF8BytesString getSql() {
