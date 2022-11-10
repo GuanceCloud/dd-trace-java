@@ -41,7 +41,7 @@ public final class DBQueryInfo {
 
   private final UTF8BytesString operation;
   private final UTF8BytesString sql;
-  private Map<Integer, String> vals;
+  private final Map<Integer, String> vals;
   private UTF8BytesString originSql;
 
   public boolean SqlObfuscation = Config.get().getJdbcSqlObfuscation();
@@ -54,7 +54,7 @@ public final class DBQueryInfo {
     } else {
       this.originSql = UTF8BytesString.EMPTY;
     }
-    
+
     this.vals = new HashMap<>();
     this.operation = UTF8BytesString.create(extractOperation(this.sql));
   }
@@ -64,10 +64,6 @@ public final class DBQueryInfo {
   }
 
   public Map<Integer, String> getVals() {
-    if (this.vals == null) {
-      this.vals = new HashMap<Integer, String>();
-      return this.vals;
-    }
     return this.vals;
   }
 

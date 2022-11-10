@@ -179,12 +179,6 @@ public class JDBCDecorator extends DatabaseClientDecorator<DBInfo> {
       String originSlq = info.getOriginSql().toString();
       if (!originSlq.equals("")) {
         Map<Integer, String> map = info.getVals();
-        // sort map
-      /*  HashMap<Integer, String> resource = map.entrySet()
-            .stream()
-            .sorted(Map.Entry.comparingByKey())
-            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue,
-                (k, v) -> k, LinkedHashMap::new));*/
         //将keySet放入list
         ArrayList<Integer> list = new ArrayList<>(map.keySet());
         //调用sort方法并重写比较器进行升/降序
@@ -206,12 +200,6 @@ public class JDBCDecorator extends DatabaseClientDecorator<DBInfo> {
           params.append(value).append(", ");
           originSlq = originSlq.replaceFirst("\\?", value);
         }
-
-   /*     for (int key : resource.keySet()) {
-          System.out.println("Key: " + key + " Value: " + resource.get(key));
-          params.append(resource.get(key)).append(", ");
-          originSlq = originSlq.replaceFirst("\\?", resource.get(key));
-        }*/
 
         span.setTag("sql.params", params.toString());
         span.setTag("db.sql.origin", originSlq);
