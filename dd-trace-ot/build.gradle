@@ -45,7 +45,6 @@ dependencies {
   api group: 'io.opentracing.contrib', name: 'opentracing-tracerresolver', version: '0.1.0'
 
   api deps.slf4j
-  implementation project(':dd-trace-ot:correlation-id-injection')
 
   testImplementation project(":dd-java-agent:testing")
 
@@ -103,7 +102,6 @@ shadowJar {
     exclude('datadog.trace.api.*')
     exclude('datadog.trace.api.config.*')
     exclude('datadog.trace.api.interceptor.*')
-    exclude('datadog.trace.api.internal.*')
     exclude('datadog.trace.api.sampling.*')
     exclude('datadog.trace.context.*')
   }

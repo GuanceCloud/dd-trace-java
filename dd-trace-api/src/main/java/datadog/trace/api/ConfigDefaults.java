@@ -140,5 +140,8 @@ public final class ConfigDefaults {
 
   public static final int DEFAULT_TRACE_X_DATADOG_TAGS_MAX_LENGTH = 512;
 
+  static final boolean DEFAULT_JDBC_SQL_OBFUSCATION = false;
+
+  static final String DEFAULT_LOG_PATTERN="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger - [%method,%line] %X{dd.service} %X{dd.trace_id} %X{dd.span_id} - %msg%n";
   private ConfigDefaults() {}
 }

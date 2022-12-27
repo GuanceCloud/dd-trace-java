@@ -450,6 +450,7 @@ public class Config {
   private final int tracerMetricsMaxPending;
 
   private final boolean reportHostName;
+  private final String logPattern;
 
   private final boolean traceAnalyticsEnabled;
   private final String traceClientIpHeader;
@@ -600,6 +601,8 @@ public class Config {
   private final String dogStatsDPath;
   private final List<String> dogStatsDArgs;
 
+  private final boolean jdbcSqlObfuscation;
+
   private String env;
   private String version;
   private final String primaryTag;
@@ -638,6 +641,8 @@ public class Config {
     }
     site = configProvider.getString(SITE, DEFAULT_SITE);
 
+    hostName = initHostName();
+
     String userProvidedServiceName =
         configProvider.getStringExcludingSource(
             SERVICE, null, CapturedEnvironmentConfigSource.class, SERVICE_NAME);
@@ -654,21 +659,14 @@ public class Config {
         configProvider.getString(
             SERVLET_ROOT_CONTEXT_SERVICE_NAME, DEFAULT_SERVLET_ROOT_CONTEXT_SERVICE_NAME);
 
+    traceEnabled = configProvider.getBoolean(TRACE_ENABLED, DEFAULT_TRACE_ENABLED);
+    integrationsEnabled =
+        configProvider.getBoolean(INTEGRATIONS_ENABLED, DEFAULT_INTEGRATIONS_ENABLED);
     integrationSynapseLegacyOperationName =
         configProvider.getBoolean(INTEGRATION_SYNAPSE_LEGACY_OPERATION_NAME, false);
     writerType = configProvider.getString(WRITER_TYPE, DEFAULT_AGENT_WRITER_TYPE);
 
-    String lambdaInitType = getEnv("AWS_LAMBDA_INITIALIZATION_TYPE");
-    if (lambdaInitType != null && lambdaInitType.equals("snap-start")) {
-      secureRandom = true;
-    } else {
-      secureRandom = configProvider.getBoolean(SECURE_RANDOM, DEFAULT_SECURE_RANDOM);
-    }
-
     String strategyName = configProvider.getString(ID_GENERATION_STRATEGY);
-    if (secureRandom) {
-      strategyName = "SECURE_RANDOM";
-    }
     if (strategyName == null) {
       strategyName = "RANDOM";
     }
@@ -680,7 +678,7 @@ public class Config {
       strategyName = "RANDOM";
       strategy = IdGenerationStrategy.fromName(strategyName);
     }
-    if (!strategyName.equals("RANDOM") && !strategyName.equals("SECURE_RANDOM")) {
+    if (!strategyName.equals("RANDOM")) {
       log.warn(
           "*** you are using an unsupported id generation strategy {} - this can impact correctness of traces",
           strategyName);
@@ -840,9 +838,6 @@ public class Config {
 
     splitByTags = tryMakeImmutableSet(configProvider.getList(SPLIT_BY_TAGS));
 
-    springDataRepositoryInterfaceResourceName =
-        configProvider.getBoolean(SPRING_DATA_REPOSITORY_INTERFACE_RESOURCE_NAME, true);
-
     scopeDepthLimit = configProvider.getInteger(SCOPE_DEPTH_LIMIT, DEFAULT_SCOPE_DEPTH_LIMIT);
 
     scopeStrictMode = configProvider.getBoolean(SCOPE_STRICT_MODE, false);
@@ -924,6 +919,12 @@ public class Config {
     tracerMetricsMaxAggregates = configProvider.getInteger(TRACER_METRICS_MAX_AGGREGATES, 2048);
     tracerMetricsMaxPending = configProvider.getInteger(TRACER_METRICS_MAX_PENDING, 2048);
 
+    logsInjectionEnabled =
+        configProvider.getBoolean(LOGS_INJECTION_ENABLED, DEFAULT_LOGS_INJECTION_ENABLED);
+
+    logPattern = configProvider.getString(LOGS_PATTERN, DEFAULT_LOG_PATTERN);
+
+    logsMDCTagsInjectionEnabled = configProvider.getBoolean(LOGS_MDC_TAGS_INJECTION_ENABLED, true);
     reportHostName =
         configProvider.getBoolean(TRACE_REPORT_HOSTNAME, DEFAULT_TRACE_REPORT_HOSTNAME);
 
@@ -1161,6 +1162,13 @@ public class Config {
         configProvider.getBoolean(
             DEBUGGER_INSTRUMENT_THE_WORLD, DEFAULT_DEBUGGER_INSTRUMENT_THE_WORLD);
     debuggerExcludeFile = configProvider.getString(DEBUGGER_EXCLUDE_FILE);
+
+    jdbcPreparedStatementClassName =
+        configProvider.getString(JDBC_PREPARED_STATEMENT_CLASS_NAME, "");
+
+    jdbcConnectionClassName = configProvider.getString(JDBC_CONNECTION_CLASS_NAME, "");
+
+    jdbcSqlObfuscation = configProvider.getBoolean(JDBC_SQL_OBFUSCATION, DEFAULT_JDBC_SQL_OBFUSCATION);
 
     awsPropagationEnabled = isPropagationEnabled(true, "aws");
     sqsPropagationEnabled = awsPropagationEnabled && isPropagationEnabled(true, "sqs");
@@ -1672,10 +1680,6 @@ public class Config {
     return profilingExceptionSampleLimit;
   }
 
-  public int getProfilingDirectAllocationSampleLimit() {
-    return profilingDirectAllocationSampleLimit;
-  }
-
   public int getProfilingExceptionHistogramTopItems() {
     return profilingExceptionHistogramTopItems;
   }
@@ -2077,8 +2081,6 @@ public class Config {
     if (azureAppServices) {
       result.putAll(getAzureAppServicesTags());
     }
-
-    result.putAll(getProcessIdTag());
 
     return Collections.unmodifiableMap(result);
   }
@@ -2547,7 +2549,7 @@ public class Config {
   }
 
   /** Returns the detected hostname. First tries locally, then using DNS */
-  static String initHostName() {
+  private static String initHostName() {
     String possibleHostname;
 
     // Try environment variable.  This works in almost all environments
@@ -2669,6 +2671,10 @@ public class Config {
     } else {
       return new Config(ConfigProvider.withPropertiesOverride(properties));
     }
+  }
+
+  public boolean getJdbcSqlObfuscation() {
+    return jdbcSqlObfuscation;
   }
 
   @Override
@@ -2824,6 +2830,12 @@ public class Config {
         + tracerMetricsMaxAggregates
         + ", tracerMetricsMaxPending="
         + tracerMetricsMaxPending
+        + ", logsInjectionEnabled="
+        + logsInjectionEnabled
+        + ", logsMDCTagsInjectionEnabled="
+        + logsMDCTagsInjectionEnabled
+        + ", logPattern="
+        + logPattern
         + ", reportHostName="
         + reportHostName
         + ", traceAnalyticsEnabled="
