@@ -4,10 +4,16 @@ muzzle {
   pass {
     group = 'ch.qos.logback'
     module = 'logback-classic'
-    versions = '[1.0.0,]'
+    versions = '[1.2.0,]'
+  }
+  pass {
+    group = 'ch.qos.logback'
+    module = 'logback.core'
+    versions = '[1.2.0,]'
   }
 }
 
 dependencies {
-  compileOnly group: 'ch.qos.logback', name: 'logback-classic', version: '1.0.0'
+  compileOnly group: 'ch.qos.logback', name: 'logback-classic', version: '1.2.0'
+  compileOnly group: 'ch.qos.logback', name: 'logback-core', version: '1.2.0'
 }

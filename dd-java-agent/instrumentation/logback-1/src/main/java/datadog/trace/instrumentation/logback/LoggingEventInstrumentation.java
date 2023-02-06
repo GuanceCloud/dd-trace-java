@@ -1,11 +1,5 @@
 package datadog.trace.instrumentation.logback;
 
-import static datadog.trace.agent.tooling.bytebuddy.matcher.HierarchyMatchers.implementsInterface;
-import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
-import static java.util.Collections.singletonMap;
-import static net.bytebuddy.matcher.ElementMatchers.isMethod;
-import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
-
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import com.google.auto.service.AutoService;
 import datadog.trace.agent.tooling.Instrumenter;
@@ -17,12 +11,19 @@ import datadog.trace.api.InstrumenterConfig;
 import datadog.trace.bootstrap.InstrumentationContext;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.api.Tags;
-import java.util.HashMap;
-import java.util.Map;
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.implementation.bytecode.assign.Assigner;
 import net.bytebuddy.matcher.ElementMatcher;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import static datadog.trace.agent.tooling.bytebuddy.matcher.HierarchyMatchers.implementsInterface;
+import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
+import static java.util.Collections.singletonMap;
+import static net.bytebuddy.matcher.ElementMatchers.isMethod;
+import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
 
 @AutoService(Instrumenter.class)
 public class LoggingEventInstrumentation extends Instrumenter.Tracing
@@ -74,6 +75,7 @@ public class LoggingEventInstrumentation extends Instrumenter.Tracing
         @Advice.This ILoggingEvent event,
         @Advice.Return(typing = Assigner.Typing.DYNAMIC, readOnly = false)
             Map<String, String> mdc) {
+      System.out.println("--------------------------------into --------------");
 
       if (mdc instanceof UnionMap) {
         return;
@@ -113,6 +115,7 @@ public class LoggingEventInstrumentation extends Instrumenter.Tracing
       }
 
       mdc = null != mdc ? new UnionMap<>(mdc, correlationValues) : correlationValues;
+      System.out.println("-------------------------------- out --------------");
     }
   }
 }
