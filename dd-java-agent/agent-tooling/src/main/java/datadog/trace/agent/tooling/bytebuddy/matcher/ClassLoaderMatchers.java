@@ -1,15 +1,19 @@
 package datadog.trace.agent.tooling.bytebuddy.matcher;
 
 import static datadog.trace.bootstrap.AgentClassLoading.PROBING_CLASSLOADER;
-import static datadog.trace.util.Strings.getResourceName;
 import static net.bytebuddy.matcher.ElementMatchers.any;
 
-import datadog.trace.agent.tooling.WeakCaches;
-import datadog.trace.api.Config;
+import datadog.trace.api.InstrumenterConfig;
 import datadog.trace.api.Tracer;
+import datadog.trace.api.cache.DDCache;
+import datadog.trace.api.cache.DDCaches;
 import datadog.trace.bootstrap.PatchLogger;
-import datadog.trace.bootstrap.WeakCache;
-import java.util.Arrays;
+import datadog.trace.util.Strings;
+import java.util.ArrayList;
+import java.util.BitSet;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import net.bytebuddy.matcher.ElementMatcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,45 +24,13 @@ public final class ClassLoaderMatchers {
   public static final ElementMatcher<ClassLoader> ANY_CLASS_LOADER = any();
 
   private static final ClassLoader BOOTSTRAP_CLASSLOADER = null;
-  private static final String DATADOG_CLASSLOADER_NAME =
-      "datadog.trace.bootstrap.DatadogClassLoader";
-  private static final String DATADOG_DELEGATE_CLASSLOADER_NAME =
-      "datadog.trace.bootstrap.DatadogClassLoader$DelegateClassLoader";
 
   private static final boolean HAS_CLASSLOADER_EXCLUDES =
-      !Config.get().getExcludedClassLoaders().isEmpty();
-
-  /* Cache of classloader-instance -> (true|false). True = skip instrumentation. False = safe to instrument. */
-  private static final WeakCache<ClassLoader, Boolean> skipCache = WeakCaches.newWeakCache();
+      !InstrumenterConfig.get().getExcludedClassLoaders().isEmpty();
 
   /** A private constructor that must not be invoked. */
   private ClassLoaderMatchers() {
     throw new UnsupportedOperationException();
-  }
-
-  public static boolean skipClassLoader(final ClassLoader loader) {
-    if (loader == BOOTSTRAP_CLASSLOADER) {
-      // Don't skip bootstrap loader
-      return false;
-    }
-    if (canSkipClassLoaderByName(loader)) {
-      return true;
-    }
-    Boolean v = skipCache.getIfPresent(loader);
-    if (v != null) {
-      return v;
-    }
-    // when ClassloadingInstrumentation is active, checking delegatesToBootstrap() below is not
-    // required, because ClassloadingInstrumentation forces all class loaders to load all of the
-    // classes in Constants.BOOTSTRAP_PACKAGE_PREFIXES directly from the bootstrap class loader
-    //
-    // however, at this time we don't want to introduce the concept of a required instrumentation,
-    // and we don't want to introduce the concept of the tooling code depending on whether or not
-    // a particular instrumentation is active (mainly because this particular use case doesn't
-    // seem to justify introducing either of these new concepts)
-    v = !delegatesToBootstrap(loader);
-    skipCache.put(loader, v);
-    return v;
   }
 
   public static boolean canSkipClassLoaderByName(final ClassLoader loader) {
@@ -70,25 +42,18 @@ public final class ClassLoaderMatchers {
       case "clojure.lang.DynamicClassLoader":
       case "org.apache.cxf.common.util.ASMHelper$TypeHelperClassLoader":
       case "sun.misc.Launcher$ExtClassLoader":
-      case DATADOG_CLASSLOADER_NAME:
-      case DATADOG_DELEGATE_CLASSLOADER_NAME:
+      case "datadog.trace.bootstrap.DatadogClassLoader":
         return true;
     }
     if (HAS_CLASSLOADER_EXCLUDES) {
-      return Config.get().getExcludedClassLoaders().contains(classLoaderName);
+      return InstrumenterConfig.get().getExcludedClassLoaders().contains(classLoaderName);
     }
     return false;
   }
 
-  /**
-   * NOTICE: Does not match the bootstrap classpath. Don't use with classes expected to be on the
-   * bootstrap.
-   *
-   * @param classNames list of names to match. returns true if empty.
-   * @return true if class is available as a resource and not the bootstrap classloader.
-   */
-  public static ElementMatcher.Junction<ClassLoader> hasClassesNamed(final String... classNames) {
-    return new ClassLoaderHasClassesNamedMatcher(classNames);
+  public static boolean incompatibleClassLoader(final ClassLoader loader) {
+    return loader != BOOTSTRAP_CLASSLOADER && hasClassMask(loader) == INCOMPATIBLE_CLASS_LOADER;
+    // note: must use '==' to distinguish INCOMPATIBLE_CLASS_LOADER from NO_CLASS_NAME_MATCHES
   }
 
   /**
@@ -96,10 +61,36 @@ public final class ClassLoaderMatchers {
    * bootstrap.
    *
    * @param className the className to match.
-   * @return true if class is available as a resource and not the bootstrap classloader.
+   * @return true if class is available as a resource, not on the bootstrap classloader.
    */
-  public static ElementMatcher.Junction<ClassLoader> hasClassesNamed(final String className) {
-    return new ClassLoaderHasClassNamedMatcher(className);
+  public static ElementMatcher.Junction<ClassLoader> hasClassNamed(String className) {
+    ElementMatcher.Junction<ClassLoader> matcher = hasClassMatchers.get(className);
+    if (null == matcher) {
+      // each matcher is given an id based on where to find its resource-name in the sequence
+      hasClassMatchers.put(className, matcher = new HasClassMatcher(hasClassResourceNames.size()));
+      hasClassResourceNames.add(Strings.getResourceName(className));
+    }
+    return matcher;
+  }
+
+  /**
+   * NOTICE: Does not match the bootstrap classpath. Don't use with classes expected to be on the
+   * bootstrap.
+   *
+   * @param classNames the classNames to match.
+   * @return true if any class is available as a resource and not the bootstrap classloader.
+   */
+  public static ElementMatcher.Junction<ClassLoader> hasClassNamedOneOf(
+      final String... classNames) {
+    ElementMatcher<ClassLoader>[] matchers = new ElementMatcher[classNames.length];
+    for (int i = 0; i < matchers.length; i++) {
+      matchers[i] = hasClassNamed(classNames[i]);
+    }
+    return new ElementMatcher.Junction.Disjunction<>(matchers);
+  }
+
+  public static void resetState() {
+    hasClassCache.clear();
   }
 
   /**
@@ -130,97 +121,62 @@ public final class ClassLoaderMatchers {
     }
   }
 
-  private abstract static class ClassLoaderHasNameMatcher
-      extends ElementMatcher.Junction.AbstractBase<ClassLoader> {
+  /** Mapping of class-name to has-class matcher. */
+  static final Map<String, ElementMatcher.Junction<ClassLoader>> hasClassMatchers = new HashMap<>();
 
-    // Initialize this lazily because of startup ordering and muzzle plugin usage patterns
-    private volatile WeakCache<ClassLoader, Boolean> cacheHolder = null;
+  /** Sequence of class resource-names, in order of assigned hasClassId. */
+  static final List<String> hasClassResourceNames = new ArrayList<>();
 
-    protected WeakCache<ClassLoader, Boolean> getCache() {
-      if (cacheHolder == null) {
-        synchronized (this) {
-          if (cacheHolder == null) {
-            cacheHolder = WeakCaches.newWeakCache(25);
-          }
-        }
-      }
-      return cacheHolder;
-    }
+  /** Cache of classloader-instance -> has-class mask. */
+  static final DDCache<ClassLoader, BitSet> hasClassCache = DDCaches.newFixedSizeWeakKeyCache(512);
 
-    @Override
-    public boolean matches(final ClassLoader cl) {
-      if (cl == BOOTSTRAP_CLASSLOADER) {
-        // Can't match the bootstrap classloader.
-        return false;
-      }
-      final Boolean cached;
-      WeakCache<ClassLoader, Boolean> cache = getCache();
-      if ((cached = cache.getIfPresent(cl)) != null) {
-        return cached;
-      }
-      final boolean value = checkMatch(cl);
-      cache.put(cl, value);
-      return value;
-    }
+  /** Distinct result used to mark an incompatible classloader that the tracer should skip. */
+  static final BitSet INCOMPATIBLE_CLASS_LOADER = new BitSet();
 
-    protected abstract boolean checkMatch(ClassLoader cl);
+  static final BitSet NO_CLASS_NAME_MATCHES = new BitSet();
+
+  static BitSet hasClassMask(ClassLoader loader) {
+    return hasClassCache.computeIfAbsent(loader, ClassLoaderMatchers::buildHasClassMask);
   }
 
-  private static class ClassLoaderHasClassesNamedMatcher extends ClassLoaderHasNameMatcher {
-
-    private final String[] resources;
-
-    private ClassLoaderHasClassesNamedMatcher(final String... classNames) {
-      resources = classNames;
-      for (int i = 0; i < resources.length; i++) {
-        resources[i] = getResourceName(resources[i]);
-      }
+  static BitSet buildHasClassMask(ClassLoader loader) {
+    if (!delegatesToBootstrap(loader)) {
+      // when ClassloadingInstrumentation is active this check is not strictly required,
+      // because that instrumentation forces all class loaders to load classes covered by
+      // Constants.BOOTSTRAP_PACKAGE_PREFIXES directly from the bootstrap class loader
+      return INCOMPATIBLE_CLASS_LOADER;
     }
-
-    protected boolean checkMatch(final ClassLoader cl) {
-      PROBING_CLASSLOADER.begin();
-      try {
-        for (final String resource : resources) {
-          if (cl.getResource(resource) == null) {
-            return false;
+    PROBING_CLASSLOADER.begin();
+    try {
+      BitSet hasClassMask = NO_CLASS_NAME_MATCHES;
+      for (int hasClassId = hasClassResourceNames.size() - 1; hasClassId >= 0; hasClassId--) {
+        try {
+          if (loader.getResource(hasClassResourceNames.get(hasClassId)) != null) {
+            if (hasClassMask.isEmpty()) {
+              hasClassMask = new BitSet(hasClassId + 1);
+            }
+            hasClassMask.set(hasClassId);
           }
+        } catch (final Throwable ignored) {
+          // continue to next check
         }
-        return true;
-      } catch (final Throwable ignored) {
-        return false;
-      } finally {
-        PROBING_CLASSLOADER.end();
       }
-    }
-
-    @Override
-    public String toString() {
-      return "ClassLoaderHasClassesNamedMatcher{named=" + Arrays.toString(resources) + "}";
+      return hasClassMask;
+    } finally {
+      PROBING_CLASSLOADER.end();
     }
   }
 
-  private static class ClassLoaderHasClassNamedMatcher extends ClassLoaderHasNameMatcher {
+  static final class HasClassMatcher extends ElementMatcher.Junction.ForNonNullValues<ClassLoader> {
+    private final int hasClassId;
 
-    private final String resource;
-
-    private ClassLoaderHasClassNamedMatcher(final String className) {
-      resource = getResourceName(className);
-    }
-
-    protected boolean checkMatch(final ClassLoader cl) {
-      PROBING_CLASSLOADER.begin();
-      try {
-        return cl.getResource(resource) != null;
-      } catch (final Throwable ignored) {
-        return false;
-      } finally {
-        PROBING_CLASSLOADER.end();
-      }
+    private HasClassMatcher(int hasClassId) {
+      this.hasClassId = hasClassId;
     }
 
     @Override
-    public String toString() {
-      return "ClassLoaderHasClassNamedMatcher{named='" + resource + "\'}";
+    protected boolean doMatch(final ClassLoader loader) {
+      return hasClassMask(loader).get(hasClassId);
     }
   }
 }

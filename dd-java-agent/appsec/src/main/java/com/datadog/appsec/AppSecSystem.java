@@ -1,23 +1,33 @@
 package com.datadog.appsec;
 
+import com.datadog.appsec.blocking.BlockingServiceImpl;
+import com.datadog.appsec.config.AppSecConfigService;
 import com.datadog.appsec.config.AppSecConfigServiceImpl;
 import com.datadog.appsec.event.EventDispatcher;
+import com.datadog.appsec.event.ReplaceableEventProducerService;
 import com.datadog.appsec.gateway.GatewayBridge;
 import com.datadog.appsec.gateway.RateLimiter;
 import com.datadog.appsec.util.AbortStartupException;
 import com.datadog.appsec.util.StandardizedLogging;
+import datadog.appsec.api.blocking.Blocking;
+import datadog.appsec.api.blocking.BlockingService;
 import datadog.communication.ddagent.SharedCommunicationObjects;
-import datadog.communication.fleet.FleetService;
-import datadog.communication.fleet.FleetServiceImpl;
 import datadog.communication.monitor.Counter;
 import datadog.communication.monitor.Monitoring;
+import datadog.remoteconfig.ConfigurationPoller;
 import datadog.trace.api.Config;
+import datadog.trace.api.ProductActivation;
 import datadog.trace.api.gateway.SubscriptionService;
 import datadog.trace.api.time.SystemTimeSource;
-import datadog.trace.util.AgentThreadFactory;
+import datadog.trace.bootstrap.ActiveSubsystems;
 import datadog.trace.util.Strings;
-import java.util.*;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.ServiceLoader;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,8 +35,10 @@ public class AppSecSystem {
 
   private static final Logger log = LoggerFactory.getLogger(AppSecSystem.class);
   private static final AtomicBoolean STARTED = new AtomicBoolean();
-  private static final Map<String, String> STARTED_MODULES_INFO = new HashMap<>();
+  private static final Map<AppSecModule, String> STARTED_MODULES_INFO = new HashMap<>();
   private static AppSecConfigServiceImpl APP_SEC_CONFIG_SERVICE;
+  private static ReplaceableEventProducerService REPLACEABLE_EVENT_PRODUCER; // testing
+  private static Runnable RESET_SUBSCRIPTION_SERVICE;
 
   public static void start(SubscriptionService gw, SharedCommunicationObjects sco) {
     try {
@@ -35,47 +47,60 @@ public class AppSecSystem {
       throw ase;
     } catch (RuntimeException | Error e) {
       StandardizedLogging.appSecStartupError(log, e);
+      setActive(false);
       throw new AbortStartupException(e);
     }
   }
 
   private static void doStart(SubscriptionService gw, SharedCommunicationObjects sco) {
     final Config config = Config.get();
-    if (!config.isAppSecEnabled()) {
+    ProductActivation appSecEnabledConfig = config.getAppSecActivation();
+    if (appSecEnabledConfig == ProductActivation.FULLY_DISABLED) {
       log.debug("AppSec: disabled");
       return;
     }
-    log.debug("AppSec is starting");
+    log.debug("AppSec is starting ({})", appSecEnabledConfig);
 
-    //  TODO: FleetService should be shared with other components
-    FleetService fleetService =
-        new FleetServiceImpl(
-            sco, new AgentThreadFactory(AgentThreadFactory.AgentThread.FLEET_MANAGEMENT_POLLER));
-    // do not start its thread, support not merged in agent yet
-    //    fleetService.init();
+    REPLACEABLE_EVENT_PRODUCER = new ReplaceableEventProducerService();
+    EventDispatcher eventDispatcher = new EventDispatcher();
+    REPLACEABLE_EVENT_PRODUCER.replaceEventProducerService(eventDispatcher);
+
+    ConfigurationPoller configurationPoller = sco.configurationPoller(config);
     // may throw and abort startup
-    APP_SEC_CONFIG_SERVICE = new AppSecConfigServiceImpl(config, fleetService);
-    // no point initializing fleet service, as it will receive no notifications
-    APP_SEC_CONFIG_SERVICE.init(false);
+    APP_SEC_CONFIG_SERVICE =
+        new AppSecConfigServiceImpl(
+            config, configurationPoller, () -> reloadSubscriptions(REPLACEABLE_EVENT_PRODUCER));
+    APP_SEC_CONFIG_SERVICE.init();
 
     sco.createRemaining(config);
 
-    EventDispatcher eventDispatcher = new EventDispatcher();
     RateLimiter rateLimiter = getRateLimiter(config, sco.monitoring);
     GatewayBridge gatewayBridge =
         new GatewayBridge(
             gw,
-            eventDispatcher,
+            REPLACEABLE_EVENT_PRODUCER,
             rateLimiter,
             APP_SEC_CONFIG_SERVICE.getTraceSegmentPostProcessors());
 
     loadModules(eventDispatcher);
+
     gatewayBridge.init();
+    RESET_SUBSCRIPTION_SERVICE = gatewayBridge::stop;
+
+    setActive(appSecEnabledConfig == ProductActivation.FULLY_ENABLED);
+
+    APP_SEC_CONFIG_SERVICE.maybeSubscribeConfigPolling();
+
+    Blocking.setBlockingService(new BlockingServiceImpl(REPLACEABLE_EVENT_PRODUCER));
 
     STARTED.set(true);
 
     String startedAppSecModules = Strings.join(", ", STARTED_MODULES_INFO.values());
-    log.info("AppSec has started with {}", startedAppSecModules);
+    if (appSecEnabledConfig == ProductActivation.FULLY_ENABLED) {
+      log.info("AppSec is {} with {}", appSecEnabledConfig, startedAppSecModules);
+    } else {
+      log.debug("AppSec is {} with {}", appSecEnabledConfig, startedAppSecModules);
+    }
   }
 
   private static RateLimiter getRateLimiter(Config config, Monitoring monitoring) {
@@ -90,10 +115,22 @@ public class AppSecSystem {
     return rateLimiter;
   }
 
+  public static boolean isActive() {
+    return ActiveSubsystems.APPSEC_ACTIVE;
+  }
+
+  public static void setActive(boolean status) {
+    ActiveSubsystems.APPSEC_ACTIVE = status;
+  }
+
   public static void stop() {
     if (!STARTED.getAndSet(false)) {
       return;
     }
+    REPLACEABLE_EVENT_PRODUCER = null;
+    RESET_SUBSCRIPTION_SERVICE.run();
+    RESET_SUBSCRIPTION_SERVICE = null;
+    Blocking.setBlockingService(BlockingService.NOOP);
 
     APP_SEC_CONFIG_SERVICE.close();
   }
@@ -109,14 +146,15 @@ public class AppSecSystem {
     for (AppSecModule module : modules) {
       log.debug("Starting appsec module {}", module.getName());
       try {
-        module.config(APP_SEC_CONFIG_SERVICE);
+        AppSecConfigService.TransactionalAppSecModuleConfigurer cfgObject;
+        cfgObject = APP_SEC_CONFIG_SERVICE.createAppSecModuleConfigurer();
+        module.config(cfgObject);
+        cfgObject.commit();
       } catch (RuntimeException | AppSecModule.AppSecModuleActivationException t) {
         log.error("Startup of appsec module {} failed", module.getName(), t);
         continue;
       }
 
-      // TODO: the set needs to be updated upon runtime module reconfiguration (when supported)
-      //       (and the subscription caches invalidated)
       for (AppSecModule.EventSubscription sub : module.getEventSubscriptions()) {
         eventSubscriptionSet.addSubscription(sub.eventType, sub);
       }
@@ -125,11 +163,35 @@ public class AppSecSystem {
         dataSubscriptionSet.addSubscription(sub.getSubscribedAddresses(), sub);
       }
 
-      STARTED_MODULES_INFO.put(module.getName(), module.getInfo());
+      STARTED_MODULES_INFO.put(module, module.getInfo());
     }
 
     eventDispatcher.subscribeEvents(eventSubscriptionSet);
     eventDispatcher.subscribeDataAvailable(dataSubscriptionSet);
+  }
+
+  private static void reloadSubscriptions(
+      ReplaceableEventProducerService replaceableEventProducerService) {
+    EventDispatcher.EventSubscriptionSet eventSubscriptionSet =
+        new EventDispatcher.EventSubscriptionSet();
+    EventDispatcher.DataSubscriptionSet dataSubscriptionSet =
+        new EventDispatcher.DataSubscriptionSet();
+
+    EventDispatcher newEd = new EventDispatcher();
+    for (AppSecModule module : STARTED_MODULES_INFO.keySet()) {
+      for (AppSecModule.EventSubscription sub : module.getEventSubscriptions()) {
+        eventSubscriptionSet.addSubscription(sub.eventType, sub);
+      }
+
+      for (AppSecModule.DataSubscription sub : module.getDataSubscriptions()) {
+        dataSubscriptionSet.addSubscription(sub.getSubscribedAddresses(), sub);
+      }
+    }
+
+    newEd.subscribeEvents(eventSubscriptionSet);
+    newEd.subscribeDataAvailable(dataSubscriptionSet);
+
+    replaceableEventProducerService.replaceEventProducerService(newEd);
   }
 
   public static boolean isStarted() {
@@ -138,7 +200,9 @@ public class AppSecSystem {
 
   public static Set<String> getStartedModulesInfo() {
     if (isStarted()) {
-      return Collections.unmodifiableSet(STARTED_MODULES_INFO.keySet());
+      return STARTED_MODULES_INFO.keySet().stream()
+          .map(AppSecModule::getName)
+          .collect(Collectors.toSet());
     } else {
       return Collections.emptySet();
     }

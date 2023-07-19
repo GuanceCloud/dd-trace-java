@@ -1,8 +1,9 @@
 import datadog.trace.agent.test.AgentTestRunner
-import datadog.trace.agent.test.checkpoints.CheckpointValidationMode
-import datadog.trace.agent.test.checkpoints.CheckpointValidator
+import datadog.trace.api.DDTags
 import datadog.trace.bootstrap.instrumentation.api.InstrumentationTags
 import datadog.trace.bootstrap.instrumentation.api.Tags
+import datadog.trace.core.datastreams.StatsGroup
+import datadog.trace.test.util.Flaky
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.serialization.Serdes
 import org.apache.kafka.streams.KafkaStreams
@@ -27,19 +28,24 @@ import spock.lang.Shared
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 
+@Flaky("https://github.com/DataDog/dd-trace-java/issues/3865")
 class KafkaStreamsTest extends AgentTestRunner {
   static final STREAM_PENDING = "test.pending"
   static final STREAM_PROCESSED = "test.processed"
 
   @Shared
   @ClassRule
-  EmbeddedKafkaRule kafkaRule = new EmbeddedKafkaRule(1, true, STREAM_PENDING, STREAM_PROCESSED)
+  EmbeddedKafkaRule kafkaRule = new EmbeddedKafkaRule(1, true, 1, STREAM_PENDING, STREAM_PROCESSED)
   @Shared
   EmbeddedKafkaBroker embeddedKafka = kafkaRule.embeddedKafka
 
+  @Override
+  protected boolean isDataStreamsEnabled() {
+    return true
+  }
+
   def "test kafka produce and consume with streams in-between"() {
     setup:
-    CheckpointValidator.excludeValidations_DONOTUSE_I_REPEAT_DO_NOT_USE(CheckpointValidationMode.INTERVALS)
     def config = new Properties()
     def producerProps = KafkaTestUtils.producerProps(embeddedKafka.getBrokersAsString())
     config.putAll(producerProps)
@@ -63,6 +69,9 @@ class KafkaStreamsTest extends AgentTestRunner {
           // this is the last processing step so we should see 2 traces here
           TEST_WRITER.waitForTraces(2)
           TEST_TRACER.activeSpan().setTag("testing", 123)
+          if (isDataStreamsEnabled()) {
+            TEST_DATA_STREAMS_WRITER.waitForGroups(1)
+          }
           records.add(record)
         }
       })
@@ -82,6 +91,9 @@ class KafkaStreamsTest extends AgentTestRunner {
         String apply(String textLine) {
           TEST_WRITER.waitForTraces(1) // ensure consistent ordering of traces
           TEST_TRACER.activeSpan().setTag("asdf", "testing")
+          if (isDataStreamsEnabled()) {
+            TEST_DATA_STREAMS_WRITER.waitForGroups(1)
+          }
           return textLine.toLowerCase()
         }
       })
@@ -119,7 +131,10 @@ class KafkaStreamsTest extends AgentTestRunner {
           tags {
             "$Tags.COMPONENT" "java-kafka"
             "$Tags.SPAN_KIND" Tags.SPAN_KIND_PRODUCER
-            defaultTags()
+            if ({ isDataStreamsEnabled()}) {
+              "$DDTags.PATHWAY_HASH" { String }
+            }
+            defaultTagsNoPeerService()
           }
         }
       }
@@ -144,6 +159,9 @@ class KafkaStreamsTest extends AgentTestRunner {
             "$InstrumentationTags.OFFSET" 0
             "$InstrumentationTags.PROCESSOR_NAME" "KSTREAM-SOURCE-0000000000"
             "asdf" "testing"
+            if ({ isDataStreamsEnabled()}) {
+              "$DDTags.PATHWAY_HASH" { String }
+            }
             defaultTags(true)
           }
         }
@@ -162,7 +180,10 @@ class KafkaStreamsTest extends AgentTestRunner {
           tags {
             "$Tags.COMPONENT" "java-kafka"
             "$Tags.SPAN_KIND" Tags.SPAN_KIND_PRODUCER
-            defaultTags()
+            if ({ isDataStreamsEnabled()}) {
+              "$DDTags.PATHWAY_HASH" { String }
+            }
+            defaultTagsNoPeerService()
           }
         }
       }
@@ -184,6 +205,9 @@ class KafkaStreamsTest extends AgentTestRunner {
             "$InstrumentationTags.CONSUMER_GROUP" "sender"
             "$InstrumentationTags.RECORD_QUEUE_TIME_MS" { it >= 0 }
             "testing" 123
+            if ({ isDataStreamsEnabled()}) {
+              "$DDTags.PATHWAY_HASH" { String }
+            }
             defaultTags(true)
           }
         }
@@ -195,6 +219,36 @@ class KafkaStreamsTest extends AgentTestRunner {
     new String(headers.headers("x-datadog-trace-id").iterator().next().value()) == "${TEST_WRITER[1][0].traceId}"
     new String(headers.headers("x-datadog-parent-id").iterator().next().value()) == "${TEST_WRITER[1][0].spanId}"
 
+    if (isDataStreamsEnabled()) {
+      StatsGroup originProducerPoint = TEST_DATA_STREAMS_WRITER.groups.find { it.parentHash == 0 }
+      verifyAll(originProducerPoint) {
+        edgeTags == ["direction:out", "topic:$STREAM_PENDING", "type:kafka"]
+        edgeTags.size() == 3
+      }
+
+      StatsGroup kafkaStreamsConsumerPoint = TEST_DATA_STREAMS_WRITER.groups.find { it.parentHash == originProducerPoint.hash }
+      verifyAll(kafkaStreamsConsumerPoint) {
+        edgeTags == [
+          "direction:in",
+          "group:test-application",
+          "topic:$STREAM_PENDING".toString(),
+          "type:kafka"
+        ]
+        edgeTags.size() == 4
+      }
+
+      StatsGroup kafkaStreamsProducerPoint = TEST_DATA_STREAMS_WRITER.groups.find { it.parentHash == kafkaStreamsConsumerPoint.hash }
+      verifyAll(kafkaStreamsProducerPoint) {
+        edgeTags == ["direction:out", "topic:$STREAM_PROCESSED", "type:kafka"]
+        edgeTags.size() == 3
+      }
+
+      StatsGroup finalConsumerPoint = TEST_DATA_STREAMS_WRITER.groups.find { it.parentHash == kafkaStreamsProducerPoint.hash }
+      verifyAll(finalConsumerPoint) {
+        edgeTags == ["direction:in", "group:sender", "topic:$STREAM_PROCESSED".toString(), "type:kafka"]
+        edgeTags.size() == 4
+      }
+    }
 
     cleanup:
     producerFactory?.destroy()

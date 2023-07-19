@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.matches;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
@@ -40,17 +41,20 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.ByteStreams;
-import datadog.common.process.PidHelper;
 import datadog.common.version.VersionInfo;
 import datadog.trace.api.Config;
+import datadog.trace.api.DDTags;
+import datadog.trace.api.profiling.ProfilingSnapshot;
 import datadog.trace.bootstrap.config.provider.ConfigProvider;
 import datadog.trace.relocate.api.IOLogger;
+import datadog.trace.util.PidHelper;
 import delight.fileupload.FileUpload;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.net.ConnectException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -61,6 +65,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
@@ -80,6 +85,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.internal.verification.VerificationModeFactory;
@@ -105,22 +111,20 @@ public class ProfileUploaderTest {
     tags.put("baz", "123");
     tags.put("null", null);
     tags.put("empty", "");
+    tags.put("quoted", "\"quoted\"");
     TAGS = tags;
   }
 
   // We sort tags to have expected parameters to have expected result
   private static final Map<String, String> EXPECTED_TAGS =
-      ImmutableMap.of(
-          "baz",
-          "123",
-          "foo",
-          "bar",
-          PidHelper.PID_TAG,
-          PidHelper.PID.toString(),
-          VersionInfo.PROFILER_VERSION_TAG,
-          VersionInfo.VERSION,
-          VersionInfo.LIBRARY_VERSION_TAG,
-          VersionInfo.VERSION);
+      new ImmutableMap.Builder<String, String>()
+          .put("baz", "123")
+          .put("foo", "bar")
+          .put("quoted", "quoted")
+          .put(DDTags.PID_TAG, PidHelper.getPid())
+          .put(VersionInfo.PROFILER_VERSION_TAG, VersionInfo.VERSION)
+          .put(VersionInfo.LIBRARY_VERSION_TAG, VersionInfo.VERSION)
+          .build();
 
   private static final int SEQUENCE_NUMBER = 123;
   private static final int PROFILE_START = 1000;
@@ -171,15 +175,16 @@ public class ProfileUploaderTest {
     }
   }
 
-  @Test
-  public void testHappyPath() throws Exception {
+  @ParameterizedTest
+  @EnumSource(ProfilingSnapshot.Kind.class)
+  public void testHappyPath(ProfilingSnapshot.Kind kind) throws Exception {
     // Given
     when(config.getProfilingUploadTimeout()).thenReturn(500000);
 
     // When
     uploader = new ProfileUploader(config, configProvider);
     server.enqueue(new MockResponse().setResponseCode(200));
-    uploadAndWait(RECORDING_TYPE, mockRecordingData(true));
+    uploadAndWait(RECORDING_TYPE, mockRecordingData(true, kind));
     final RecordedRequest recordedRequest = server.takeRequest(5, TimeUnit.SECONDS);
 
     // Then
@@ -214,14 +219,17 @@ public class ProfileUploaderTest {
         event.get(V4_PROFILE_START_PARAM).asText());
     assertEquals(
         Instant.ofEpochSecond(PROFILE_END).toString(), event.get(V4_PROFILE_END_PARAM).asText());
+    Map<String, String> expectedTags = new TreeMap<>(EXPECTED_TAGS);
+    expectedTags.put("snapshot", kind.name().toLowerCase());
     assertEquals(
-        EXPECTED_TAGS,
+        expectedTags,
         ProfilingTestUtils.parseTags(
             Arrays.asList(event.get("tags_profiler").asText().split(","))));
   }
 
-  @Test
-  public void testHappyPathSync() throws Exception {
+  @ParameterizedTest
+  @EnumSource(ProfilingSnapshot.Kind.class)
+  public void testHappyPathSync(ProfilingSnapshot.Kind kind) throws Exception {
     // Given
     when(config.getProfilingUploadTimeout()).thenReturn(500000);
 
@@ -229,7 +237,7 @@ public class ProfileUploaderTest {
     uploader = new ProfileUploader(config, configProvider);
     server.enqueue(new MockResponse().setResponseCode(200));
     // upload synchronously
-    uploader.upload(RECORDING_TYPE, mockRecordingData(true), true);
+    uploader.upload(RECORDING_TYPE, mockRecordingData(true, kind), true);
     final RecordedRequest recordedRequest = server.takeRequest(5, TimeUnit.SECONDS);
 
     // Then
@@ -264,8 +272,10 @@ public class ProfileUploaderTest {
         event.get(V4_PROFILE_START_PARAM).asText());
     assertEquals(
         Instant.ofEpochSecond(PROFILE_END).toString(), event.get(V4_PROFILE_END_PARAM).asText());
+    Map<String, String> expectedTags = new TreeMap<>(EXPECTED_TAGS);
+    expectedTags.put("snapshot", kind.name().toLowerCase());
     assertEquals(
-        EXPECTED_TAGS,
+        expectedTags,
         ProfilingTestUtils.parseTags(
             Arrays.asList(event.get("tags_profiler").asText().split(","))));
   }
@@ -611,6 +621,29 @@ public class ProfileUploaderTest {
   }
 
   @Test
+  public void testSyncDoesNotStayBlocked() throws Exception {
+    // We need to muck around with the 'uploadTimeout' field to actually force
+    // the uploader to take the 'safety-break' route. Otherwise, the request
+    // will always fail first on socket timeouts.
+    Field fld = ProfileUploader.class.getDeclaredField("uploadTimeout");
+    fld.setAccessible(true);
+    fld.set(uploader, Duration.ofSeconds(1));
+    // ---
+
+    server.enqueue(new MockResponse().setSocketPolicy(SocketPolicy.STALL_SOCKET_AT_START));
+    final RecordingData recording = mockRecordingData();
+    uploader.upload(RECORDING_TYPE, recording, true);
+
+    // Wait longer than termination timeout
+    assertNotNull(server.takeRequest(REQUEST_TIMEOUT.getSeconds() + 1, TimeUnit.SECONDS));
+
+    // Shutting down uploader ensures all callbacks are called on http client
+    uploader.shutdown();
+    verify(recording).release();
+    verify(ioLogger).error(eq("Failed to upload profile to " + url), (Exception) isNull());
+  }
+
+  @Test
   public void testTimeout() throws Exception {
     server.enqueue(
         new MockResponse()
@@ -646,7 +679,7 @@ public class ProfileUploaderTest {
 
     // Wait longer than request timeout
     assertNotNull(
-        server.takeRequest(REQUEST_IO_OPERATION_TIMEOUT.getSeconds() + 2, TimeUnit.SECONDS));
+        server.takeRequest(REQUEST_IO_OPERATION_TIMEOUT.getSeconds() + 10, TimeUnit.SECONDS));
 
     // Shutting down uploader ensures all callbacks are called on http client
     uploader.shutdown();
@@ -775,10 +808,15 @@ public class ProfileUploaderTest {
   }
 
   private RecordingData mockRecordingData() throws IOException {
-    return mockRecordingData(false);
+    return mockRecordingData(false, ProfilingSnapshot.Kind.PERIODIC);
   }
 
   private RecordingData mockRecordingData(final boolean zip) throws IOException {
+    return mockRecordingData(zip, ProfilingSnapshot.Kind.PERIODIC);
+  }
+
+  private RecordingData mockRecordingData(final boolean zip, ProfilingSnapshot.Kind kind)
+      throws IOException {
     final RecordingData recordingData = mock(RecordingData.class, withSettings().lenient());
     when(recordingData.getStream())
         .then(
@@ -787,6 +825,7 @@ public class ProfileUploaderTest {
     when(recordingData.getName()).thenReturn(RECORDING_NAME_PREFIX + SEQUENCE_NUMBER);
     when(recordingData.getStart()).thenReturn(Instant.ofEpochSecond(PROFILE_START));
     when(recordingData.getEnd()).thenReturn(Instant.ofEpochSecond(PROFILE_END));
+    when(recordingData.getKind()).thenReturn(kind);
     return recordingData;
   }
 

@@ -26,7 +26,7 @@ public class CriteriaInstrumentation extends AbstractHibernateInstrumentation {
 
   @Override
   public Map<String, String> contextStore() {
-    return singletonMap("org.hibernate.Criteria", SessionState.class.getName());
+    return singletonMap("org.hibernate.Criteria", SESSION_STATE);
   }
 
   @Override
@@ -37,8 +37,13 @@ public class CriteriaInstrumentation extends AbstractHibernateInstrumentation {
   }
 
   @Override
+  public String hierarchyMarkerType() {
+    return "org.hibernate.Criteria";
+  }
+
+  @Override
   public ElementMatcher<TypeDescription> hierarchyMatcher() {
-    return implementsInterface(named("org.hibernate.Criteria"));
+    return implementsInterface(named(hierarchyMarkerType()));
   }
 
   @Override

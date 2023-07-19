@@ -8,11 +8,9 @@ import static datadog.trace.instrumentation.grpc.server.GrpcExtractAdapter.GETTE
 import static datadog.trace.instrumentation.grpc.server.GrpcServerDecorator.DECORATE;
 import static datadog.trace.instrumentation.grpc.server.GrpcServerDecorator.GRPC_MESSAGE;
 import static datadog.trace.instrumentation.grpc.server.GrpcServerDecorator.GRPC_SERVER;
+import static datadog.trace.instrumentation.grpc.server.GrpcServerDecorator.SERVER_PATHWAY_EDGE_TAGS;
 
 import datadog.trace.api.Config;
-import datadog.trace.api.function.BiFunction;
-import datadog.trace.api.function.Function;
-import datadog.trace.api.function.Supplier;
 import datadog.trace.api.function.TriConsumer;
 import datadog.trace.api.function.TriFunction;
 import datadog.trace.api.gateway.CallbackProvider;
@@ -24,7 +22,6 @@ import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan.Context;
 import datadog.trace.bootstrap.instrumentation.api.AgentTracer;
-import datadog.trace.bootstrap.instrumentation.api.PathwayContext;
 import datadog.trace.bootstrap.instrumentation.api.TagContext;
 import io.grpc.ForwardingServerCall;
 import io.grpc.ForwardingServerCallListener;
@@ -36,9 +33,11 @@ import io.grpc.ServerInterceptor;
 import io.grpc.Status;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.util.Arrays;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import javax.annotation.Nonnull;
 
 public class TracingServerInterceptor implements ServerInterceptor {
@@ -68,9 +67,7 @@ public class TracingServerInterceptor implements ServerInterceptor {
     CallbackProvider cbp = tracer.getCallbackProvider(RequestContextSlot.APPSEC);
     final AgentSpan span = startSpan(GRPC_SERVER, spanContext).setMeasured(true);
 
-    PathwayContext pathwayContext = propagate().extractPathwayContext(headers, GETTER);
-    span.mergePathwayContext(pathwayContext);
-    AgentTracer.get().setDataStreamCheckpoint(span, Arrays.asList("type:grpc"));
+    AgentTracer.get().setDataStreamCheckpoint(span, SERVER_PATHWAY_EDGE_TAGS, 0);
 
     RequestContext reqContext = span.getRequestContext();
     if (reqContext != null) {
@@ -88,8 +85,6 @@ public class TracingServerInterceptor implements ServerInterceptor {
       final TracingServerCall<ReqT, RespT> tracingServerCall = new TracingServerCall<>(span, call);
       // call other interceptors
       result = next.startCall(tracingServerCall, headers);
-      // the span related work can continue on any thread
-      span.startThreadMigration();
     } catch (final Throwable e) {
       if (span.phasedFinish()) {
         DECORATE.onError(span, e);
@@ -117,8 +112,6 @@ public class TracingServerInterceptor implements ServerInterceptor {
     public void close(final Status status, final Metadata trailers) {
       DECORATE.onClose(span, status);
       try (final AgentScope scope = activateSpan(span)) {
-        // resume the span related work on this thread
-        span.finishThreadMigration();
         delegate().close(status, trailers);
       } catch (final Throwable e) {
         DECORATE.onError(span, e);
@@ -264,7 +257,7 @@ public class TracingServerInterceptor implements ServerInterceptor {
       }
       if (startedCbIast != null) {
         Flow<Object> flowIast = startedCbIast.get();
-        tagContext.withRequestContextDataAppSec(flowIast.getResult());
+        tagContext.withRequestContextDataIast(flowIast.getResult());
       }
       return tagContext;
     }

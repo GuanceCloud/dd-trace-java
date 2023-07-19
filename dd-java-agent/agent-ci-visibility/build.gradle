@@ -1,0 +1,84 @@
+plugins {
+  id 'com.github.johnrengelman.shadow'
+  id 'java-test-fixtures'
+}
+
+apply from: "$rootDir/gradle/java.gradle"
+apply from: "$rootDir/gradle/version.gradle"
+
+minimumBranchCoverage = 0.7
+minimumInstructionCoverage = 0.8
+
+excludedClassesCoverage += [
+  "datadog.trace.civisibility.CiVisibilitySystem",
+  "datadog.trace.civisibility.DDTestModuleImpl",
+  "datadog.trace.civisibility.DDTestSessionImpl",
+  "datadog.trace.civisibility.DDTestSuiteImpl",
+  "datadog.trace.civisibility.DDTestImpl",
+  "datadog.trace.civisibility.TestModuleRegistry",
+  "datadog.trace.civisibility.ci.CIInfo",
+  "datadog.trace.civisibility.ci.CIInfo.Builder",
+  "datadog.trace.civisibility.communication.*",
+  "datadog.trace.civisibility.config.JvmInfoFactory",
+  "datadog.trace.civisibility.config.ConfigurationApi",
+  "datadog.trace.civisibility.config.ModuleExecutionSettingsFactory",
+  "datadog.trace.civisibility.config.JvmInfo",
+  "datadog.trace.civisibility.config.JvmInfoFactory.JvmVersionOutputParser",
+  "datadog.trace.civisibility.config.CiVisibilitySettings",
+  "datadog.trace.civisibility.config.ConfigurationApiImpl.MultiEnvelopeDto",
+  "datadog.trace.civisibility.config.ConfigurationApi.1",
+  "datadog.trace.civisibility.context.AbstractTestContext",
+  "datadog.trace.civisibility.context.EmptyTestContext",
+  "datadog.trace.civisibility.context.ParentProcessTestContext",
+  "datadog.trace.civisibility.context.SpanTestContext",
+  "datadog.trace.civisibility.coverage.TestProbes.TestProbesFactory",
+  "datadog.trace.civisibility.coverage.ExecutionDataAdapter",
+  "datadog.trace.civisibility.coverage.TestProbes",
+  "datadog.trace.civisibility.coverage.SourceAnalyzer",
+  "datadog.trace.civisibility.events.BuildEventsHandlerImpl",
+  "datadog.trace.civisibility.events.CachingTestEventsHandlerFactory.CacheKey",
+  "datadog.trace.civisibility.events.TestEventsHandlerImpl",
+  "datadog.trace.civisibility.events.TestDescriptor",
+  "datadog.trace.civisibility.events.TestModuleDescriptor",
+  "datadog.trace.civisibility.events.TestSuiteDescriptor",
+  "datadog.trace.civisibility.git.GitObject",
+  "datadog.trace.civisibility.git.tree.*",
+  "datadog.trace.civisibility.ipc.ModuleExecutionResult",
+  "datadog.trace.civisibility.ipc.RepoIndexResponse",
+  "datadog.trace.civisibility.ipc.RepoIndexRequest",
+  "datadog.trace.civisibility.ipc.SignalServer",
+  "datadog.trace.civisibility.ipc.SignalType",
+  "datadog.trace.civisibility.ipc.SignalClient",
+  "datadog.trace.civisibility.source.MethodLinesResolver.MethodLines",
+  "datadog.trace.civisibility.source.index.RepoIndexBuilder.RepoIndexingFileVisitor",
+  "datadog.trace.civisibility.source.index.RepoIndexFetcher",
+  "datadog.trace.civisibility.source.index.RepoIndexSourcePathResolver",
+  "datadog.trace.civisibility.utils.ShellCommandExecutor",
+  "datadog.trace.civisibility.utils.ShellCommandExecutor.OutputParser",
+]
+
+dependencies {
+  api deps.slf4j
+
+  implementation deps.asm
+  implementation deps.asmcommons
+  implementation group: 'org.jacoco', name: 'org.jacoco.core', version: '0.8.9'
+
+  implementation project(':communication')
+  implementation project(':internal-api')
+  implementation project(':internal-api:internal-api-9')
+
+  testImplementation project(":utils:test-utils")
+  testImplementation("com.google.jimfs:jimfs:1.1") // an in-memory file system for testing code that works with files
+
+  testFixturesApi project(':dd-java-agent:testing')
+  testFixturesApi project(':utils:test-utils')
+}
+
+shadowJar {
+  dependencies deps.excludeShared
+}
+
+jar {
+  archiveClassifier = 'unbundled'
+}

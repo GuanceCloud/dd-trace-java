@@ -1,6 +1,8 @@
 package datadog.trace.instrumentation.tomcat;
 
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
+import static datadog.trace.agent.tooling.muzzle.Reference.EXPECTS_NON_STATIC;
+import static datadog.trace.agent.tooling.muzzle.Reference.EXPECTS_PUBLIC;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSpan;
 import static datadog.trace.bootstrap.instrumentation.decorator.HttpServerDecorator.DD_SPAN_ATTRIBUTE;
 import static datadog.trace.bootstrap.instrumentation.java.concurrent.ExcludeFilter.ExcludeType.RUNNABLE;
@@ -12,10 +14,13 @@ import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
 import com.google.auto.service.AutoService;
 import datadog.trace.agent.tooling.ExcludeFilterProvider;
 import datadog.trace.agent.tooling.Instrumenter;
+import datadog.trace.agent.tooling.muzzle.Reference;
 import datadog.trace.api.CorrelationIdentifier;
 import datadog.trace.api.GlobalTracer;
+import datadog.trace.api.gateway.Flow;
 import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
+import datadog.trace.bootstrap.instrumentation.api.AgentTracer;
 import datadog.trace.bootstrap.instrumentation.java.concurrent.ExcludeFilter;
 import java.util.Arrays;
 import java.util.Collection;
@@ -45,8 +50,30 @@ public final class TomcatServerInstrumentation extends Instrumenter.Tracing
       packageName + ".ExtractAdapter$Request",
       packageName + ".ExtractAdapter$Response",
       packageName + ".TomcatDecorator",
+      packageName + ".TomcatDecorator$TomcatBlockResponseFunction",
       packageName + ".RequestURIDataAdapter",
+      packageName + ".TomcatBlockingHelper",
     };
+  }
+
+  private static final Reference GET_OUTPUT_STREAM_REFERENCE =
+      new Reference.Builder("org.apache.catalina.connector.Response")
+          .withMethod(
+              new String[0],
+              EXPECTS_PUBLIC | EXPECTS_NON_STATIC,
+              "getOutputStream",
+              "Ljavax/servlet/ServletOutputStream;")
+          .or()
+          .withMethod(
+              new String[0],
+              EXPECTS_PUBLIC | EXPECTS_NON_STATIC,
+              "getOutputStream",
+              "Ljakarta/servlet/ServletOutputStream;")
+          .build();
+
+  @Override
+  public Reference[] additionalMuzzleReferences() {
+    return new Reference[] {GET_OUTPUT_STREAM_REFERENCE};
   }
 
   @Override
@@ -97,16 +124,14 @@ public final class TomcatServerInstrumentation extends Instrumenter.Tracing
       req.setAttribute(DD_EXTRACTED_CONTEXT_ATTRIBUTE, extractedContext);
 
       final AgentSpan span = DECORATE.startSpan(req, extractedContext);
+      final AgentScope scope = activateSpan(span);
+      scope.setAsyncPropagation(true);
       // This span is finished when Request.recycle() is called by RequestInstrumentation.
       DECORATE.afterStart(span);
 
-      final AgentScope scope = activateSpan(span);
-      scope.setAsyncPropagation(true);
       req.setAttribute(DD_SPAN_ATTRIBUTE, span);
       req.setAttribute(CorrelationIdentifier.getTraceIdKey(), GlobalTracer.get().getTraceId());
       req.setAttribute(CorrelationIdentifier.getSpanIdKey(), GlobalTracer.get().getSpanId());
-      // request may be processed on any thread; signal thread migration
-      span.startThreadMigration();
       return scope;
     }
 
@@ -130,15 +155,26 @@ public final class TomcatServerInstrumentation extends Instrumenter.Tracing
   public static class PostParseAdvice {
 
     @Advice.OnMethodExit(suppress = Throwable.class)
-    public static void afterParse(@Advice.Argument(1) Request req) {
+    public static void afterParse(
+        @Advice.Argument(1) Request req,
+        @Advice.Argument(3) Response resp,
+        @Advice.Return(readOnly = false) Boolean ret) {
       Object spanObj = req.getAttribute(DD_SPAN_ATTRIBUTE);
       if (spanObj instanceof AgentSpan) {
+        AgentSpan span = (AgentSpan) spanObj;
+        req.setAttribute(CorrelationIdentifier.getTraceIdKey(), AgentTracer.get().getTraceId(span));
+        req.setAttribute(CorrelationIdentifier.getSpanIdKey(), AgentTracer.get().getSpanId(span));
         Object ctxObj = req.getAttribute(DD_EXTRACTED_CONTEXT_ATTRIBUTE);
         AgentSpan.Context.Extracted ctx =
             ctxObj instanceof AgentSpan.Context.Extracted
                 ? (AgentSpan.Context.Extracted) ctxObj
                 : null;
-        DECORATE.onRequest((AgentSpan) spanObj, req, req, ctx);
+        DECORATE.onRequest(span, req, req, ctx);
+        Flow.Action.RequestBlockingAction rba = span.getRequestBlockingAction();
+        if (rba != null) {
+          TomcatBlockingHelper.commitBlockingResponse(req, resp, rba);
+          ret = false; // skip pipeline
+        }
       }
     }
   }

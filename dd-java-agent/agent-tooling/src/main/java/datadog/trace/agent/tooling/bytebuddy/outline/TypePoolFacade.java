@@ -5,6 +5,8 @@ import static datadog.trace.agent.tooling.bytebuddy.outline.TypeFactory.findType
 import static datadog.trace.agent.tooling.bytebuddy.outline.TypeFactory.typeFactory;
 
 import datadog.trace.agent.tooling.bytebuddy.SharedTypePools;
+import datadog.trace.agent.tooling.bytebuddy.memoize.Memoizer;
+import datadog.trace.api.InstrumenterConfig;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.pool.TypePool;
 
@@ -27,6 +29,10 @@ public final class TypePoolFacade implements TypePool, SharedTypePools.Supplier 
     typeFactory.get().switchContext(classLoader);
   }
 
+  public static ClassLoader currentContext() {
+    return typeFactory.get().currentContext();
+  }
+
   @Override
   public void annotationOfInterest(String name) {
     AnnotationOutline.prepareAnnotationOutline(name);
@@ -47,9 +53,22 @@ public final class TypePoolFacade implements TypePool, SharedTypePools.Supplier 
     typeFactory.get().enableFullDescriptions();
   }
 
+  /** Temporarily switch back to outlines, e.g. for last-minute memoization. */
+  public static boolean disableFullDescriptions() {
+    return typeFactory.get().disableFullDescriptions();
+  }
+
   @Override
   public void endTransform() {
     typeFactory.get().endTransform();
+  }
+
+  @Override
+  public void clear() {
+    if (InstrumenterConfig.get().isResolverMemoizingEnabled()) {
+      Memoizer.clear();
+    }
+    TypeFactory.clear();
   }
 
   @Override
@@ -61,7 +80,4 @@ public final class TypePoolFacade implements TypePool, SharedTypePools.Supplier 
     }
     return new Resolution.Simple(type);
   }
-
-  @Override
-  public void clear() {}
 }

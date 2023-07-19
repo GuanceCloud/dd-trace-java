@@ -1,6 +1,5 @@
 package datadog.trace.instrumentation.jms;
 
-import static datadog.trace.agent.tooling.bytebuddy.matcher.ClassLoaderMatchers.hasClassesNamed;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.HierarchyMatchers.hasInterface;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.HierarchyMatchers.implementsInterface;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
@@ -12,7 +11,7 @@ import static datadog.trace.instrumentation.jms.JMSDecorator.BROKER_DECORATE;
 import static datadog.trace.instrumentation.jms.JMSDecorator.CONSUMER_DECORATE;
 import static datadog.trace.instrumentation.jms.JMSDecorator.JMS_CONSUME;
 import static datadog.trace.instrumentation.jms.JMSDecorator.JMS_DELIVER;
-import static datadog.trace.instrumentation.jms.JMSDecorator.JMS_LEGACY_TRACING;
+import static datadog.trace.instrumentation.jms.JMSDecorator.TIME_IN_QUEUE_ENABLED;
 import static datadog.trace.instrumentation.jms.MessageExtractAdapter.GETTER;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static net.bytebuddy.matcher.ElementMatchers.isMethod;
@@ -44,14 +43,13 @@ public final class JMSMessageConsumerInstrumentation extends Instrumenter.Tracin
   }
 
   @Override
-  public ElementMatcher<ClassLoader> classLoaderMatcher() {
-    // Optimization for expensive typeMatcher.
-    return hasClassesNamed("javax.jms.MessageConsumer");
+  public String hierarchyMarkerType() {
+    return "javax.jms.MessageConsumer";
   }
 
   @Override
   public ElementMatcher<TypeDescription> hierarchyMatcher() {
-    return implementsInterface(named("javax.jms.MessageConsumer"));
+    return implementsInterface(named(hierarchyMarkerType()));
   }
 
   @Override
@@ -128,14 +126,14 @@ public final class JMSMessageConsumerInstrumentation extends Instrumenter.Tracin
         propagatedContext = propagate().extract(message, GETTER);
       }
       long startMillis = GETTER.extractTimeInQueueStart(message);
-      if (startMillis == 0 || JMS_LEGACY_TRACING) {
+      if (startMillis == 0 || !TIME_IN_QUEUE_ENABLED) {
         span = startSpan(JMS_CONSUME, propagatedContext);
       } else {
         long batchId = GETTER.extractMessageBatchId(message);
         AgentSpan timeInQueue = consumerState.getTimeInQueueSpan(batchId);
         if (null == timeInQueue) {
           timeInQueue =
-              startSpan(JMS_DELIVER, propagatedContext, MILLISECONDS.toMicros(startMillis), false);
+              startSpan(JMS_DELIVER, propagatedContext, MILLISECONDS.toMicros(startMillis));
           BROKER_DECORATE.afterStart(timeInQueue);
           BROKER_DECORATE.onTimeInQueue(
               timeInQueue,

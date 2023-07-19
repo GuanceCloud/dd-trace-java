@@ -1,6 +1,5 @@
 package datadog.trace.instrumentation.rabbitmq.amqp;
 
-import static datadog.trace.agent.tooling.bytebuddy.matcher.ClassLoaderMatchers.hasClassesNamed;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.HierarchyMatchers.implementsInterface;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.nameEndsWith;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
@@ -9,11 +8,17 @@ import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSp
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.noopSpan;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.propagate;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.startSpan;
-import static datadog.trace.instrumentation.rabbitmq.amqp.RabbitDecorator.AMQP_COMMAND;
+import static datadog.trace.core.datastreams.TagsProcessor.DIRECTION_OUT;
+import static datadog.trace.core.datastreams.TagsProcessor.DIRECTION_TAG;
+import static datadog.trace.core.datastreams.TagsProcessor.EXCHANGE_TAG;
+import static datadog.trace.core.datastreams.TagsProcessor.HAS_ROUTING_KEY_TAG;
+import static datadog.trace.core.datastreams.TagsProcessor.TYPE_TAG;
 import static datadog.trace.instrumentation.rabbitmq.amqp.RabbitDecorator.CLIENT_DECORATE;
 import static datadog.trace.instrumentation.rabbitmq.amqp.RabbitDecorator.CONSUMER_DECORATE;
+import static datadog.trace.instrumentation.rabbitmq.amqp.RabbitDecorator.OPERATION_AMQP_COMMAND;
+import static datadog.trace.instrumentation.rabbitmq.amqp.RabbitDecorator.OPERATION_AMQP_OUTBOUND;
 import static datadog.trace.instrumentation.rabbitmq.amqp.RabbitDecorator.PRODUCER_DECORATE;
-import static datadog.trace.instrumentation.rabbitmq.amqp.RabbitDecorator.RABBITMQ_LEGACY_TRACING;
+import static datadog.trace.instrumentation.rabbitmq.amqp.RabbitDecorator.TIME_IN_QUEUE_ENABLED;
 import static datadog.trace.instrumentation.rabbitmq.amqp.TextMapInjectAdapter.SETTER;
 import static net.bytebuddy.matcher.ElementMatchers.canThrow;
 import static net.bytebuddy.matcher.ElementMatchers.isGetter;
@@ -38,6 +43,7 @@ import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.description.type.TypeDescription;
@@ -52,14 +58,13 @@ public class RabbitChannelInstrumentation extends Instrumenter.Tracing
   }
 
   @Override
-  public ElementMatcher<ClassLoader> classLoaderMatcher() {
-    // Optimization for expensive typeMatcher.
-    return hasClassesNamed("com.rabbitmq.client.Channel");
+  public String hierarchyMarkerType() {
+    return "com.rabbitmq.client.Channel";
   }
 
   @Override
   public ElementMatcher<TypeDescription> hierarchyMatcher() {
-    return implementsInterface(named("com.rabbitmq.client.Channel"));
+    return implementsInterface(named(hierarchyMarkerType()));
   }
 
   @Override
@@ -67,7 +72,7 @@ public class RabbitChannelInstrumentation extends Instrumenter.Tracing
     return new String[] {
       packageName + ".RabbitDecorator",
       packageName + ".TextMapInjectAdapter",
-      packageName + ".TracedDelegatingConsumer"
+      packageName + ".TracedDelegatingConsumer",
     };
   }
 
@@ -118,7 +123,7 @@ public class RabbitChannelInstrumentation extends Instrumenter.Tracing
 
       final Connection connection = channel.getConnection();
 
-      final AgentSpan span = startSpan(AMQP_COMMAND);
+      final AgentSpan span = startSpan(OPERATION_AMQP_COMMAND);
       span.setResourceName(method);
       CLIENT_DECORATE.setPeerPort(span, connection.getPort());
       CLIENT_DECORATE.afterStart(span);
@@ -155,7 +160,7 @@ public class RabbitChannelInstrumentation extends Instrumenter.Tracing
 
       final Connection connection = channel.getConnection();
 
-      final AgentSpan span = startSpan(AMQP_COMMAND);
+      final AgentSpan span = startSpan(OPERATION_AMQP_OUTBOUND);
       PRODUCER_DECORATE.setPeerPort(span, connection.getPort());
       PRODUCER_DECORATE.afterStart(span);
       PRODUCER_DECORATE.onPeerConnection(span, connection.getAddress());
@@ -177,11 +182,17 @@ public class RabbitChannelInstrumentation extends Instrumenter.Tracing
         // We need to copy the BasicProperties and provide a header map we can modify
         Map<String, Object> headers = props.getHeaders();
         headers = (headers == null) ? new HashMap<String, Object>() : new HashMap<>(headers);
-        if (!RABBITMQ_LEGACY_TRACING) {
+        if (TIME_IN_QUEUE_ENABLED) {
           RabbitDecorator.injectTimeInQueueStart(headers);
         }
         propagate().inject(span, headers, SETTER);
-        propagate().injectPathwayContext(span, headers, SETTER);
+        LinkedHashMap<String, String> sortedTags = new LinkedHashMap<>();
+        sortedTags.put(DIRECTION_TAG, DIRECTION_OUT);
+        sortedTags.put(EXCHANGE_TAG, exchange);
+        sortedTags.put(
+            HAS_ROUTING_KEY_TAG, routingKey == null || routingKey.equals("") ? "false" : "true");
+        sortedTags.put(TYPE_TAG, "rabbitmq");
+        propagate().injectPathwayContext(span, headers, SETTER, sortedTags);
         props =
             new AMQP.BasicProperties(
                 props.getContentType(),

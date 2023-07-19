@@ -21,10 +21,15 @@ import net.bytebuddy.matcher.ElementMatcher;
 
 @AutoService(Instrumenter.class)
 public final class RmiClientInstrumentation extends Instrumenter.Tracing
-    implements Instrumenter.ForTypeHierarchy {
+    implements Instrumenter.ForBootstrap, Instrumenter.ForTypeHierarchy {
 
   public RmiClientInstrumentation() {
     super("rmi", "rmi-client");
+  }
+
+  @Override
+  public String hierarchyMarkerType() {
+    return null; // bootstrap type
   }
 
   @Override
@@ -49,9 +54,8 @@ public final class RmiClientInstrumentation extends Instrumenter.Tracing
         return null;
       }
       final AgentSpan span = startSpan(RMI_INVOKE);
-      span.setResourceName(DECORATE.spanNameForMethod(method));
-
       DECORATE.afterStart(span);
+      DECORATE.onMethodInvocation(span, method);
       return activateSpan(span);
     }
 

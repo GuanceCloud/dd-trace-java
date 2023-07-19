@@ -20,24 +20,39 @@ import static datadog.trace.util.AgentThreadFactory.AgentThread.PROFILER_HTTP_DI
 import com.datadog.profiling.controller.RecordingData;
 import com.datadog.profiling.controller.RecordingType;
 import com.datadog.profiling.uploader.util.JfrCliHelper;
-import datadog.common.process.PidHelper;
+import com.squareup.moshi.JsonAdapter;
+import com.squareup.moshi.JsonReader;
+import com.squareup.moshi.JsonWriter;
 import datadog.common.version.VersionInfo;
 import datadog.communication.http.OkHttpUtils;
 import datadog.trace.api.Config;
+import datadog.trace.api.DDTags;
+import datadog.trace.api.git.GitInfo;
+import datadog.trace.api.git.GitInfoProvider;
 import datadog.trace.bootstrap.config.provider.ConfigProvider;
+import datadog.trace.bootstrap.instrumentation.api.Tags;
 import datadog.trace.relocate.api.IOLogger;
 import datadog.trace.util.AgentThreadFactory;
+import datadog.trace.util.PidHelper;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.io.IOException;
 import java.io.InterruptedIOException;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.Dispatcher;
@@ -105,7 +120,10 @@ public final class ProfileUploader {
   private final HttpUrl url;
   private final int terminationTimeout;
   private final CompressionType compressionType;
-  private final String tags;
+
+  private final RecordingDataAdapter jsonAdapter;
+
+  private final Duration uploadTimeout;
 
   public ProfileUploader(final Config config, final ConfigProvider configProvider) {
     this(config, configProvider, new IOLogger(log), TERMINATION_TIMEOUT_SEC);
@@ -141,12 +159,23 @@ public final class ProfileUploader {
     final Map<String, String> tagsMap = new HashMap<>(config.getMergedProfilingTags());
     tagsMap.put(VersionInfo.PROFILER_VERSION_TAG, VersionInfo.VERSION);
     tagsMap.put(VersionInfo.LIBRARY_VERSION_TAG, VersionInfo.VERSION);
-    // PID can be null if we cannot find it out from the system
-    if (PidHelper.PID != null) {
-      tagsMap.put(PidHelper.PID_TAG, PidHelper.PID.toString());
+    // PID can be empty if we cannot find it out from the system
+    if (!PidHelper.getPid().isEmpty()) {
+      tagsMap.put(DDTags.PID_TAG, PidHelper.getPid());
     }
+
+    if (config.isTraceGitMetadataEnabled()) {
+      GitInfo gitInfo = GitInfoProvider.INSTANCE.getGitInfo();
+      tagsMap.put(Tags.GIT_REPOSITORY_URL, gitInfo.getRepositoryURL());
+      tagsMap.put(Tags.GIT_COMMIT_SHA, gitInfo.getCommit().getSha());
+    }
+
     // Comma separated tags string for V2.4 format
-    tags = String.join(",", tagsToList(tagsMap));
+    Pattern quotes = Pattern.compile("\"");
+    jsonAdapter =
+        new RecordingDataAdapter(
+            quotes.matcher(String.join(",", tagsToList(tagsMap))).replaceAll(""));
+    uploadTimeout = Duration.ofSeconds(config.getProfilingUploadTimeout());
 
     // This is the same thing OkHttp Dispatcher is doing except thread naming and daemonization
     okHttpExecutorService =
@@ -169,7 +198,7 @@ public final class ProfileUploader {
             config.getProfilingProxyPort(),
             config.getProfilingProxyUsername(),
             config.getProfilingProxyPassword(),
-            TimeUnit.SECONDS.toMillis(config.getProfilingUploadTimeout()));
+            uploadTimeout.toMillis());
 
     compressionType = CompressionType.of(config.getProfilingUploadCompression());
   }
@@ -232,31 +261,51 @@ public final class ProfileUploader {
     }
 
     Call call = makeRequest(type, data);
+    CountDownLatch latch = new CountDownLatch(sync ? 1 : 0);
+    AtomicBoolean handled = new AtomicBoolean(false);
+
+    call.enqueue(
+        new Callback() {
+          @Override
+          public void onResponse(final Call call, final Response response) throws IOException {
+            if (handled.compareAndSet(false, true)) {
+              handleResponse(call, response, data, onCompletion);
+              latch.countDown();
+            }
+          }
+
+          @Override
+          public void onFailure(final Call call, final IOException e) {
+            if (handled.compareAndSet(false, true)) {
+              handleFailure(call, e, data, onCompletion);
+              latch.countDown();
+            }
+          }
+        });
     if (sync) {
       try {
-        handleResponse(call, call.execute(), data, onCompletion);
-      } catch (IOException e) {
-        handleFailure(call, e, data, onCompletion);
+        log.debug("Waiting at most {} seconds for upload to finish", uploadTimeout.plusSeconds(1));
+        if (!latch.await(uploadTimeout.plusSeconds(1).toMillis(), TimeUnit.MILLISECONDS)) {
+          // Usually this should not happen and timeouts should be handled by the client.
+          // But, in any case, we have this safety-break in place to prevent blocking finishing the
+          // sync request to a misbehaving server.
+          if (handled.compareAndSet(false, true)) {
+            handleFailure(call, null, data, onCompletion);
+          }
+        }
+      } catch (InterruptedException e) {
+        if (handled.compareAndSet(false, true)) {
+          handleFailure(call, e, data, onCompletion);
+        }
+        // reset the interrupted flag
+        Thread.currentThread().interrupt();
       }
-    } else {
-      call.enqueue(
-          new Callback() {
-            @Override
-            public void onResponse(final Call call, final Response response) throws IOException {
-              handleResponse(call, response, data, onCompletion);
-            }
-
-            @Override
-            public void onFailure(final Call call, final IOException e) {
-              handleFailure(call, e, data, onCompletion);
-            }
-          });
     }
   }
 
   private void handleFailure(
       final Call call,
-      final IOException e,
+      final Exception e,
       final RecordingData data,
       @Nonnull final Runnable onCompletion) {
     if (isEmptyReplyFromServer(e)) {
@@ -303,6 +352,7 @@ public final class ProfileUploader {
     onCompletion.run();
   }
 
+  @SuppressFBWarnings("DCN_NULLPOINTER_EXCEPTION")
   private IOLogger.Response getLoggerResponse(final okhttp3.Response response) {
     if (response != null) {
       try {
@@ -315,15 +365,16 @@ public final class ProfileUploader {
     return null;
   }
 
-  private static boolean isEmptyReplyFromServer(final IOException e) {
+  private static boolean isEmptyReplyFromServer(final Exception e) {
     // The server in datadog-agent triggers 'unexpected end of stream' caused by
     // EOFException.
     // The MockWebServer in tests triggers an InterruptedIOException with SocketPolicy
     // NO_RESPONSE. This is because in tests we can't cleanly terminate the connection
     // on the
     // server side without resetting.
-    return (e instanceof InterruptedIOException)
-        || (e.getCause() != null && e.getCause() instanceof java.io.EOFException);
+    return e != null
+        && ((e instanceof InterruptedIOException)
+            || (e.getCause() != null && e.getCause() instanceof java.io.EOFException));
   }
 
   public void shutdown() {
@@ -333,22 +384,13 @@ public final class ProfileUploader {
     } catch (final InterruptedException e) {
       // Note: this should only happen in main thread right before exiting, so eating up interrupted
       // state should be fine.
-      log.warn("Wait for executor shutdown interrupted");
+      log.debug("Wait for executor shutdown interrupted");
     }
     client.connectionPool().evictAll();
   }
 
   private byte[] createEvent(@Nonnull final RecordingData data) {
-    final StringBuilder os = new StringBuilder();
-    os.append("{");
-    os.append("\"attachments\":[\"" + V4_ATTACHMENT_FILENAME + "\"],");
-    os.append("\"" + V4_PROFILE_TAGS_PARAM + "\":\"" + tags + "\",");
-    os.append("\"" + V4_PROFILE_START_PARAM + "\":\"" + data.getStart() + "\",");
-    os.append("\"" + V4_PROFILE_END_PARAM + "\":\"" + data.getEnd() + "\",");
-    os.append("\"family\":\"" + V4_FAMILY + "\",");
-    os.append("\"version\":\"" + V4_VERSION + "\"");
-    os.append("}");
-    return os.toString().getBytes();
+    return jsonAdapter.toJson(data).getBytes(StandardCharsets.UTF_8);
   }
 
   private MultipartBody makeRequestBody(
@@ -396,5 +438,43 @@ public final class ProfileUploader {
    */
   OkHttpClient getClient() {
     return client;
+  }
+
+  private static final class RecordingDataAdapter extends JsonAdapter<RecordingData> {
+
+    private final String tags;
+
+    private RecordingDataAdapter(String tags) {
+      this.tags = tags;
+    }
+
+    @Nullable
+    @Override
+    public RecordingData fromJson(JsonReader jsonReader) {
+      throw new IllegalStateException();
+    }
+
+    @Override
+    public void toJson(JsonWriter writer, RecordingData recordingData) throws IOException {
+      if (recordingData == null) {
+        return;
+      }
+      writer.beginObject();
+      writer.name("attachments");
+      writer.beginArray();
+      writer.value(V4_ATTACHMENT_FILENAME);
+      writer.endArray();
+      writer.name(V4_PROFILE_TAGS_PARAM);
+      writer.value(tags + ",snapshot:" + recordingData.getKind().name().toLowerCase(Locale.ROOT));
+      writer.name(V4_PROFILE_START_PARAM);
+      writer.value(recordingData.getStart().toString());
+      writer.name(V4_PROFILE_END_PARAM);
+      writer.value(recordingData.getEnd().toString());
+      writer.name("family");
+      writer.value(V4_FAMILY);
+      writer.name("version");
+      writer.value(V4_VERSION);
+      writer.endObject();
+    }
   }
 }

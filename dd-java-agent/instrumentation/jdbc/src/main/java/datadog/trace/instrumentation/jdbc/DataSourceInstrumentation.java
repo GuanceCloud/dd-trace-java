@@ -19,7 +19,7 @@ import net.bytebuddy.matcher.ElementMatcher;
 
 @AutoService(Instrumenter.class)
 public final class DataSourceInstrumentation extends Instrumenter.Tracing
-    implements Instrumenter.ForTypeHierarchy {
+    implements Instrumenter.ForBootstrap, Instrumenter.ForTypeHierarchy {
   public DataSourceInstrumentation() {
     super("jdbc-datasource");
   }
@@ -37,13 +37,19 @@ public final class DataSourceInstrumentation extends Instrumenter.Tracing
   }
 
   @Override
+  public String hierarchyMarkerType() {
+    return null; // bootstrap type
+  }
+
+  @Override
   public ElementMatcher<TypeDescription> hierarchyMatcher() {
     return implementsInterface(named("javax.sql.DataSource"));
   }
 
   @Override
   public void adviceTransformations(AdviceTransformation transformation) {
-    transformation.applyAdvice(named("getConnection"), GetConnectionAdvice.class.getName());
+    transformation.applyAdvice(
+        named("getConnection"), DataSourceInstrumentation.class.getName() + "$GetConnectionAdvice");
   }
 
   public static class GetConnectionAdvice {

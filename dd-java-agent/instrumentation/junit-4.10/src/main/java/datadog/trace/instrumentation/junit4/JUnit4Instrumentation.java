@@ -1,6 +1,5 @@
 package datadog.trace.instrumentation.junit4;
 
-import static datadog.trace.agent.tooling.bytebuddy.matcher.ClassLoaderMatchers.hasClassesNamed;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.HierarchyMatchers.extendsClass;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
 import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
@@ -24,21 +23,22 @@ public class JUnit4Instrumentation extends Instrumenter.CiVisibility
   }
 
   @Override
-  public ElementMatcher<TypeDescription> hierarchyMatcher() {
-    return extendsClass(named("org.junit.runner.Runner"));
+  public String hierarchyMarkerType() {
+    return "org.junit.runner.Runner";
   }
 
   @Override
-  public ElementMatcher<ClassLoader> classLoaderMatcher() {
-    return hasClassesNamed("org.junit.runner.Runner");
+  public ElementMatcher<TypeDescription> hierarchyMatcher() {
+    return extendsClass(named(hierarchyMarkerType()));
   }
 
   @Override
   public String[] helperClassNames() {
     return new String[] {
-      packageName + ".JUnit4Decorator",
       packageName + ".TracingListener",
-      packageName + ".JUnit4Utils"
+      packageName + ".SkippedByItr",
+      packageName + ".JUnit4Utils",
+      packageName + ".ItrFilter",
     };
   }
 
@@ -59,9 +59,16 @@ public class JUnit4Instrumentation extends Instrumenter.CiVisibility
         return;
       }
 
-      // This prevents installing the TracingListener multiple times.
       for (final RunListener listener : runListeners) {
-        if (JUnit4Utils.isTracingListener(listener)) {
+        RunListener unwrappedListener = JUnit4Utils.unwrapListener(listener);
+        // prevents installing TracingListener multiple times
+        if (JUnit4Utils.isTracingListener(unwrappedListener)) {
+          return;
+        }
+        // prevents installing TracingListener if we're running in JUnit 5 vintage compatibility
+        // mode
+        // (in that case JUnit 5 instrumentation will install its own TracingListener)
+        if (JUnit4Utils.isJUnitVintageListener(unwrappedListener)) {
           return;
         }
       }

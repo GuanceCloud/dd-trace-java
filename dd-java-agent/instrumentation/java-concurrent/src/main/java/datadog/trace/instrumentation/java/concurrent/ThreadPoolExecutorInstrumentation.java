@@ -15,9 +15,12 @@ import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
 import com.google.auto.service.AutoService;
 import datadog.trace.agent.tooling.ExcludeFilterProvider;
 import datadog.trace.agent.tooling.Instrumenter;
+import datadog.trace.api.Platform;
+import datadog.trace.bootstrap.ContextStore;
 import datadog.trace.bootstrap.InstrumentationContext;
 import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.java.concurrent.ExcludeFilter;
+import datadog.trace.bootstrap.instrumentation.java.concurrent.QueueTimerHelper;
 import datadog.trace.bootstrap.instrumentation.java.concurrent.State;
 import datadog.trace.bootstrap.instrumentation.java.concurrent.TPEHelper;
 import datadog.trace.bootstrap.instrumentation.java.concurrent.Wrapper;
@@ -57,7 +60,7 @@ import net.bytebuddy.matcher.ElementMatcher;
  */
 @AutoService(Instrumenter.class)
 public final class ThreadPoolExecutorInstrumentation extends Instrumenter.Tracing
-    implements Instrumenter.ForTypeHierarchy, ExcludeFilterProvider {
+    implements Instrumenter.ForBootstrap, Instrumenter.ForTypeHierarchy, ExcludeFilterProvider {
 
   private static final String TPE = "java.util.concurrent.ThreadPoolExecutor";
 
@@ -74,6 +77,11 @@ public final class ThreadPoolExecutorInstrumentation extends Instrumenter.Tracin
   }
 
   @Override
+  public String hierarchyMarkerType() {
+    return null; // bootstrap type
+  }
+
+  @Override
   public ElementMatcher<TypeDescription> hierarchyMatcher() {
     return not(named("java.util.concurrent.ScheduledThreadPoolExecutor"))
         .and(extendsClass(named(TPE)));
@@ -83,7 +91,7 @@ public final class ThreadPoolExecutorInstrumentation extends Instrumenter.Tracin
   public Map<String, String> contextStore() {
     final Map<String, String> stores = new HashMap<>();
     stores.put(TPE, Boolean.class.getName());
-    stores.put("java.lang.Runnable", State.class.getName());
+    stores.put(Runnable.class.getName(), State.class.getName());
     return Collections.unmodifiableMap(stores);
   }
 
@@ -91,7 +99,10 @@ public final class ThreadPoolExecutorInstrumentation extends Instrumenter.Tracin
   public void adviceTransformations(AdviceTransformation transformation) {
     transformation.applyAdvice(isConstructor(), getClass().getName() + "$Init");
     transformation.applyAdvice(
-        named("execute").and(isMethod()).and(NO_WRAPPING_BEFORE_DELEGATION),
+        named("execute")
+            .and(isMethod())
+            .and(NO_WRAPPING_BEFORE_DELEGATION)
+            .and(takesArgument(0, named(Runnable.class.getName()))),
         getClass().getName() + "$Execute");
     transformation.applyAdvice(
         named("beforeExecute")
@@ -120,22 +131,29 @@ public final class ThreadPoolExecutorInstrumentation extends Instrumenter.Tracin
   public static final class Init {
     @Advice.OnMethodExit(suppress = Throwable.class)
     public static void decideWrapping(@Advice.This final ThreadPoolExecutor zis) {
-      TPEHelper.setPropagate(
-          InstrumentationContext.get(ThreadPoolExecutor.class, Boolean.class), zis);
+      // avoid tracking threads when building native images as it confuses the scanner
+      // (we still want instrumentation applied, so tracking works in the built image)
+      if (!Platform.isNativeImageBuilder()) {
+        TPEHelper.setPropagate(
+            InstrumentationContext.get(ThreadPoolExecutor.class, Boolean.class), zis);
+      }
     }
   }
 
   public static final class Execute {
     @Advice.OnMethodEnter(suppress = Throwable.class)
     public static void capture(
-        @Advice.This final ThreadPoolExecutor zis,
+        @Advice.This final ThreadPoolExecutor tpe,
         @Advice.Argument(readOnly = false, value = 0) Runnable task) {
       if (TPEHelper.shouldPropagate(
-          InstrumentationContext.get(ThreadPoolExecutor.class, Boolean.class), zis)) {
+          InstrumentationContext.get(ThreadPoolExecutor.class, Boolean.class), tpe)) {
         if (TPEHelper.useWrapping(task)) {
           task = Wrapper.wrap(task);
         } else {
-          TPEHelper.capture(InstrumentationContext.get(Runnable.class, State.class), task);
+          ContextStore<Runnable, State> contextStore =
+              InstrumentationContext.get(Runnable.class, State.class);
+          TPEHelper.capture(contextStore, task);
+          QueueTimerHelper.startQueuingTimer(contextStore, tpe.getClass(), task);
         }
       }
     }

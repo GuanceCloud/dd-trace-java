@@ -15,27 +15,28 @@ class TelemetrySystemSpecification extends DDSpecification {
   Instrumentation inst = Mock()
 
   void 'installs dependencies transformer'() {
-    setup:
-    injectSysConfig('dd.instrumentation.telemetry.enabled', 'true')
-
     when:
-    TelemetrySystem.createDependencyService(inst)
+    def depService = TelemetrySystem.createDependencyService(inst)
 
     then:
     1 * inst.addTransformer(_ as LocationsCollectingTransformer)
+
+    cleanup:
+    depService.stop()
   }
 
   void 'create telemetry thread'() {
     setup:
     def telemetryService = Mock(TelemetryService)
-    def okHttpClient = Mock(OkHttpClient)
     def depService = Mock(DependencyService)
 
     when:
-    def thread = TelemetrySystem.createTelemetryRunnable(telemetryService, okHttpClient, depService)
+    def thread = TelemetrySystem.createTelemetryRunnable(telemetryService, depService)
 
     then:
     thread != null
+
+    cleanup:
     TelemetrySystem.stop()
   }
 

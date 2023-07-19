@@ -11,13 +11,26 @@ import static net.bytebuddy.matcher.ElementMatchers.takesNoArguments;
 
 import com.google.auto.service.AutoService;
 import datadog.trace.agent.tooling.Instrumenter;
+import datadog.trace.api.Config;
 import datadog.trace.api.CorrelationIdentifier;
 import datadog.trace.api.GlobalTracer;
+import datadog.trace.api.ProductActivation;
 import datadog.trace.bootstrap.InstrumentationContext;
 import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
+import datadog.trace.instrumentation.jetty.ConnectionHandleRequestVisitor;
 import java.util.Map;
 import net.bytebuddy.asm.Advice;
+import net.bytebuddy.asm.AsmVisitorWrapper;
+import net.bytebuddy.description.field.FieldDescription;
+import net.bytebuddy.description.field.FieldList;
+import net.bytebuddy.description.method.MethodList;
+import net.bytebuddy.description.type.TypeDescription;
+import net.bytebuddy.implementation.Implementation;
+import net.bytebuddy.jar.asm.ClassVisitor;
+import net.bytebuddy.jar.asm.ClassWriter;
+import net.bytebuddy.jar.asm.Opcodes;
+import net.bytebuddy.pool.TypePool;
 import org.eclipse.jetty.http.Generator;
 import org.eclipse.jetty.server.HttpConnection;
 import org.eclipse.jetty.server.Request;
@@ -44,6 +57,8 @@ public final class JettyServerInstrumentation extends Instrumenter.Tracing
       packageName + ".ExtractAdapter$Response",
       packageName + ".JettyDecorator",
       packageName + ".RequestURIDataAdapter",
+      "datadog.trace.instrumentation.jetty.JettyBlockResponseFunction",
+      "datadog.trace.instrumentation.jetty.JettyBlockingHelper",
     };
   }
 
@@ -63,6 +78,42 @@ public final class JettyServerInstrumentation extends Instrumenter.Tracing
     transformation.applyAdvice(
         named("reset").and(takesArgument(0, boolean.class)),
         JettyServerInstrumentation.class.getName() + "$ResetAdvice");
+  }
+
+  @Override
+  public AdviceTransformer transformer() {
+    return new VisitingTransformer(new ConnectionHandleRequestVisitorWrapper());
+  }
+
+  public static class ConnectionHandleRequestVisitorWrapper implements AsmVisitorWrapper {
+
+    @Override
+    public int mergeWriter(int flags) {
+      return flags | ClassWriter.COMPUTE_MAXS;
+    }
+
+    @Override
+    public int mergeReader(int flags) {
+      return flags;
+    }
+
+    @Override
+    public ClassVisitor wrap(
+        TypeDescription instrumentedType,
+        ClassVisitor classVisitor,
+        Implementation.Context implementationContext,
+        TypePool typePool,
+        FieldList<FieldDescription.InDefinedShape> fields,
+        MethodList<?> methods,
+        int writerFlags,
+        int readerFlags) {
+      if (Config.get().getAppSecActivation() == ProductActivation.FULLY_DISABLED) {
+        return classVisitor;
+      }
+
+      return new ConnectionHandleRequestVisitor(
+          Opcodes.ASM7, classVisitor, "org/eclipse/jetty/server/HttpConnection");
+    }
   }
 
   /**
@@ -91,7 +142,8 @@ public final class JettyServerInstrumentation extends Instrumenter.Tracing
   public static class HandleRequestAdvice {
 
     @Advice.OnMethodEnter(suppress = Throwable.class)
-    public static AgentScope onEnter(@Advice.This final HttpConnection connection) {
+    public static AgentScope onEnter(
+        @Advice.This final HttpConnection connection, @Advice.Local("agentSpan") AgentSpan span) {
       Request req = connection.getRequest();
 
       Object existingSpan = req.getAttribute(DD_SPAN_ATTRIBUTE);
@@ -101,17 +153,15 @@ public final class JettyServerInstrumentation extends Instrumenter.Tracing
       }
 
       final AgentSpan.Context.Extracted extractedContext = DECORATE.extract(req);
-      final AgentSpan span = DECORATE.startSpan(req, extractedContext);
+      span = DECORATE.startSpan(req, extractedContext);
+      final AgentScope scope = activateSpan(span);
+      scope.setAsyncPropagation(true);
       DECORATE.afterStart(span);
       DECORATE.onRequest(span, req, req, extractedContext);
 
-      final AgentScope scope = activateSpan(span);
-      scope.setAsyncPropagation(true);
       req.setAttribute(DD_SPAN_ATTRIBUTE, span);
       req.setAttribute(CorrelationIdentifier.getTraceIdKey(), GlobalTracer.get().getTraceId());
       req.setAttribute(CorrelationIdentifier.getSpanIdKey(), GlobalTracer.get().getSpanId());
-      // request may be processed on any thread; signal thread migration
-      span.startThreadMigration();
       return scope;
     }
 
@@ -134,8 +184,6 @@ public final class JettyServerInstrumentation extends Instrumenter.Tracing
       if (spanObj instanceof AgentSpan) {
         final AgentSpan span = (AgentSpan) spanObj;
         DECORATE.onResponse(span, channel);
-        // span could have been originated on a different thread and migrated
-        span.finishThreadMigration();
         DECORATE.beforeFinish(span);
         span.finish();
       }

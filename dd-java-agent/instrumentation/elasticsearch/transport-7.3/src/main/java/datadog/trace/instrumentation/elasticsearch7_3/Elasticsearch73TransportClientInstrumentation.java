@@ -1,11 +1,11 @@
 package datadog.trace.instrumentation.elasticsearch7_3;
 
-import static datadog.trace.agent.tooling.bytebuddy.matcher.ClassLoaderMatchers.hasClassesNamed;
+import static datadog.trace.agent.tooling.bytebuddy.matcher.ClassLoaderMatchers.hasClassNamed;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSpan;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.startSpan;
 import static datadog.trace.instrumentation.elasticsearch.ElasticsearchTransportClientDecorator.DECORATE;
-import static datadog.trace.instrumentation.elasticsearch.ElasticsearchTransportClientDecorator.ELASTICSEARCH_QUERY;
+import static datadog.trace.instrumentation.elasticsearch.ElasticsearchTransportClientDecorator.OPERATION_NAME;
 import static net.bytebuddy.matcher.ElementMatchers.isMethod;
 import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
 import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
@@ -30,13 +30,10 @@ public class Elasticsearch73TransportClientInstrumentation extends Instrumenter.
     super("elasticsearch", "elasticsearch-transport", "elasticsearch-transport-7");
   }
 
-  // this is required to make sure ES7 instrumentation won't apply to previous releases
-  static final ElementMatcher<ClassLoader> CLASS_LOADER_MATCHER =
-      hasClassesNamed("org.elasticsearch.action.ActionType");
-
   @Override
   public ElementMatcher<ClassLoader> classLoaderMatcher() {
-    return CLASS_LOADER_MATCHER;
+    // Avoid matching pre-ES7 releases which have their own instrumentations.
+    return hasClassNamed("org.elasticsearch.action.ActionType");
   }
 
   @Override
@@ -76,7 +73,7 @@ public class Elasticsearch73TransportClientInstrumentation extends Instrumenter.
         @Advice.Argument(value = 2, readOnly = false)
             ActionListener<ActionResponse> actionListener) {
 
-      final AgentSpan span = startSpan(ELASTICSEARCH_QUERY);
+      final AgentSpan span = startSpan(OPERATION_NAME);
       DECORATE.afterStart(span);
       DECORATE.onRequest(span, action.getClass(), actionRequest.getClass());
 

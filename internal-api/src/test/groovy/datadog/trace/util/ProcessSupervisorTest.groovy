@@ -1,12 +1,10 @@
 package datadog.trace.util
 
 import datadog.trace.test.util.DDSpecification
-import spock.lang.Requires
 import spock.util.concurrent.PollingConditions
 
 // This test looks at the private "currentProcess" variable because the alternative
 // would be calling "ps -e" repeatedly
-@Requires({ jvm.java8Compatible })
 class ProcessSupervisorTest extends DDSpecification {
   ProcessBuilder createProcessBuilder() {
     // Creates a process that never returns
@@ -24,8 +22,8 @@ class ProcessSupervisorTest extends DDSpecification {
     then:
     conditions.eventually {
       def process = processSupervisor.currentProcess
-      process != null
-      process.isAlive()
+      assert process != null
+      assert process.isAlive()
     }
 
     when:
@@ -41,9 +39,9 @@ class ProcessSupervisorTest extends DDSpecification {
     then:
     oldProcess != null
     conditions.eventually {
-      !oldProcess.isAlive()
+      assert !oldProcess.isAlive()
       def process = processSupervisor.currentProcess
-      process == null || !process.isAlive()
+      assert process == null || !process.isAlive()
     }
   }
 
@@ -58,8 +56,8 @@ class ProcessSupervisorTest extends DDSpecification {
     then:
     conditions.eventually {
       def process = processSupervisor.currentProcess
-      process != null
-      process.isAlive()
+      assert process != null
+      assert process.isAlive()
     }
 
     when:
@@ -71,11 +69,11 @@ class ProcessSupervisorTest extends DDSpecification {
     then:
     firstProcess != null
     conditions.eventually {
-      !firstProcess.isAlive()
+      assert !firstProcess.isAlive()
       def process = processSupervisor.currentProcess
-      process != null
-      process != firstProcess
-      process.isAlive()
+      assert process != null
+      assert process != firstProcess
+      assert process.isAlive()
     }
 
     when:
@@ -87,9 +85,9 @@ class ProcessSupervisorTest extends DDSpecification {
     then:
     secondProcess != null
     conditions.eventually {
-      !secondProcess.isAlive()
+      assert !secondProcess.isAlive()
       def process = processSupervisor.currentProcess
-      process == null || !process.isAlive()
+      assert process == null || !process.isAlive()
     }
   }
 }

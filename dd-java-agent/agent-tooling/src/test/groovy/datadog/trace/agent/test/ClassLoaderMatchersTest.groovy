@@ -10,29 +10,28 @@ class ClassLoaderMatchersTest extends DDSpecification {
 
   def "skip non-delegating classloader"() {
     setup:
-    final URLClassLoader badLoader = new NonDelegatingClassLoader()
+    final ClassLoader badLoader = new NonDelegatingClassLoader()
     expect:
-    ClassLoaderMatchers.skipClassLoader(badLoader)
+    ClassLoaderMatchers.incompatibleClassLoader(badLoader)
   }
 
   def "skips agent classloader"() {
     setup:
-    URL root = new URL("file://")
-    final URLClassLoader agentLoader = new DatadogClassLoader(root, null, new DatadogClassLoader.BootstrapClassLoaderProxy(), null)
+    final ClassLoader agentLoader = new DatadogClassLoader()
     expect:
-    ClassLoaderMatchers.skipClassLoader(agentLoader)
+    ClassLoaderMatchers.incompatibleClassLoader(agentLoader)
   }
 
   def "does not skip empty classloader"() {
     setup:
     final ClassLoader emptyLoader = new ClassLoader() {}
     expect:
-    !ClassLoaderMatchers.skipClassLoader(emptyLoader)
+    !ClassLoaderMatchers.incompatibleClassLoader(emptyLoader)
   }
 
   def "does not skip bootstrap classloader"() {
     expect:
-    !ClassLoaderMatchers.skipClassLoader(null)
+    !ClassLoaderMatchers.incompatibleClassLoader(null)
   }
 
   def "DatadogClassLoader class name is hardcoded in ClassLoaderMatcher"() {

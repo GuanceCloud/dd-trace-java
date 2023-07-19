@@ -2,67 +2,88 @@ package datadog.trace.bootstrap.instrumentation.api;
 
 import static datadog.trace.api.ConfigDefaults.DEFAULT_ASYNC_PROPAGATING;
 
-import datadog.trace.api.Checkpointer;
-import datadog.trace.api.DDId;
-import datadog.trace.api.PropagationStyle;
-import datadog.trace.api.SpanCheckpointer;
-import datadog.trace.api.function.Consumer;
+import datadog.trace.api.DDSpanId;
+import datadog.trace.api.DDTraceId;
+import datadog.trace.api.EndpointCheckpointer;
+import datadog.trace.api.EndpointTracker;
+import datadog.trace.api.TraceConfig;
+import datadog.trace.api.TracePropagationStyle;
+import datadog.trace.api.experimental.DataStreamsCheckpointer;
+import datadog.trace.api.experimental.DataStreamsContextCarrier;
 import datadog.trace.api.gateway.CallbackProvider;
+import datadog.trace.api.gateway.Flow;
 import datadog.trace.api.gateway.RequestContext;
 import datadog.trace.api.gateway.RequestContextSlot;
 import datadog.trace.api.gateway.SubscriptionService;
 import datadog.trace.api.interceptor.TraceInterceptor;
+import datadog.trace.api.internal.InternalTracer;
+import datadog.trace.api.internal.TraceSegment;
+import datadog.trace.api.profiling.Timer;
 import datadog.trace.api.sampling.PrioritySampling;
+import datadog.trace.api.scopemanager.ScopeListener;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan.Context;
-import datadog.trace.context.ScopeListener;
-import java.io.IOException;
 import java.util.Collections;
-import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.Consumer;
 
 public class AgentTracer {
 
   // Implicit parent
+  /** Deprecated. Use {@link #startSpan(String, CharSequence)} instead. */
+  @Deprecated
   public static AgentSpan startSpan(final CharSequence spanName) {
-    return startSpan(spanName, true);
+    return startSpan("default", spanName);
   }
 
-  public static AgentSpan startSpan(final CharSequence spanName, boolean withCheckpoints) {
-    return get().startSpan(spanName, withCheckpoints);
+  /** @see TracerAPI#startSpan(String, CharSequence) */
+  public static AgentSpan startSpan(final String instrumentationName, final CharSequence spanName) {
+    return get().startSpan(instrumentationName, spanName);
   }
 
   // Implicit parent
+  /** Deprecated. Use {@link #startSpan(String, CharSequence, long)} instead. */
+  @Deprecated
   public static AgentSpan startSpan(final CharSequence spanName, final long startTimeMicros) {
-    return startSpan(spanName, startTimeMicros, true);
+    return startSpan("default", spanName, startTimeMicros);
   }
 
+  /** @see TracerAPI#startSpan(String, CharSequence, long) */
   public static AgentSpan startSpan(
-      final CharSequence spanName, final long startTimeMicros, boolean withCheckpoints) {
-    return get().startSpan(spanName, startTimeMicros, withCheckpoints);
+      final String instrumentationName, final CharSequence spanName, final long startTimeMicros) {
+    return get().startSpan(instrumentationName, spanName, startTimeMicros);
   }
 
   // Explicit parent
+  /** Deprecated. Use {@link #startSpan(String, CharSequence, AgentSpan.Context)} instead. */
+  @Deprecated
   public static AgentSpan startSpan(final CharSequence spanName, final AgentSpan.Context parent) {
-    return startSpan(spanName, parent, true);
+    return startSpan("default", spanName, parent);
   }
 
+  /** @see TracerAPI#startSpan(String, CharSequence, AgentSpan.Context) */
   public static AgentSpan startSpan(
-      final CharSequence spanName, final AgentSpan.Context parent, boolean withCheckpoints) {
-    return get().startSpan(spanName, parent, withCheckpoints);
+      final String instrumentationName,
+      final CharSequence spanName,
+      final AgentSpan.Context parent) {
+    return get().startSpan(instrumentationName, spanName, parent);
   }
 
   // Explicit parent
+  /** Deprecated. Use {@link #startSpan(String, CharSequence, AgentSpan.Context, long)} instead. */
+  @Deprecated
   public static AgentSpan startSpan(
       final CharSequence spanName, final AgentSpan.Context parent, final long startTimeMicros) {
-    return startSpan(spanName, parent, startTimeMicros, true);
+    return startSpan("default", spanName, parent, startTimeMicros);
   }
 
+  /** @see TracerAPI#startSpan(String, CharSequence, AgentSpan.Context, long) */
   public static AgentSpan startSpan(
+      final String instrumentationName,
       final CharSequence spanName,
       final AgentSpan.Context parent,
-      final long startTimeMicros,
-      boolean withCheckpoints) {
-    return get().startSpan(spanName, parent, startTimeMicros, withCheckpoints);
+      final long startTimeMicros) {
+    return get().startSpan(instrumentationName, spanName, parent, startTimeMicros);
   }
 
   public static AgentScope activateSpan(final AgentSpan span) {
@@ -74,7 +95,7 @@ public class AgentTracer {
   }
 
   public static AgentScope.Continuation captureSpan(final AgentSpan span) {
-    return get().captureSpan(span, ScopeSource.INSTRUMENTATION);
+    return get().captureSpan(span);
   }
 
   /**
@@ -92,6 +113,20 @@ public class AgentTracer {
    */
   public static AgentScope activateNext(final AgentSpan span) {
     return get().activateNext(span);
+  }
+
+  public static TraceConfig traceConfig(final AgentSpan span) {
+    if (null != span) {
+      TraceConfig traceConfig = span.traceConfig();
+      if (null != traceConfig) {
+        return traceConfig;
+      }
+    }
+    return get().captureTraceConfig();
+  }
+
+  public static TraceConfig traceConfig() {
+    return get().captureTraceConfig();
   }
 
   public static AgentSpan activeSpan() {
@@ -135,24 +170,64 @@ public class AgentTracer {
   // Not intended to be constructed.
   private AgentTracer() {}
 
-  public interface TracerAPI extends datadog.trace.api.Tracer, AgentPropagation, SpanCheckpointer {
-    AgentSpan startSpan(CharSequence spanName, boolean emitCheckpoint);
+  public interface TracerAPI
+      extends datadog.trace.api.Tracer,
+          InternalTracer,
+          AgentPropagation,
+          EndpointCheckpointer,
+          DataStreamsCheckpointer,
+          ScopeStateAware {
 
-    AgentSpan startSpan(CharSequence spanName, long startTimeMicros, boolean emitCheckpoint);
+    /**
+     * Create and start a new span.
+     *
+     * @param instrumentationName The instrumentation creating the span.
+     * @param spanName The span operation name.
+     * @return The new started span.
+     */
+    AgentSpan startSpan(String instrumentationName, CharSequence spanName);
 
-    AgentSpan startSpan(CharSequence spanName, AgentSpan.Context parent, boolean emitCheckpoint);
+    /**
+     * Create and start a new span with a given start time.
+     *
+     * @param instrumentationName The instrumentation creating the span.
+     * @param spanName The span operation name.
+     * @param startTimeMicros The span start time, in microseconds.
+     * @return The new started span.
+     */
+    AgentSpan startSpan(String instrumentationName, CharSequence spanName, long startTimeMicros);
 
+    /**
+     * Create and start a new span with an explicit parent.
+     *
+     * @param instrumentationName The instrumentation creating the span.
+     * @param spanName The span operation name.
+     * @param parent The parent span context.
+     * @return The new started span.
+     */
     AgentSpan startSpan(
+        String instrumentationName, CharSequence spanName, AgentSpan.Context parent);
+
+    /**
+     * Create and start a new span with an explicit parent and a given start time.
+     *
+     * @param instrumentationName The instrumentation creating the span.
+     * @param spanName The span operation name.
+     * @param parent The parent span context.
+     * @param startTimeMicros The span start time, in microseconds.
+     * @return The new started span.
+     */
+    AgentSpan startSpan(
+        String instrumentationName,
         CharSequence spanName,
         AgentSpan.Context parent,
-        long startTimeMicros,
-        boolean emitCheckpoint);
+        long startTimeMicros);
 
     AgentScope activateSpan(AgentSpan span, ScopeSource source);
 
     AgentScope activateSpan(AgentSpan span, ScopeSource source, boolean isAsyncPropagating);
 
-    AgentScope.Continuation captureSpan(AgentSpan span, ScopeSource source);
+    AgentScope.Continuation captureSpan(AgentSpan span);
 
     void closePrevious(boolean finishSpan);
 
@@ -166,18 +241,31 @@ public class AgentTracer {
 
     AgentSpan noopSpan();
 
-    SpanBuilder buildSpan(CharSequence spanName);
+    /** Deprecated. Use {@link #buildSpan(String, CharSequence)} instead. */
+    @Deprecated
+    default SpanBuilder buildSpan(CharSequence spanName) {
+      return buildSpan("default", spanName);
+    }
+
+    SpanBuilder buildSpan(String instrumentationName, CharSequence spanName);
 
     void close();
 
-    void flush();
+    /**
+     * Attach a scope listener to the global scope manager
+     *
+     * @param listener listener to attach
+     */
+    void addScopeListener(ScopeListener listener);
 
     /**
      * Registers the checkpointer
      *
      * @param checkpointer
      */
-    void registerCheckpointer(Checkpointer checkpointer);
+    void registerCheckpointer(EndpointCheckpointer checkpointer);
+
+    void registerTimer(Timer timer);
 
     SubscriptionService getSubscriptionService(RequestContextSlot slot);
 
@@ -185,11 +273,34 @@ public class AgentTracer {
 
     CallbackProvider getUniversalCallbackProvider();
 
-    void setDataStreamCheckpoint(AgentSpan span, List<String> tags);
+    /**
+     * Sets data streams checkpoint, used for both produce and consume operations.
+     *
+     * @param span active span
+     * @param sortedTags alphabetically sorted tags for the checkpoint (direction, queue type etc)
+     * @param defaultTimestamp unix timestamp to use as a start of the pathway if this is the first
+     *     checkpoint in the chain. Zero should be passed if we can't extract the timestamp from the
+     *     message / payload itself (for instance: produce operations; http produce / consume etc).
+     *     Value will be ignored for checkpoints happening not at the start of the pipeline.
+     */
+    void setDataStreamCheckpoint(
+        AgentSpan span, LinkedHashMap<String, String> sortedTags, long defaultTimestamp);
 
     AgentSpan.Context notifyExtensionStart(Object event);
 
-    void notifyExtensionEnd(AgentSpan span, boolean isError);
+    void notifyExtensionEnd(AgentSpan span, Object result, boolean isError);
+
+    AgentDataStreamsMonitoring getDataStreamsMonitoring();
+
+    Timer getTimer();
+
+    String getTraceId(AgentSpan span);
+
+    String getSpanId(AgentSpan span);
+
+    TraceConfig captureTraceConfig();
+
+    ProfilingContextIntegration getProfilingContext();
   }
 
   public interface SpanBuilder {
@@ -217,7 +328,7 @@ public class AgentTracer {
 
     SpanBuilder withSpanType(CharSequence spanType);
 
-    SpanBuilder suppressCheckpoints();
+    <T> SpanBuilder withRequestContextData(RequestContextSlot slot, T data);
   }
 
   static class NoopTracerAPI implements TracerAPI {
@@ -225,28 +336,28 @@ public class AgentTracer {
     protected NoopTracerAPI() {}
 
     @Override
-    public AgentSpan startSpan(final CharSequence spanName, boolean withCheckpoints) {
+    public AgentSpan startSpan(final String instrumentationName, final CharSequence spanName) {
       return NoopAgentSpan.INSTANCE;
     }
 
     @Override
     public AgentSpan startSpan(
-        final CharSequence spanName, final long startTimeMicros, boolean withCheckpoints) {
+        final String instrumentationName, final CharSequence spanName, final long startTimeMicros) {
       return NoopAgentSpan.INSTANCE;
     }
 
     @Override
     public AgentSpan startSpan(
-        final CharSequence spanName, final Context parent, boolean withCheckpoints) {
+        final String instrumentationName, final CharSequence spanName, final Context parent) {
       return NoopAgentSpan.INSTANCE;
     }
 
     @Override
     public AgentSpan startSpan(
+        final String instrumentationName,
         final CharSequence spanName,
         final Context parent,
-        final long startTimeMicros,
-        boolean withCheckpoints) {
+        final long startTimeMicros) {
       return NoopAgentSpan.INSTANCE;
     }
 
@@ -262,7 +373,7 @@ public class AgentTracer {
     }
 
     @Override
-    public AgentScope.Continuation captureSpan(final AgentSpan span, final ScopeSource source) {
+    public AgentScope.Continuation captureSpan(final AgentSpan span) {
       return NoopContinuation.INSTANCE;
     }
 
@@ -295,7 +406,7 @@ public class AgentTracer {
     }
 
     @Override
-    public SpanBuilder buildSpan(final CharSequence spanName) {
+    public SpanBuilder buildSpan(final String instrumentationName, final CharSequence spanName) {
       return null;
     }
 
@@ -303,7 +414,24 @@ public class AgentTracer {
     public void close() {}
 
     @Override
+    public void addScopeListener(
+        Runnable afterScopeActivatedCallback, Runnable afterScopeClosedCallback) {}
+
+    @Override
     public void flush() {}
+
+    @Override
+    public void flushMetrics() {}
+
+    @Override
+    public ProfilingContextIntegration getProfilingContext() {
+      return ProfilingContextIntegration.NoOp.INSTANCE;
+    }
+
+    @Override
+    public TraceSegment getTraceSegment() {
+      return null;
+    }
 
     @Override
     public String getTraceId() {
@@ -316,15 +444,33 @@ public class AgentTracer {
     }
 
     @Override
+    public String getTraceId(AgentSpan span) {
+      return null;
+    }
+
+    @Override
+    public String getSpanId(AgentSpan span) {
+      return null;
+    }
+
+    @Override
     public boolean addTraceInterceptor(final TraceInterceptor traceInterceptor) {
       return false;
+    }
+
+    @Override
+    public DataStreamsCheckpointer getDataStreamsCheckpointer() {
+      return this;
     }
 
     @Override
     public void addScopeListener(final ScopeListener listener) {}
 
     @Override
-    public void registerCheckpointer(Checkpointer checkpointer) {}
+    public void registerCheckpointer(EndpointCheckpointer checkpointer) {}
+
+    @Override
+    public void registerTimer(Timer timer) {}
 
     @Override
     public SubscriptionService getSubscriptionService(RequestContextSlot slot) {
@@ -353,13 +499,19 @@ public class AgentTracer {
     public <C> void inject(final Context context, final C carrier, final Setter<C> setter) {}
 
     @Override
-    public <C> void inject(AgentSpan span, C carrier, Setter<C> setter, PropagationStyle style) {}
+    public <C> void inject(
+        AgentSpan span, C carrier, Setter<C> setter, TracePropagationStyle style) {}
 
     @Override
-    public <C> void injectBinaryPathwayContext(AgentSpan span, C carrier, BinarySetter<C> setter) {}
+    public <C> void injectBinaryPathwayContext(
+        AgentSpan span,
+        C carrier,
+        BinarySetter<C> setter,
+        LinkedHashMap<String, String> sortedTags) {}
 
     @Override
-    public <C> void injectPathwayContext(AgentSpan span, C carrier, Setter<C> setter) {}
+    public <C> void injectPathwayContext(
+        AgentSpan span, C carrier, Setter<C> setter, LinkedHashMap<String, String> sortedTags) {}
 
     @Override
     public <C> Context.Extracted extract(final C carrier, final ContextVisitor<C> getter) {
@@ -367,45 +519,16 @@ public class AgentTracer {
     }
 
     @Override
-    public <C> PathwayContext extractBinaryPathwayContext(
-        C carrier, BinaryContextVisitor<C> getter) {
-      return null;
+    public void onRootSpanFinished(AgentSpan root, EndpointTracker tracker) {}
+
+    @Override
+    public EndpointTracker onRootSpanStarted(AgentSpan root) {
+      return EndpointTracker.NO_OP;
     }
 
     @Override
-    public <C> PathwayContext extractPathwayContext(C carrier, ContextVisitor<C> getter) {
-      return null;
-    }
-
-    @Override
-    public void checkpoint(AgentSpan span, int flags) {}
-
-    @Override
-    public void onStart(AgentSpan span) {}
-
-    @Override
-    public void onStartWork(AgentSpan span) {}
-
-    @Override
-    public void onFinishWork(AgentSpan span) {}
-
-    @Override
-    public void onStartThreadMigration(AgentSpan span) {}
-
-    @Override
-    public void onFinishThreadMigration(AgentSpan span) {}
-
-    @Override
-    public void onFinish(AgentSpan span) {}
-
-    @Override
-    public void onRootSpanFinished(AgentSpan root, boolean published) {}
-
-    @Override
-    public void onRootSpanStarted(AgentSpan root) {}
-
-    @Override
-    public void setDataStreamCheckpoint(AgentSpan span, List<String> tags) {}
+    public void setDataStreamCheckpoint(
+        AgentSpan span, LinkedHashMap<String, String> sortedTags, long defaultTimestamp) {}
 
     @Override
     public AgentSpan.Context notifyExtensionStart(Object event) {
@@ -413,7 +536,35 @@ public class AgentTracer {
     }
 
     @Override
-    public void notifyExtensionEnd(AgentSpan span, boolean isError) {}
+    public void notifyExtensionEnd(AgentSpan span, Object result, boolean isError) {}
+
+    @Override
+    public ScopeState newScopeState() {
+      return null;
+    }
+
+    @Override
+    public AgentDataStreamsMonitoring getDataStreamsMonitoring() {
+      return NoopAgentDataStreamsMonitoring.INSTANCE;
+    }
+
+    @Override
+    public void setConsumeCheckpoint(
+        String type, String source, DataStreamsContextCarrier carrier) {}
+
+    @Override
+    public void setProduceCheckpoint(
+        String type, String target, DataStreamsContextCarrier carrier) {}
+
+    @Override
+    public Timer getTimer() {
+      return Timer.NoOp.INSTANCE;
+    }
+
+    @Override
+    public TraceConfig captureTraceConfig() {
+      return null;
+    }
   }
 
   public static final class NoopAgentSpan implements AgentSpan {
@@ -422,18 +573,26 @@ public class AgentTracer {
     private NoopAgentSpan() {}
 
     @Override
-    public DDId getTraceId() {
-      return DDId.ZERO;
+    public DDTraceId getTraceId() {
+      return DDTraceId.ZERO;
     }
 
     @Override
-    public DDId getSpanId() {
-      return DDId.ZERO;
+    public long getSpanId() {
+      return DDSpanId.ZERO;
     }
 
     @Override
     public AgentSpan setTag(final String key, final boolean value) {
       return this;
+    }
+
+    @Override
+    public void setRequestBlockingAction(Flow.Action.RequestBlockingAction rba) {}
+
+    @Override
+    public Flow.Action.RequestBlockingAction getRequestBlockingAction() {
+      return null;
     }
 
     @Override
@@ -537,21 +696,14 @@ public class AgentTracer {
     }
 
     @Override
-    public void startThreadMigration() {}
-
-    @Override
-    public void finishThreadMigration() {}
-
-    @Override
-    public void finishWork() {}
-
-    @Override
     public RequestContext getRequestContext() {
       return null;
     }
 
     @Override
-    public void mergePathwayContext(PathwayContext pathwayContext) {}
+    public Integer forceSamplingDecision() {
+      return null;
+    }
 
     @Override
     public Integer getSamplingPriority() {
@@ -594,6 +746,11 @@ public class AgentTracer {
     }
 
     @Override
+    public AgentSpan setError(boolean error, byte priority) {
+      return this;
+    }
+
+    @Override
     public AgentSpan setMeasured(boolean measured) {
       return this;
     }
@@ -610,6 +767,11 @@ public class AgentTracer {
 
     @Override
     public AgentSpan addThrowable(final Throwable throwable) {
+      return this;
+    }
+
+    @Override
+    public AgentSpan addThrowable(Throwable throwable, byte errorPriority) {
       return this;
     }
 
@@ -692,16 +854,8 @@ public class AgentTracer {
     }
 
     @Override
-    public void setEmittingCheckpoints(boolean value) {}
-
-    @Override
-    public Boolean isEmittingCheckpoints() {
-      return Boolean.FALSE;
-    }
-
-    @Override
-    public boolean hasCheckpoints() {
-      return false;
+    public TraceConfig traceConfig() {
+      return null;
     }
   }
 
@@ -722,11 +876,6 @@ public class AgentTracer {
 
     @Override
     public void setAsyncPropagation(final boolean value) {}
-
-    @Override
-    public boolean checkpointed() {
-      return false;
-    }
 
     @Override
     public AgentScope.Continuation capture() {
@@ -762,28 +911,23 @@ public class AgentTracer {
     public <C> void inject(final Context context, final C carrier, final Setter<C> setter) {}
 
     @Override
-    public <C> void inject(AgentSpan span, C carrier, Setter<C> setter, PropagationStyle style) {}
+    public <C> void inject(
+        AgentSpan span, C carrier, Setter<C> setter, TracePropagationStyle style) {}
 
     @Override
-    public <C> void injectBinaryPathwayContext(AgentSpan span, C carrier, BinarySetter<C> setter) {}
+    public <C> void injectBinaryPathwayContext(
+        AgentSpan span,
+        C carrier,
+        BinarySetter<C> setter,
+        LinkedHashMap<String, String> sortedTags) {}
 
     @Override
-    public <C> void injectPathwayContext(AgentSpan span, C carrier, Setter<C> setter) {}
+    public <C> void injectPathwayContext(
+        AgentSpan span, C carrier, Setter<C> setter, LinkedHashMap<String, String> sortedTags) {}
 
     @Override
     public <C> Context.Extracted extract(final C carrier, final ContextVisitor<C> getter) {
       return NoopContext.INSTANCE;
-    }
-
-    @Override
-    public <C> PathwayContext extractBinaryPathwayContext(
-        C carrier, BinaryContextVisitor<C> getter) {
-      return null;
-    }
-
-    @Override
-    public <C> PathwayContext extractPathwayContext(C carrier, ContextVisitor<C> getter) {
-      return null;
     }
   }
 
@@ -799,12 +943,6 @@ public class AgentTracer {
     public void cancel() {}
 
     @Override
-    public void migrate() {}
-
-    @Override
-    public void migrated() {}
-
-    @Override
     public AgentSpan getSpan() {
       return NoopAgentSpan.INSTANCE;
     }
@@ -816,18 +954,23 @@ public class AgentTracer {
     private NoopContext() {}
 
     @Override
-    public DDId getTraceId() {
-      return DDId.ZERO;
+    public DDTraceId getTraceId() {
+      return DDTraceId.ZERO;
     }
 
     @Override
-    public DDId getSpanId() {
-      return DDId.ZERO;
+    public long getSpanId() {
+      return DDSpanId.ZERO;
     }
 
     @Override
     public AgentTrace getTrace() {
       return NoopAgentTrace.INSTANCE;
+    }
+
+    @Override
+    public int getSamplingPriority() {
+      return PrioritySampling.UNSET;
     }
 
     @Override
@@ -846,22 +989,32 @@ public class AgentTracer {
     }
 
     @Override
-    public String getForwardedProto() {
+    public String getFastlyClientIp() {
       return null;
     }
 
     @Override
-    public String getForwardedHost() {
+    public String getCfConnectingIp() {
       return null;
     }
 
     @Override
-    public String getForwardedIp() {
+    public String getCfConnectingIpv6() {
       return null;
     }
 
     @Override
-    public String getForwardedPort() {
+    public String getXForwardedProto() {
+      return null;
+    }
+
+    @Override
+    public String getXForwardedHost() {
+      return null;
+    }
+
+    @Override
+    public String getXForwardedPort() {
       return null;
     }
 
@@ -891,17 +1044,12 @@ public class AgentTracer {
     }
 
     @Override
-    public String getClientIp() {
+    public String getXClientIp() {
       return null;
     }
 
     @Override
     public String getUserAgent() {
-      return null;
-    }
-
-    @Override
-    public String getVia() {
       return null;
     }
 
@@ -926,6 +1074,14 @@ public class AgentTracer {
     public void cancelContinuation(final AgentScope.Continuation continuation) {}
   }
 
+  public static class NoopAgentDataStreamsMonitoring implements AgentDataStreamsMonitoring {
+    public static final NoopAgentDataStreamsMonitoring INSTANCE =
+        new NoopAgentDataStreamsMonitoring();
+
+    @Override
+    public void trackBacklog(LinkedHashMap<String, String> sortedTags, long value) {}
+  }
+
   public static class NoopPathwayContext implements PathwayContext {
     public static final NoopPathwayContext INSTANCE = new NoopPathwayContext();
 
@@ -935,15 +1091,27 @@ public class AgentTracer {
     }
 
     @Override
-    public void setCheckpoint(List<String> tags, Consumer<StatsPoint> pointConsumer) {}
+    public long getHash() {
+      return 0L;
+    }
 
     @Override
-    public byte[] encode() throws IOException {
+    public void setCheckpoint(
+        LinkedHashMap<String, String> sortedTags,
+        Consumer<StatsPoint> pointConsumer,
+        long defaultTimestamp) {}
+
+    @Override
+    public void setCheckpoint(
+        LinkedHashMap<String, String> sortedTags, Consumer<StatsPoint> pointConsumer) {}
+
+    @Override
+    public byte[] encode() {
       return null;
     }
 
     @Override
-    public String strEncode() throws IOException {
+    public String strEncode() {
       return null;
     }
   }

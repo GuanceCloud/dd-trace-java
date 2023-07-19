@@ -24,14 +24,13 @@ public final class ServletContextInstrumentation extends Instrumenter.Tracing
   }
 
   @Override
-  public ElementMatcher<ClassLoader> classLoaderMatcher() {
-    // Optimization for expensive typeMatcher.
-    return RequestDispatcherInstrumentation.CLASS_LOADER_MATCHER;
+  public String hierarchyMarkerType() {
+    return "javax.servlet.ServletContext";
   }
 
   @Override
   public ElementMatcher<TypeDescription> hierarchyMatcher() {
-    return implementsInterface(named("javax.servlet.ServletContext"));
+    return implementsInterface(named(hierarchyMarkerType()));
   }
 
   @Override
@@ -47,7 +46,7 @@ public final class ServletContextInstrumentation extends Instrumenter.Tracing
             // javax.servlet.ServletContext.getRequestDispatcher
             // javax.servlet.ServletContext.getNamedDispatcher
             .and(isPublic()),
-        RequestDispatcherTargetAdvice.class.getName());
+        ServletContextInstrumentation.class.getName() + "$RequestDispatcherTargetAdvice");
   }
 
   public static class RequestDispatcherTargetAdvice {

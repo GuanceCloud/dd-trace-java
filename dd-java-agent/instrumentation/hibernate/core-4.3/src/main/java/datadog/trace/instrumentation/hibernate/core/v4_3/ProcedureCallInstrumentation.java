@@ -2,6 +2,7 @@ package datadog.trace.instrumentation.hibernate.core.v4_3;
 
 import static datadog.trace.agent.tooling.bytebuddy.matcher.HierarchyMatchers.implementsInterface;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
+import static datadog.trace.instrumentation.hibernate.core.v4_3.SessionInstrumentation.SESSION_STATE;
 import static java.util.Collections.singletonMap;
 import static net.bytebuddy.matcher.ElementMatchers.isMethod;
 
@@ -27,7 +28,7 @@ public class ProcedureCallInstrumentation extends Instrumenter.Tracing
 
   @Override
   public Map<String, String> contextStore() {
-    return singletonMap("org.hibernate.procedure.ProcedureCall", SessionState.class.getName());
+    return singletonMap("org.hibernate.procedure.ProcedureCall", SESSION_STATE);
   }
 
   @Override
@@ -37,12 +38,6 @@ public class ProcedureCallInstrumentation extends Instrumenter.Tracing
       "datadog.trace.instrumentation.hibernate.SessionState",
       "datadog.trace.instrumentation.hibernate.HibernateDecorator",
     };
-  }
-
-  @Override
-  public ElementMatcher<ClassLoader> classLoaderMatcher() {
-    // Optimization for expensive typeMatcher.
-    return SessionInstrumentation.CLASS_LOADER_MATCHER;
   }
 
   @Override
@@ -56,8 +51,13 @@ public class ProcedureCallInstrumentation extends Instrumenter.Tracing
   }
 
   @Override
+  public String hierarchyMarkerType() {
+    return "org.hibernate.procedure.ProcedureCall";
+  }
+
+  @Override
   public ElementMatcher<TypeDescription> hierarchyMatcher() {
-    return implementsInterface(named("org.hibernate.procedure.ProcedureCall"));
+    return implementsInterface(named(hierarchyMarkerType()));
   }
 
   @Override

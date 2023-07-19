@@ -1,6 +1,5 @@
 package datadog.trace.instrumentation.hibernate.core.v4_3;
 
-import static datadog.trace.agent.tooling.bytebuddy.matcher.ClassLoaderMatchers.hasClassesNamed;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.HierarchyMatchers.hasInterface;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.HierarchyMatchers.implementsInterface;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
@@ -26,18 +25,17 @@ import org.hibernate.procedure.ProcedureCall;
 public class SessionInstrumentation extends Instrumenter.Tracing
     implements Instrumenter.CanShortcutTypeMatching {
 
+  static final String SESSION_STATE = "datadog.trace.instrumentation.hibernate.SessionState";
+
   public SessionInstrumentation() {
     super("hibernate", "hibernate-core");
   }
 
-  static final ElementMatcher<ClassLoader> CLASS_LOADER_MATCHER =
-      hasClassesNamed("org.hibernate.Session");
-
   @Override
   public Map<String, String> contextStore() {
     final Map<String, String> map = new HashMap<>();
-    map.put("org.hibernate.SharedSessionContract", SessionState.class.getName());
-    map.put("org.hibernate.procedure.ProcedureCall", SessionState.class.getName());
+    map.put("org.hibernate.SharedSessionContract", SESSION_STATE);
+    map.put("org.hibernate.procedure.ProcedureCall", SESSION_STATE);
     return Collections.unmodifiableMap(map);
   }
 
@@ -48,12 +46,6 @@ public class SessionInstrumentation extends Instrumenter.Tracing
       "datadog.trace.instrumentation.hibernate.SessionState",
       "datadog.trace.instrumentation.hibernate.HibernateDecorator",
     };
-  }
-
-  @Override
-  public ElementMatcher<ClassLoader> classLoaderMatcher() {
-    // Optimization for expensive typeMatcher.
-    return CLASS_LOADER_MATCHER;
   }
 
   @Override
@@ -74,8 +66,13 @@ public class SessionInstrumentation extends Instrumenter.Tracing
   }
 
   @Override
+  public String hierarchyMarkerType() {
+    return "org.hibernate.SharedSessionContract";
+  }
+
+  @Override
   public ElementMatcher<TypeDescription> hierarchyMatcher() {
-    return implementsInterface(named("org.hibernate.SharedSessionContract"));
+    return implementsInterface(named(hierarchyMarkerType()));
   }
 
   @Override

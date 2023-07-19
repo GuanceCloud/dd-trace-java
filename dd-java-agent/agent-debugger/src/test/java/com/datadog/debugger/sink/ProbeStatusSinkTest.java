@@ -1,6 +1,7 @@
 package com.datadog.debugger.sink;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 import com.datadog.debugger.agent.ProbeStatus;
@@ -8,6 +9,7 @@ import com.datadog.debugger.agent.ProbeStatus.Builder;
 import com.datadog.debugger.util.MoshiHelper;
 import com.squareup.moshi.JsonAdapter;
 import datadog.trace.api.Config;
+import datadog.trace.bootstrap.debugger.ProbeId;
 import java.io.IOException;
 import java.time.Clock;
 import java.time.Duration;
@@ -27,7 +29,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class ProbeStatusSinkTest {
 
   private static final String SERVICE_NAME = "service-name";
-  private static final String PROBE_ID = UUID.randomUUID().toString();
+  private static final ProbeId PROBE_ID = new ProbeId(UUID.randomUUID().toString(), 12);
+  private static final ProbeId PROBE_ID_NEW_VERSION = new ProbeId(PROBE_ID.getId(), 21);
+  private static final ProbeId PROBE_ID2 = new ProbeId(UUID.randomUUID().toString(), 21);
   private static final String MESSAGE = "Foo";
   private static final int DIAGNOSTICS_INTERVAL = 60 * 60; // in seconds = 1h
   private static final Instant AFTER_INTERVAL_HAS_PASSED =
@@ -44,7 +48,7 @@ class ProbeStatusSinkTest {
   void setUp() {
     when(config.getServiceName()).thenReturn(SERVICE_NAME);
     when(config.getDebuggerDiagnosticsInterval()).thenReturn(DIAGNOSTICS_INTERVAL);
-    when(config.getDebuggerUploadBatchSize()).thenReturn(1000);
+    when(config.getDebuggerUploadBatchSize()).thenReturn(100);
     builder = new Builder(config);
     probeStatusSink = new ProbeStatusSink(config);
   }
@@ -122,6 +126,25 @@ class ProbeStatusSinkTest {
   }
 
   @Test
+  void addReceivedThenInstalledThenNewVersion() {
+    probeStatusSink.addReceived(PROBE_ID);
+    probeStatusSink.addInstalled(PROBE_ID);
+    probeStatusSink.addReceived(PROBE_ID_NEW_VERSION);
+    probeStatusSink.addInstalled(PROBE_ID_NEW_VERSION);
+    assertEquals(
+        Arrays.asList(
+            builder.receivedMessage(PROBE_ID),
+            builder.installedMessage(PROBE_ID),
+            builder.receivedMessage(PROBE_ID_NEW_VERSION),
+            builder.installedMessage(PROBE_ID_NEW_VERSION)),
+        probeStatusSink.getDiagnostics());
+    Clock fixed = Clock.fixed(AFTER_INTERVAL_HAS_PASSED, ZoneId.systemDefault());
+    assertEquals(
+        Collections.singletonList(builder.installedMessage(PROBE_ID_NEW_VERSION)),
+        probeStatusSink.getDiagnostics(fixed));
+  }
+
+  @Test
   void addErrorWithThrowable() {
     Throwable throwable = new Exception("test");
     probeStatusSink.addError(PROBE_ID, throwable);
@@ -163,13 +186,17 @@ class ProbeStatusSinkTest {
   void reemitOnlyLatestMessage() {
     probeStatusSink.addReceived(PROBE_ID);
     probeStatusSink.addError(PROBE_ID, MESSAGE);
+    List<ProbeStatus> firstDiagnostics = probeStatusSink.getDiagnostics();
     assertEquals(
         Arrays.asList(builder.receivedMessage(PROBE_ID), builder.errorMessage(PROBE_ID, MESSAGE)),
-        probeStatusSink.getDiagnostics());
+        firstDiagnostics);
     Clock fixed = Clock.fixed(AFTER_INTERVAL_HAS_PASSED, ZoneId.systemDefault());
+    List<ProbeStatus> secondDiagnostics = probeStatusSink.getDiagnostics(fixed);
     assertEquals(
-        Collections.singletonList(builder.errorMessage(PROBE_ID, MESSAGE)),
-        probeStatusSink.getDiagnostics(fixed));
+        Collections.singletonList(builder.errorMessage(PROBE_ID, MESSAGE)), secondDiagnostics);
+
+    // expect timestamp to be updated
+    assertTrue(firstDiagnostics.get(1).getTimestamp() < secondDiagnostics.get(0).getTimestamp());
   }
 
   @Test
@@ -197,7 +224,7 @@ class ProbeStatusSinkTest {
 
   @Test
   void multipleProbes() {
-    String secondProbeId = UUID.randomUUID().toString();
+    ProbeId secondProbeId = new ProbeId(UUID.randomUUID().toString(), 123);
 
     // Emit both right-away after adding the messages
     probeStatusSink.addReceived(PROBE_ID);
@@ -229,16 +256,46 @@ class ProbeStatusSinkTest {
   }
 
   @Test
-  void dropDiagnostics() {
+  void dropRepeatingDiagnostics() {
     probeStatusSink.addReceived(PROBE_ID);
-    for (int i = 1; i <= 999; i++) {
-      probeStatusSink.addError(PROBE_ID, "foo");
+
+    // enqueues only a single error message (checking if queue already have that message).
+    for (int i = 1; i <= 100; i++) {
+      probeStatusSink.addError(PROBE_ID, "bar");
     }
-    // This will trigger clearing and re-populating the queue with the latest status per probe
-    probeStatusSink.addError(PROBE_ID, "bar");
+    // this will enqueue a new error message
+    probeStatusSink.addError(PROBE_ID, "foo");
     assertEquals(
-        Collections.singletonList(builder.errorMessage(PROBE_ID, "bar")),
+        Arrays.asList(
+            builder.receivedMessage(PROBE_ID),
+            builder.errorMessage(PROBE_ID, "bar"),
+            builder.errorMessage(PROBE_ID, "foo")),
         probeStatusSink.getDiagnostics());
+  }
+
+  @Test
+  void dealingFullQueueDroppedDiagnostics() {
+    probeStatusSink.addReceived(PROBE_ID);
+    // enqueues all messages
+    for (int i = 1; i <= 199; i++) {
+      probeStatusSink.addError(PROBE_ID, "bar " + i);
+    }
+    // those two messages would be dropped because the queue is full.
+    // However, getDiagnostics will ensure we emit the last message for each probe once it is
+    // drained
+    probeStatusSink.addReceived(PROBE_ID2);
+    probeStatusSink.addInstalled(PROBE_ID2);
+
+    List<ProbeStatus> firstBatch = probeStatusSink.getDiagnostics();
+    List<ProbeStatus> secondBatch = probeStatusSink.getDiagnostics();
+    List<ProbeStatus> thirdBatch = probeStatusSink.getDiagnostics();
+    assertEquals(100, firstBatch.size());
+    assertEquals(100, secondBatch.size());
+    assertEquals(1, thirdBatch.size());
+
+    // when fetching all messages the queue will reset and only send last messages for ecah probe
+
+    assertEquals(Arrays.asList(builder.installedMessage(PROBE_ID2)), thirdBatch);
   }
 
   @Test

@@ -1,6 +1,5 @@
 package datadog.trace.instrumentation.apachehttpasyncclient;
 
-import static datadog.trace.agent.tooling.bytebuddy.matcher.ClassLoaderMatchers.hasClassesNamed;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.HierarchyMatchers.implementsInterface;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
 import static net.bytebuddy.matcher.ElementMatchers.isMethod;
@@ -8,6 +7,7 @@ import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
 
 import com.google.auto.service.AutoService;
 import datadog.trace.agent.tooling.Instrumenter;
+import java.util.Locale;
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.implementation.bytecode.assign.Assigner;
@@ -29,14 +29,13 @@ public class ApacheHttpClientRedirectInstrumentation extends Instrumenter.Tracin
   }
 
   @Override
-  public ElementMatcher<ClassLoader> classLoaderMatcher() {
-    // Optimization for expensive typeMatcher.
-    return hasClassesNamed("org.apache.http.client.RedirectStrategy");
+  public String hierarchyMarkerType() {
+    return "org.apache.http.client.RedirectStrategy";
   }
 
   @Override
   public ElementMatcher<TypeDescription> hierarchyMatcher() {
-    return implementsInterface(named("org.apache.http.client.RedirectStrategy"));
+    return implementsInterface(named(hierarchyMarkerType()));
   }
 
   @Override
@@ -68,7 +67,7 @@ public class ApacheHttpClientRedirectInstrumentation extends Instrumenter.Tracin
         redirect.setHeaders(original.getAllHeaders());
       } else {
         for (final Header header : original.getAllHeaders()) {
-          final String name = header.getName().toLowerCase();
+          final String name = header.getName().toLowerCase(Locale.ROOT);
           if (name.startsWith("x-datadog-") || name.startsWith("x-b3-")) {
             if (!redirect.containsHeader(header.getName())) {
               redirect.setHeader(header.getName(), header.getValue());

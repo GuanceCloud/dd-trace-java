@@ -18,7 +18,8 @@ import java.sql.Statement;
 import java.util.Map;
 import net.bytebuddy.asm.Advice;
 
-public abstract class AbstractConnectionInstrumentation extends Instrumenter.Tracing {
+public abstract class AbstractConnectionInstrumentation extends Instrumenter.Tracing
+    implements Instrumenter.ForBootstrap {
   public AbstractConnectionInstrumentation(String instrumentationName, String... additionalNames) {
     super(instrumentationName, additionalNames);
   }
@@ -40,12 +41,13 @@ public abstract class AbstractConnectionInstrumentation extends Instrumenter.Tra
     transformation.applyAdvice(
         nameStartsWith("prepare")
             .and(takesArgument(0, String.class))
-            // Also include CallableStatement, which is a sub type of PreparedStatement
+            // Also include CallableStatement, which is a subtype of PreparedStatement
             .and(returns(hasInterface(named("java.sql.PreparedStatement")))),
         AbstractConnectionInstrumentation.class.getName() + "$ConnectionPrepareAdvice");
   }
 
   public static class ConnectionPrepareAdvice {
+
     @Advice.OnMethodExit(suppress = Throwable.class)
     public static void addDBInfo(
         @Advice.This Connection connection,

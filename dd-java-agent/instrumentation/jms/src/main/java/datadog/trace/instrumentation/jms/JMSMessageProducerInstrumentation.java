@@ -1,14 +1,13 @@
 package datadog.trace.instrumentation.jms;
 
-import static datadog.trace.agent.tooling.bytebuddy.matcher.ClassLoaderMatchers.hasClassesNamed;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.HierarchyMatchers.implementsInterface;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSpan;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.propagate;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.startSpan;
-import static datadog.trace.instrumentation.jms.JMSDecorator.JMS_LEGACY_TRACING;
 import static datadog.trace.instrumentation.jms.JMSDecorator.JMS_PRODUCE;
 import static datadog.trace.instrumentation.jms.JMSDecorator.PRODUCER_DECORATE;
+import static datadog.trace.instrumentation.jms.JMSDecorator.TIME_IN_QUEUE_ENABLED;
 import static datadog.trace.instrumentation.jms.MessageInjectAdapter.SETTER;
 import static java.util.Collections.singletonMap;
 import static net.bytebuddy.matcher.ElementMatchers.isPublic;
@@ -39,14 +38,13 @@ public final class JMSMessageProducerInstrumentation extends Instrumenter.Tracin
   }
 
   @Override
-  public ElementMatcher<ClassLoader> classLoaderMatcher() {
-    // Optimization for expensive typeMatcher.
-    return hasClassesNamed("javax.jms.MessageProducer");
+  public String hierarchyMarkerType() {
+    return "javax.jms.MessageProducer";
   }
 
   @Override
   public ElementMatcher<TypeDescription> hierarchyMatcher() {
-    return implementsInterface(named("javax.jms.MessageProducer"));
+    return implementsInterface(named(hierarchyMarkerType()));
   }
 
   @Override
@@ -109,7 +107,7 @@ public final class JMSMessageProducerInstrumentation extends Instrumenter.Tracin
           && (null == producerState || !producerState.isPropagationDisabled())) {
         propagate().inject(span, message, SETTER);
       }
-      if (!JMS_LEGACY_TRACING) {
+      if (TIME_IN_QUEUE_ENABLED) {
         if (null != producerState) {
           SETTER.injectTimeInQueue(message, producerState);
         }
@@ -154,7 +152,7 @@ public final class JMSMessageProducerInstrumentation extends Instrumenter.Tracin
           && !Config.get().isJmsPropagationDisabledForDestination(destinationName)) {
         propagate().inject(span, message, SETTER);
       }
-      if (!JMS_LEGACY_TRACING) {
+      if (TIME_IN_QUEUE_ENABLED) {
         MessageProducerState producerState =
             InstrumentationContext.get(MessageProducer.class, MessageProducerState.class)
                 .get(producer);

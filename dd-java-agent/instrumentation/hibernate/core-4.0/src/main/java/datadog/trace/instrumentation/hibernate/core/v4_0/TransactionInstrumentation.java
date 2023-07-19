@@ -24,7 +24,7 @@ public class TransactionInstrumentation extends AbstractHibernateInstrumentation
 
   @Override
   public Map<String, String> contextStore() {
-    return singletonMap("org.hibernate.Transaction", SessionState.class.getName());
+    return singletonMap("org.hibernate.Transaction", SESSION_STATE);
   }
 
   @Override
@@ -38,8 +38,13 @@ public class TransactionInstrumentation extends AbstractHibernateInstrumentation
   }
 
   @Override
+  public String hierarchyMarkerType() {
+    return "org.hibernate.Transaction";
+  }
+
+  @Override
   public ElementMatcher<TypeDescription> hierarchyMatcher() {
-    return implementsInterface(named("org.hibernate.Transaction"));
+    return implementsInterface(named(hierarchyMarkerType()));
   }
 
   @Override

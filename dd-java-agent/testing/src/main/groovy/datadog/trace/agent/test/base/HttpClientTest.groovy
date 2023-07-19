@@ -1,12 +1,17 @@
 package datadog.trace.agent.test.base
 
-import datadog.trace.agent.test.AgentTestRunner
+
 import datadog.trace.agent.test.asserts.TraceAssert
+import datadog.trace.agent.test.naming.VersionedNamingTestBase
 import datadog.trace.agent.test.server.http.HttpProxy
 import datadog.trace.api.DDSpanTypes
 import datadog.trace.api.DDTags
+import datadog.trace.api.config.TracerConfig
 import datadog.trace.bootstrap.instrumentation.api.Tags
+import datadog.trace.bootstrap.instrumentation.api.URIUtils
 import datadog.trace.core.DDSpan
+import datadog.trace.core.datastreams.StatsGroup
+import datadog.trace.test.util.Flaky
 import spock.lang.AutoCleanup
 import spock.lang.Requires
 import spock.lang.Shared
@@ -21,15 +26,19 @@ import static datadog.trace.agent.test.utils.TraceUtils.basicSpan
 import static datadog.trace.agent.test.utils.TraceUtils.runUnderTrace
 import static datadog.trace.api.config.TraceInstrumentationConfig.HTTP_CLIENT_HOST_SPLIT_BY_DOMAIN
 import static datadog.trace.api.config.TraceInstrumentationConfig.HTTP_CLIENT_TAG_QUERY_STRING
+import static datadog.trace.bootstrap.instrumentation.decorator.HttpClientDecorator.CLIENT_PATHWAY_EDGE_TAGS
 import static org.junit.Assume.assumeTrue
 
 @Unroll
-abstract class HttpClientTest extends AgentTestRunner {
+abstract class HttpClientTest extends VersionedNamingTestBase {
   protected static final BODY_METHODS = ["POST", "PUT"]
   protected static final int CONNECT_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(3) as int
   protected static final int READ_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(5) as int
   protected static final BASIC_AUTH_KEY = "custom_authorization_header"
   protected static final BASIC_AUTH_VAL = "plain text auth token"
+  protected static final DSM_EDGE_TAGS = CLIENT_PATHWAY_EDGE_TAGS.collect { key, value ->
+    return key + ":" + value
+  }
 
   @AutoCleanup
   @Shared
@@ -79,8 +88,21 @@ abstract class HttpClientTest extends AgentTestRunner {
   @Shared
   ProxySelector proxySelector
 
-  @Shared
   String component = component()
+
+  @Override
+  boolean isDataStreamsEnabled() {
+    true
+  }
+
+  @Override
+  protected void configurePreAgent() {
+    super.configurePreAgent()
+    // we inject this config because it's statically assigned and we cannot inject this at test level without forking
+    // not starting with "/" made full url (http://..) matching but not the path portion (because starting with /)
+    // this settings should not affect test results
+    injectSysConfig(TracerConfig.TRACE_HTTP_CLIENT_PATH_RESOURCE_NAME_MAPPING, "**/success:*")
+  }
 
   def setupSpec() {
     List<Proxy> proxyList = Collections.singletonList(new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxy.port)))
@@ -125,6 +147,9 @@ abstract class HttpClientTest extends AgentTestRunner {
     when:
     injectSysConfig(HTTP_CLIENT_TAG_QUERY_STRING, "$tagQueryString")
     def status = doRequest(method, url)
+    if (isDataStreamsEnabled()) {
+      TEST_DATA_STREAMS_WRITER.waitForGroups(1)
+    }
 
     then:
     status == 200
@@ -133,6 +158,14 @@ abstract class HttpClientTest extends AgentTestRunner {
         clientSpan(it, null, method, false, tagQueryString, url)
       }
       server.distributedRequestTrace(it, trace(0).last())
+    }
+    and:
+    if (isDataStreamsEnabled()) {
+      StatsGroup first = TEST_DATA_STREAMS_WRITER.groups.find { it.parentHash == 0 }
+      verifyAll(first) {
+        edgeTags.containsAll(DSM_EDGE_TAGS)
+        edgeTags.size() == DSM_EDGE_TAGS.size()
+      }
     }
 
     where:
@@ -156,6 +189,9 @@ abstract class HttpClientTest extends AgentTestRunner {
 
     when:
     def status = doRequest(method, url)
+    if (isDataStreamsEnabled()) {
+      TEST_DATA_STREAMS_WRITER.waitForGroups(1)
+    }
 
     then:
     status == 200
@@ -164,6 +200,15 @@ abstract class HttpClientTest extends AgentTestRunner {
         clientSpan(it, null, method, false, false, url)
       }
       server.distributedRequestTrace(it, trace(0).last())
+    }
+
+    and:
+    if (isDataStreamsEnabled()) {
+      StatsGroup first = TEST_DATA_STREAMS_WRITER.groups.find { it.parentHash == 0 }
+      verifyAll(first) {
+        edgeTags.containsAll(DSM_EDGE_TAGS)
+        edgeTags.size() == DSM_EDGE_TAGS.size()
+      }
     }
 
     where:
@@ -186,6 +231,9 @@ abstract class HttpClientTest extends AgentTestRunner {
       doRequest(method, url, [:], body)
     }
     println("RESPONSE: $status")
+    if (isDataStreamsEnabled()) {
+      TEST_DATA_STREAMS_WRITER.waitForGroups(1)
+    }
 
     then:
     status == 200
@@ -202,6 +250,15 @@ abstract class HttpClientTest extends AgentTestRunner {
       server.distributedRequestTrace(it, remoteParentSpan)
     }
 
+    and:
+    if (isDataStreamsEnabled()) {
+      StatsGroup first = TEST_DATA_STREAMS_WRITER.groups.find { it.parentHash == 0 }
+      verifyAll(first) {
+        edgeTags.containsAll(DSM_EDGE_TAGS)
+        edgeTags.size() == DSM_EDGE_TAGS.size()
+      }
+    }
+
     where:
     method << BODY_METHODS
     url = server.secureAddress.resolve("/success#proxy") // fragment indicates the request should be proxied.
@@ -212,6 +269,9 @@ abstract class HttpClientTest extends AgentTestRunner {
     when:
     def status = runUnderTrace("parent") {
       doRequest(method, server.address.resolve("/success"), [:], body)
+    }
+    if (isDataStreamsEnabled()) {
+      TEST_DATA_STREAMS_WRITER.waitForGroups(1)
     }
 
     then:
@@ -224,11 +284,21 @@ abstract class HttpClientTest extends AgentTestRunner {
       server.distributedRequestTrace(it, trace(0).last())
     }
 
+    and:
+    if (isDataStreamsEnabled()) {
+      StatsGroup first = TEST_DATA_STREAMS_WRITER.groups.find { it.parentHash == 0 }
+      verifyAll(first) {
+        edgeTags.containsAll(DSM_EDGE_TAGS)
+        edgeTags.size() == DSM_EDGE_TAGS.size()
+      }
+    }
+
     where:
     method << BODY_METHODS
     body = (1..10000).join(" ")
   }
 
+  @Flaky(suites = ["ApacheHttpAsyncClient5Test"])
   def "server error request with parent"() {
     setup:
     def uri = server.address.resolve("/error")
@@ -236,6 +306,9 @@ abstract class HttpClientTest extends AgentTestRunner {
     when:
     def status = runUnderTrace("parent") {
       doRequest(method, uri)
+    }
+    if (isDataStreamsEnabled()) {
+      TEST_DATA_STREAMS_WRITER.waitForGroups(1)
     }
 
     then:
@@ -248,12 +321,22 @@ abstract class HttpClientTest extends AgentTestRunner {
       server.distributedRequestTrace(it, trace(0).last())
     }
 
+    and:
+    if (isDataStreamsEnabled()) {
+      StatsGroup first = TEST_DATA_STREAMS_WRITER.groups.find { it.parentHash == 0 }
+      verifyAll(first) {
+        edgeTags.containsAll(DSM_EDGE_TAGS)
+        edgeTags.size() == DSM_EDGE_TAGS.size()
+      }
+    }
+
     where:
     method | _
     "GET"  | _
     "POST" | _
   }
 
+  @Flaky(suites = ["ApacheHttpAsyncClient5Test"])
   def "client error request with parent"() {
     setup:
     def uri = server.address.resolve("/secured")
@@ -261,6 +344,9 @@ abstract class HttpClientTest extends AgentTestRunner {
     when:
     def status = runUnderTrace("parent") {
       doRequest(method, uri)
+    }
+    if (isDataStreamsEnabled()) {
+      TEST_DATA_STREAMS_WRITER.waitForGroups(1)
     }
 
     then:
@@ -271,6 +357,15 @@ abstract class HttpClientTest extends AgentTestRunner {
         clientSpan(it, span(0), method, false, false, uri, 401, true)
       }
       server.distributedRequestTrace(it, trace(0).last())
+    }
+
+    and:
+    if (isDataStreamsEnabled()) {
+      StatsGroup first = TEST_DATA_STREAMS_WRITER.groups.find { it.parentHash == 0 }
+      verifyAll(first) {
+        edgeTags.containsAll(DSM_EDGE_TAGS)
+        edgeTags.size() == DSM_EDGE_TAGS.size()
+      }
     }
 
     where:
@@ -285,6 +380,9 @@ abstract class HttpClientTest extends AgentTestRunner {
     when:
     injectSysConfig(HTTP_CLIENT_HOST_SPLIT_BY_DOMAIN, "true")
     def status = doRequest(method, server.address.resolve("/success"))
+    if (isDataStreamsEnabled()) {
+      TEST_DATA_STREAMS_WRITER.waitForGroups(1)
+    }
 
     then:
     status == 200
@@ -295,15 +393,28 @@ abstract class HttpClientTest extends AgentTestRunner {
       server.distributedRequestTrace(it, trace(0).last())
     }
 
+    and:
+    if (isDataStreamsEnabled()) {
+      StatsGroup first = TEST_DATA_STREAMS_WRITER.groups.find { it.parentHash == 0 }
+      verifyAll(first) {
+        edgeTags.containsAll(DSM_EDGE_TAGS)
+        edgeTags.size() == DSM_EDGE_TAGS.size()
+      }
+    }
+
     where:
     method = "HEAD"
   }
 
+  @Flaky(suites = ["ApacheHttpAsyncClient5Test"])
   def "trace request without propagation"() {
     when:
     injectSysConfig(HTTP_CLIENT_HOST_SPLIT_BY_DOMAIN, "$renameService")
     def status = runUnderTrace("parent") {
       doRequest(method, server.address.resolve("/success"), ["is-dd-server": "false"])
+    }
+    if (isDataStreamsEnabled()) {
+      TEST_DATA_STREAMS_WRITER.waitForGroups(1)
     }
 
     then:
@@ -316,13 +427,24 @@ abstract class HttpClientTest extends AgentTestRunner {
       }
     }
 
+    and:
+    if (isDataStreamsEnabled()) {
+      StatsGroup first = TEST_DATA_STREAMS_WRITER.groups.find { it.parentHash == 0 }
+      verifyAll(first) {
+        edgeTags.containsAll(DSM_EDGE_TAGS)
+        edgeTags.size() == DSM_EDGE_TAGS.size()
+      }
+    }
+
     where:
     method = "GET"
     renameService << [false, true]
   }
 
+  @Flaky(value = 'Futures timed out after [1 second]', suites = ['PlayWSClientTest'])
   def "trace request with callback and parent"() {
     given:
+    def method = 'GET'
     assumeTrue(testCallbackWithParent())
 
     when:
@@ -332,6 +454,9 @@ abstract class HttpClientTest extends AgentTestRunner {
           blockUntilChildSpansFinished(1)
         }
       }
+    }
+    if (isDataStreamsEnabled()) {
+      TEST_DATA_STREAMS_WRITER.waitForGroups(1)
     }
 
     then:
@@ -346,8 +471,14 @@ abstract class HttpClientTest extends AgentTestRunner {
       }
     }
 
-    where:
-    method = "GET"
+    and:
+    if (isDataStreamsEnabled()) {
+      StatsGroup first = TEST_DATA_STREAMS_WRITER.groups.find { it.parentHash == 0 }
+      verifyAll(first) {
+        edgeTags.containsAll(DSM_EDGE_TAGS)
+        edgeTags.size() == DSM_EDGE_TAGS.size()
+      }
+    }
   }
 
   def "trace request with callback and no parent"() {
@@ -372,6 +503,9 @@ abstract class HttpClientTest extends AgentTestRunner {
     for (int i = 0; i < traces.size(); i++) {
       TEST_WRITER.set(i, traces.get(i))
     }
+    if (isDataStreamsEnabled()) {
+      TEST_DATA_STREAMS_WRITER.waitForGroups(1)
+    }
 
     then:
     status == 200
@@ -382,6 +516,15 @@ abstract class HttpClientTest extends AgentTestRunner {
       }
       trace(1) {
         basicSpan(it, "callback")
+      }
+    }
+
+    and:
+    if (isDataStreamsEnabled()) {
+      StatsGroup first = TEST_DATA_STREAMS_WRITER.groups.find { it.parentHash == 0 }
+      verifyAll(first) {
+        edgeTags.containsAll(DSM_EDGE_TAGS)
+        edgeTags.size() == DSM_EDGE_TAGS.size()
       }
     }
 
@@ -399,6 +542,9 @@ abstract class HttpClientTest extends AgentTestRunner {
 
     when:
     def status = doRequest(method, uri)
+    if (isDataStreamsEnabled()) {
+      TEST_DATA_STREAMS_WRITER.waitForGroups(1)
+    }
 
     then:
     status == 200
@@ -408,6 +554,15 @@ abstract class HttpClientTest extends AgentTestRunner {
       }
       server.distributedRequestTrace(it, trace(0).last())
       server.distributedRequestTrace(it, trace(0).last())
+    }
+
+    and:
+    if (isDataStreamsEnabled()) {
+      StatsGroup first = TEST_DATA_STREAMS_WRITER.groups.find { it.parentHash == 0 }
+      verifyAll(first) {
+        edgeTags.containsAll(DSM_EDGE_TAGS)
+        edgeTags.size() == DSM_EDGE_TAGS.size()
+      }
     }
 
     where:
@@ -421,6 +576,9 @@ abstract class HttpClientTest extends AgentTestRunner {
 
     when:
     def status = doRequest(method, uri)
+    if (isDataStreamsEnabled()) {
+      TEST_DATA_STREAMS_WRITER.waitForGroups(1)
+    }
 
     then:
     status == 200
@@ -431,6 +589,15 @@ abstract class HttpClientTest extends AgentTestRunner {
       server.distributedRequestTrace(it, trace(0).last())
       server.distributedRequestTrace(it, trace(0).last())
       server.distributedRequestTrace(it, trace(0).last())
+    }
+
+    and:
+    if (isDataStreamsEnabled()) {
+      StatsGroup first = TEST_DATA_STREAMS_WRITER.groups.find { it.parentHash == 0 }
+      verifyAll(first) {
+        edgeTags.containsAll(DSM_EDGE_TAGS)
+        edgeTags.size() == DSM_EDGE_TAGS.size()
+      }
     }
 
     where:
@@ -469,6 +636,9 @@ abstract class HttpClientTest extends AgentTestRunner {
 
     when:
     def status = doRequest(method, uri, [(BASIC_AUTH_KEY): BASIC_AUTH_VAL])
+    if (isDataStreamsEnabled()) {
+      TEST_DATA_STREAMS_WRITER.waitForGroups(1)
+    }
 
     then:
     status == 200
@@ -478,6 +648,15 @@ abstract class HttpClientTest extends AgentTestRunner {
       }
       server.distributedRequestTrace(it, trace(0).last())
       server.distributedRequestTrace(it, trace(0).last())
+    }
+
+    and:
+    if (isDataStreamsEnabled()) {
+      StatsGroup first = TEST_DATA_STREAMS_WRITER.groups.find { it.parentHash == 0 }
+      verifyAll(first) {
+        edgeTags.containsAll(DSM_EDGE_TAGS)
+        edgeTags.size() == DSM_EDGE_TAGS.size()
+      }
     }
 
     where:
@@ -543,6 +722,9 @@ abstract class HttpClientTest extends AgentTestRunner {
 
     when:
     def status = doRequest(method, uri)
+    if (isDataStreamsEnabled()) {
+      TEST_DATA_STREAMS_WRITER.waitForGroups(1)
+    }
 
     then:
     status == 200
@@ -552,12 +734,26 @@ abstract class HttpClientTest extends AgentTestRunner {
       }
     }
 
+    and:
+    if (isDataStreamsEnabled()) {
+      StatsGroup first = TEST_DATA_STREAMS_WRITER.groups.find { it.parentHash == 0 }
+      verifyAll(first) {
+        edgeTags.containsAll(DSM_EDGE_TAGS)
+        edgeTags.size() == DSM_EDGE_TAGS.size()
+      }
+    }
+
     where:
     method = "HEAD"
   }
 
   // parent span must be cast otherwise it breaks debugging classloading (junit loads it early)
   void clientSpan(TraceAssert trace, Object parentSpan, String method = "GET", boolean renameService = false, boolean tagQueryString = false, URI uri = server.address.resolve("/success"), Integer status = 200, boolean error = false, Throwable exception = null, boolean ignorePeer = false) {
+    def expectedQuery = tagQueryString ? uri.query : null
+    def expectedUrl = URIUtils.buildURL(uri.scheme, uri.host, uri.port, uri.path)
+    if (expectedQuery != null && !expectedQuery.empty) {
+      expectedUrl = "$expectedUrl?$expectedQuery"
+    }
     trace.span {
       if (parentSpan == null) {
         parent()
@@ -567,7 +763,7 @@ abstract class HttpClientTest extends AgentTestRunner {
       if (renameService) {
         serviceName uri.host
       }
-      operationName expectedOperationName()
+      operationName operation()
       resourceName "$method $uri.path"
       spanType DDSpanTypes.HTTP_CLIENT
       errored error
@@ -578,25 +774,25 @@ abstract class HttpClientTest extends AgentTestRunner {
         "$Tags.PEER_HOSTNAME" { it == uri.host || ignorePeer }
         "$Tags.PEER_HOST_IPV4" { it == null || it == "127.0.0.1" || ignorePeer } // Optional
         "$Tags.PEER_PORT" { it == null || it == uri.port || it == proxy.port || it == 443 || ignorePeer }
-        "$Tags.HTTP_URL" "${uri.resolve(uri.path)}" // remove fragment
+        "$Tags.HTTP_URL" expectedUrl
         "$Tags.HTTP_METHOD" method
         if (status) {
           "$Tags.HTTP_STATUS" status
         }
         if (tagQueryString) {
-          "$DDTags.HTTP_QUERY" uri.query
+          "$DDTags.HTTP_QUERY" expectedQuery
           "$DDTags.HTTP_FRAGMENT" { it == null || it == uri.fragment } // Optional
+        }
+        if ({ isDataStreamsEnabled() }) {
+          "$DDTags.PATHWAY_HASH" { String }
         }
         if (exception) {
           errorTags(exception.class, exception.message)
         }
+        peerServiceFrom(Tags.PEER_HOSTNAME)
         defaultTags()
       }
     }
-  }
-
-  String expectedOperationName() {
-    return "http.request"
   }
 
   int size(int size) {

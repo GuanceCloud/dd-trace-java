@@ -1,31 +1,37 @@
 package datadog.trace.instrumentation.springweb;
 
-import static datadog.trace.agent.tooling.bytebuddy.matcher.ClassLoaderMatchers.hasClassesNamed;
+import static datadog.trace.agent.tooling.bytebuddy.matcher.ClassLoaderMatchers.hasClassNamed;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
 import static datadog.trace.api.gateway.Events.EVENTS;
-import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activeSpan;
 import static net.bytebuddy.matcher.ElementMatchers.isMethod;
 import static net.bytebuddy.matcher.ElementMatchers.isPublic;
 import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
 import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
 
 import com.google.auto.service.AutoService;
+import datadog.appsec.api.blocking.BlockingException;
 import datadog.trace.agent.tooling.Instrumenter;
-import datadog.trace.api.function.BiFunction;
+import datadog.trace.api.gateway.BlockResponseFunction;
 import datadog.trace.api.gateway.CallbackProvider;
 import datadog.trace.api.gateway.Flow;
 import datadog.trace.api.gateway.RequestContext;
 import datadog.trace.api.gateway.RequestContextSlot;
+import datadog.trace.api.iast.InstrumentationBridge;
+import datadog.trace.api.iast.Source;
+import datadog.trace.api.iast.SourceTypes;
+import datadog.trace.api.iast.propagation.PropagationModule;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.api.AgentTracer;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.BiFunction;
 import javax.servlet.http.HttpServletRequest;
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.matcher.ElementMatcher;
 
 /** Obtain template and matrix variables for AbstractUrlHandlerMapping */
 @AutoService(Instrumenter.class)
-public class TemplateVariablesUrlHandlerInstrumentation extends Instrumenter.AppSec
+public class TemplateVariablesUrlHandlerInstrumentation extends Instrumenter.Default
     implements Instrumenter.ForSingleType {
 
   public TemplateVariablesUrlHandlerInstrumentation() {
@@ -33,9 +39,15 @@ public class TemplateVariablesUrlHandlerInstrumentation extends Instrumenter.App
   }
 
   @Override
+  public boolean isApplicable(Set<TargetSystem> enabledSystems) {
+    return enabledSystems.contains(TargetSystem.APPSEC)
+        || enabledSystems.contains(TargetSystem.IAST);
+  }
+
+  @Override
   public ElementMatcher<ClassLoader> classLoaderMatcher() {
-    return hasClassesNamed(
-        "org.springframework.web.servlet.handler.AbstractUrlHandlerMapping$UriTemplateVariablesHandlerInterceptor");
+    // Only apply to versions of spring-webmvc that include request mapping information
+    return hasClassNamed("org.springframework.web.servlet.mvc.method.RequestMappingInfo");
   }
 
   @Override
@@ -61,9 +73,15 @@ public class TemplateVariablesUrlHandlerInstrumentation extends Instrumenter.App
         "org.springframework.web.servlet.HandlerMapping.uriTemplateVariables";
 
     @SuppressWarnings("Duplicates")
-    @Advice.OnMethodExit(suppress = Throwable.class)
-    public static void after(@Advice.Argument(0) final HttpServletRequest req) {
-      AgentSpan agentSpan = activeSpan();
+    @Advice.OnMethodExit(suppress = Throwable.class, onThrowable = Throwable.class)
+    @Source(SourceTypes.REQUEST_PATH_PARAMETER_STRING)
+    public static void after(
+        @Advice.Argument(0) final HttpServletRequest req,
+        @Advice.Thrown(readOnly = false) Throwable t) {
+      if (t != null) {
+        return;
+      }
+      AgentSpan agentSpan = AgentTracer.activeSpan();
       if (agentSpan == null) {
         return;
       }
@@ -73,19 +91,57 @@ public class TemplateVariablesUrlHandlerInstrumentation extends Instrumenter.App
         return;
       }
 
-      Map<String, Object> map = (Map<String, Object>) templateVars;
+      Map<String, String> map = (Map<String, String>) templateVars;
       if (map.isEmpty()) {
         return;
       }
 
-      CallbackProvider cbp = AgentTracer.get().getCallbackProvider(RequestContextSlot.APPSEC);
-      BiFunction<RequestContext, Map<String, ?>, Flow<Void>> callback =
-          cbp.getCallback(EVENTS.requestPathParams());
-      RequestContext requestContext = agentSpan.getRequestContext();
-      if (requestContext == null || callback == null) {
+      RequestContext reqCtx = agentSpan.getRequestContext();
+      if (reqCtx == null) {
         return;
       }
-      callback.apply(requestContext, map);
+
+      { // appsec
+        Object appSecRequestContext = reqCtx.getData(RequestContextSlot.APPSEC);
+        if (appSecRequestContext != null) {
+          CallbackProvider cbp = AgentTracer.get().getCallbackProvider(RequestContextSlot.APPSEC);
+          BiFunction<RequestContext, Map<String, ?>, Flow<Void>> callback =
+              cbp.getCallback(EVENTS.requestPathParams());
+          if (callback != null) {
+            Flow<Void> flow = callback.apply(reqCtx, map);
+            Flow.Action action = flow.getAction();
+            if (action instanceof Flow.Action.RequestBlockingAction) {
+              Flow.Action.RequestBlockingAction rba = (Flow.Action.RequestBlockingAction) action;
+              BlockResponseFunction brf = reqCtx.getBlockResponseFunction();
+              if (brf != null) {
+                brf.tryCommitBlockingResponse(
+                    rba.getStatusCode(), rba.getBlockingContentType(), rba.getExtraHeaders());
+              }
+              t =
+                  new BlockingException(
+                      "Blocked request (for UriTemplateVariablesHandlerInterceptor/preHandle)");
+            }
+          }
+        }
+      }
+
+      { // iast
+        Object iastRequestContext = reqCtx.getData(RequestContextSlot.IAST);
+        if (iastRequestContext != null) {
+          PropagationModule module = InstrumentationBridge.PROPAGATION;
+          if (module != null) {
+            for (Map.Entry<String, String> e : map.entrySet()) {
+              String parameterName = e.getKey();
+              String value = e.getValue();
+              if (parameterName == null || value == null) {
+                continue; // should not happen
+              }
+              module.taint(
+                  iastRequestContext, SourceTypes.REQUEST_PATH_PARAMETER, parameterName, value);
+            }
+          }
+        }
+      }
     }
   }
 }

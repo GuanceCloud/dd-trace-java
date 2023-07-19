@@ -1,11 +1,11 @@
 package datadog.trace.instrumentation.elasticsearch7;
 
-import static datadog.trace.agent.tooling.bytebuddy.matcher.ClassLoaderMatchers.hasClassesNamed;
+import static datadog.trace.agent.tooling.bytebuddy.matcher.ClassLoaderMatchers.hasClassNamed;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSpan;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.startSpan;
 import static datadog.trace.instrumentation.elasticsearch.ElasticsearchRestClientDecorator.DECORATE;
-import static datadog.trace.instrumentation.elasticsearch.ElasticsearchRestClientDecorator.ELASTICSEARCH_REST_QUERY;
+import static datadog.trace.instrumentation.elasticsearch.ElasticsearchRestClientDecorator.OPERATION_NAME;
 import static net.bytebuddy.matcher.ElementMatchers.isMethod;
 import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
 import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
@@ -29,13 +29,10 @@ public class Elasticsearch7RestClientInstrumentation extends Instrumenter.Tracin
     super("elasticsearch", "elasticsearch-rest", "elasticsearch-rest-7");
   }
 
-  // this is required to make sure ES7 instrumentation won't apply to previous releases
-  static final ElementMatcher<ClassLoader> CLASS_LOADER_MATCHER =
-      hasClassesNamed("org.elasticsearch.client.RestClient$InternalRequest");
-
   @Override
   public ElementMatcher<ClassLoader> classLoaderMatcher() {
-    return CLASS_LOADER_MATCHER;
+    // Avoid matching pre-ES7 releases which have their own instrumentations.
+    return hasClassNamed("org.elasticsearch.client.RestClient$InternalRequest");
   }
 
   @Override
@@ -76,9 +73,14 @@ public class Elasticsearch7RestClientInstrumentation extends Instrumenter.Tracin
         @Advice.Argument(value = 1, readOnly = false, optional = true)
             ResponseListener responseListener) {
 
-      final AgentSpan span = startSpan(ELASTICSEARCH_REST_QUERY);
+      final AgentSpan span = startSpan(OPERATION_NAME);
       DECORATE.afterStart(span);
-      DECORATE.onRequest(span, request.getMethod(), request.getEndpoint());
+      DECORATE.onRequest(
+          span,
+          request.getMethod(),
+          request.getEndpoint(),
+          request.getEntity(),
+          request.getParameters());
 
       if (responseListener != null) {
         responseListener = new RestResponseListener(responseListener, span);

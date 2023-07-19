@@ -1,5 +1,7 @@
 package com.datadog.appsec
 
+import com.datadog.appsec.config.AppSecConfig
+import com.datadog.appsec.event.EventProducerService
 import com.datadog.appsec.gateway.AppSecRequestContext
 import com.datadog.appsec.report.raw.events.AppSecEvent100
 import com.datadog.appsec.util.AbortStartupException
@@ -7,9 +9,12 @@ import datadog.communication.ddagent.DDAgentFeaturesDiscovery
 import datadog.communication.ddagent.SharedCommunicationObjects
 import datadog.communication.monitor.Counter
 import datadog.communication.monitor.Monitoring
-import datadog.trace.api.TraceSegment
-import datadog.trace.api.Tracer
-import datadog.trace.api.function.BiFunction
+import datadog.remoteconfig.ConfigurationChangesTypedListener
+import datadog.remoteconfig.ConfigurationEndListener
+import datadog.remoteconfig.ConfigurationPoller
+import datadog.remoteconfig.Product
+import datadog.trace.api.Config
+import datadog.trace.api.internal.TraceSegment
 import datadog.trace.api.gateway.Flow
 import datadog.trace.api.gateway.IGSpanInfo
 import datadog.trace.api.gateway.RequestContext
@@ -21,12 +26,13 @@ import okhttp3.OkHttpClient
 
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.function.BiFunction
 
 import static datadog.trace.api.gateway.Events.EVENTS
 
 class AppSecSystemSpecification extends DDSpecification {
   SubscriptionService subService = Mock()
-  Tracer tracer = Mock()
+  ConfigurationPoller poller = Mock()
 
   def cleanup() {
     AppSecSystem.stop()
@@ -126,11 +132,66 @@ class AppSecSystemSpecification extends DDSpecification {
     AppSecSystem.startedModulesInfo.empty
   }
 
+  void 'updating configuration replaces the EventProducer'() {
+    ConfigurationChangesTypedListener<AppSecConfig> savedAsmListener
+    ConfigurationEndListener savedConfEndListener
+
+    when:
+    AppSecSystem.start(subService, sharedCommunicationObjects())
+    EventProducerService initialEPS = AppSecSystem.REPLACEABLE_EVENT_PRODUCER.cur
+
+    then:
+    1 * poller.addListener(Product.ASM_DD, _, _) >> {
+      savedAsmListener = it[2]
+    }
+    1 * poller.addConfigurationEndListener(_) >> {
+      savedConfEndListener = it[0]
+    }
+
+    when:
+    savedAsmListener.accept('ignored config key',
+      AppSecConfig.valueOf([version: '2.1', rules: [
+          [
+            id: 'foo',
+            name: 'foo',
+            conditions: [
+              [
+                operator: 'match_regex',
+                parameters: [
+                  inputs: [
+                    [
+                      address: 'my.addr',
+                      key_path: ['kp'],
+                    ]
+                  ],
+                  regex: 'foo',
+                ]
+              ]
+            ],
+            tags: [
+              type: 't',
+              'category': 'c',
+            ],
+            action: 'record',
+          ]
+        ]]), null)
+    savedConfEndListener.onConfigurationEnd()
+
+    then:
+    AppSecSystem.REPLACEABLE_EVENT_PRODUCER.cur != initialEPS
+  }
+
   private SharedCommunicationObjects sharedCommunicationObjects() {
-    new SharedCommunicationObjects(
-      okHttpClient: Mock(OkHttpClient),
-      monitoring: Mock(Monitoring),
-      featuresDiscovery: Mock(DDAgentFeaturesDiscovery)
-      )
+    def sco = new SharedCommunicationObjects(
+      ) {
+        @Override
+        ConfigurationPoller configurationPoller(Config config) {
+          poller
+        }
+      }
+    sco.okHttpClient = Mock(OkHttpClient)
+    sco.monitoring = Mock(Monitoring)
+    sco.featuresDiscovery = Mock(DDAgentFeaturesDiscovery)
+    sco
   }
 }

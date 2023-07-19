@@ -1,29 +1,41 @@
 package com.datadog.debugger.agent;
 
+import static java.util.Collections.singletonList;
+import static java.util.stream.Collectors.toList;
+
+import com.datadog.debugger.instrumentation.DiagnosticMessage;
 import com.datadog.debugger.instrumentation.InstrumentationResult;
+import com.datadog.debugger.probe.LogProbe;
+import com.datadog.debugger.probe.ProbeDefinition;
+import com.datadog.debugger.probe.Where;
 import com.datadog.debugger.util.ExceptionHelper;
 import datadog.trace.agent.tooling.AgentStrategies;
 import datadog.trace.api.Config;
-import datadog.trace.bootstrap.debugger.DebuggerContext;
-import datadog.trace.bootstrap.debugger.DiagnosticMessage;
+import datadog.trace.bootstrap.debugger.ProbeId;
+import datadog.trace.bootstrap.debugger.ProbeImplementation;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.instrument.ClassFileTransformer;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.security.CodeSource;
 import java.security.ProtectionDomain;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 import net.bytebuddy.description.type.TypeDescription;
-import net.bytebuddy.dynamic.ClassFileLocator;
 import net.bytebuddy.pool.TypePool;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
@@ -46,8 +58,9 @@ import org.slf4j.LoggerFactory;
  */
 public class DebuggerTransformer implements ClassFileTransformer {
   private static final Logger log = LoggerFactory.getLogger(DebuggerTransformer.class);
-  private static final String CANNOT_FIND_METHOD = "Cannot find %s::%s";
-  private static final String CANNOT_FIND_LINE = "Cannot find %s:L%s";
+  private static final String CANNOT_FIND_METHOD = "Cannot find method %s::%s";
+  private static final String CANNOT_FIND_LINE = "No executable code was found at %s:L%s";
+  private static final Pattern COMMA_PATTERN = Pattern.compile(",");
 
   private final Config config;
   private final TransformerDefinitionMatcher definitonMatcher;
@@ -57,6 +70,7 @@ public class DebuggerTransformer implements ClassFileTransformer {
   private final boolean instrumentTheWorld;
   private final Set<String> excludeClasses = new HashSet<>();
   private final Trie excludeTrie = new Trie();
+  private final Map<String, LogProbe> instrumentTheWorldProbes;
 
   public interface InstrumentationListener {
     void instrumentationResult(ProbeDefinition definition, InstrumentationResult result);
@@ -71,7 +85,10 @@ public class DebuggerTransformer implements ClassFileTransformer {
     this.listener = listener;
     this.instrumentTheWorld = config.isDebuggerInstrumentTheWorld();
     if (this.instrumentTheWorld) {
-      readExcludeFile(config.getDebuggerExcludeFile());
+      instrumentTheWorldProbes = new ConcurrentHashMap<>();
+      readExcludeFiles(config.getDebuggerExcludeFiles());
+    } else {
+      instrumentTheWorldProbes = null;
     }
   }
 
@@ -79,27 +96,33 @@ public class DebuggerTransformer implements ClassFileTransformer {
     this(config, configuration, null);
   }
 
-  private void readExcludeFile(String fileName) {
-    if (fileName == null) {
+  private void readExcludeFiles(String commaSeparatedFileNames) {
+    if (commaSeparatedFileNames == null) {
       return;
     }
-    Path excludePath = Paths.get(fileName);
-    if (!Files.exists(excludePath)) {
-      log.warn("Cannot find exclude file: {}", excludePath);
-      return;
-    }
-    try {
-      Files.lines(excludePath)
-          .forEach(
-              line -> {
-                if (line.endsWith("*")) {
-                  excludeTrie.insert(line.substring(0, line.length() - 1));
-                } else {
-                  excludeClasses.add(line);
-                }
-              });
-    } catch (IOException ex) {
-      log.warn("Error reading exclude file '{}' for Instrument-The-World: ", fileName, ex);
+    String[] fileNames = COMMA_PATTERN.split(commaSeparatedFileNames);
+    for (String fileName : fileNames) {
+      Path excludePath = Paths.get(fileName);
+      if (!Files.exists(excludePath)) {
+        log.warn("Cannot find exclude file: {}", excludePath);
+        continue;
+      }
+      try {
+        Files.lines(excludePath)
+            .forEach(
+                line -> {
+                  if (line.startsWith("#")) {
+                    return;
+                  }
+                  if (line.endsWith("*")) {
+                    excludeTrie.insert(line.substring(0, line.length() - 1));
+                  } else {
+                    excludeClasses.add(line);
+                  }
+                });
+      } catch (IOException ex) {
+        log.warn("Error reading exclude file '{}' for Instrument-The-World: ", fileName, ex);
+      }
     }
   }
 
@@ -129,14 +152,10 @@ public class DebuggerTransformer implements ClassFileTransformer {
       if (!instrumentationIsAllowed(fullyQualifiedClassName, definitions)) {
         return null;
       }
-      definitions = filterActiveDefinitions(definitions);
-      if (definitions.isEmpty()) {
-        log.info("No active definition for {}", fullyQualifiedClassName);
-        return null;
-      }
+      Map<Where, List<ProbeDefinition>> defByLocation = mergeLocations(definitions);
       ClassNode classNode = parseClassFile(classFilePath, classfileBuffer);
       boolean transformed =
-          performInstrumentation(loader, fullyQualifiedClassName, definitions, classNode);
+          performInstrumentation(loader, fullyQualifiedClassName, defByLocation, classNode);
       if (transformed) {
         return writeClassFile(loader, classFilePath, classNode);
       }
@@ -146,10 +165,20 @@ public class DebuggerTransformer implements ClassFileTransformer {
       // e.g. Main.java contains Main & TopLevel class, line numbers are in TopLevel class
       log.info(
           "type {} matched but no transformation for definitions: {}", classFilePath, definitions);
-    } catch (Exception ex) {
+    } catch (Throwable ex) {
       log.warn("Cannot transform: ", ex);
     }
     return null;
+  }
+
+  private Map<Where, List<ProbeDefinition>> mergeLocations(List<ProbeDefinition> definitions) {
+    Map<Where, List<ProbeDefinition>> mergedProbes = new HashMap<>();
+    for (ProbeDefinition definition : definitions) {
+      List<ProbeDefinition> instrumentationDefinitions =
+          mergedProbes.computeIfAbsent(definition.getWhere(), key -> new ArrayList<>());
+      instrumentationDefinitions.add(definition);
+    }
+    return mergedProbes;
   }
 
   private boolean skipInstrumentation(ClassLoader loader, String classFilePath) {
@@ -186,28 +215,60 @@ public class DebuggerTransformer implements ClassFileTransformer {
       if (isExcludedFromTransformation(classFilePath)) {
         return null;
       }
-      log.debug("Parsing class '{}' loaded from '{}'", classFilePath, loader);
+      URL location = null;
+      if (protectionDomain != null) {
+        CodeSource codeSource = protectionDomain.getCodeSource();
+        if (codeSource != null) {
+          location = codeSource.getLocation();
+        }
+      }
+      log.debug(
+          "Parsing class '{}' {}B loaded from loader='{}' location={}",
+          classFilePath,
+          classfileBuffer.length,
+          loader,
+          location);
       ClassNode classNode = parseClassFile(classFilePath, classfileBuffer);
       List<ProbeDefinition> probes = new ArrayList<>();
       Set<String> methodNames = new HashSet<>();
       for (MethodNode methodNode : classNode.methods) {
         if (methodNames.add(methodNode.name)) {
-          SnapshotProbe probe =
-              SnapshotProbe.builder()
-                  .probeId(UUID.randomUUID().toString())
+          LogProbe probe =
+              LogProbe.builder()
+                  .probeId(UUID.randomUUID().toString(), 0)
                   .where(classNode.name, methodNode.name)
+                  .captureSnapshot(true)
                   .build();
           probes.add(probe);
+          instrumentTheWorldProbes.put(probe.getId(), probe);
         }
       }
-      boolean transformed = performInstrumentation(loader, classFilePath, probes, classNode);
+      Map<Where, List<ProbeDefinition>> defByLocation = mergeLocations(probes);
+      boolean transformed = performInstrumentation(loader, classFilePath, defByLocation, classNode);
       if (transformed) {
         return writeClassFile(loader, classFilePath, classNode);
       }
     } catch (Throwable ex) {
       log.warn("Cannot transform: ", ex);
+      writeToInstrumentationLog(classFilePath);
     }
     return null;
+  }
+
+  private synchronized void writeToInstrumentationLog(String classFilePath) {
+    try (FileWriter writer = new FileWriter("/tmp/debugger/instrumentation.log", true)) {
+      writer.write(classFilePath);
+      writer.write("\n");
+    } catch (Exception ex) {
+      log.warn("Cannot write to instrumentation.log", ex);
+    }
+  }
+
+  public ProbeImplementation instrumentTheWorldResolver(String id, Class<?> callingClass) {
+    if (instrumentTheWorldProbes == null) {
+      return null;
+    }
+    return instrumentTheWorldProbes.get(id);
   }
 
   private boolean isExcludedFromTransformation(String classFilePath) {
@@ -227,6 +288,7 @@ public class DebuggerTransformer implements ClassFileTransformer {
       InstrumentationResult result =
           InstrumentationResult.Factory.blocked(
               fullyQualifiedClassName,
+              definitions,
               new DiagnosticMessage(
                   DiagnosticMessage.Kind.WARN,
                   "Instrumentation denied for " + fullyQualifiedClassName));
@@ -238,6 +300,7 @@ public class DebuggerTransformer implements ClassFileTransformer {
       InstrumentationResult result =
           InstrumentationResult.Factory.blocked(
               fullyQualifiedClassName,
+              definitions,
               new DiagnosticMessage(
                   DiagnosticMessage.Kind.WARN,
                   "Instrumentation not allowed for " + fullyQualifiedClassName));
@@ -288,7 +351,8 @@ public class DebuggerTransformer implements ClassFileTransformer {
         try {
           analyzer.analyze(classNode.name, method);
         } catch (AnalyzerException e) {
-          printWriter.printf("Error analyzing method '%s.%s':%n", classNode.name, method.name);
+          printWriter.printf(
+              "Error analyzing method '%s.%s%s':%n", classNode.name, method.name, method.desc);
           e.printStackTrace(printWriter);
         }
       }
@@ -305,40 +369,50 @@ public class DebuggerTransformer implements ClassFileTransformer {
   private boolean performInstrumentation(
       ClassLoader loader,
       String fullyQualifiedClassName,
-      List<ProbeDefinition> definitions,
+      Map<Where, List<ProbeDefinition>> definitionByLocation,
       ClassNode classNode) {
     boolean transformed = false;
     // FIXME build a map also for methods to optimize the matching, currently O(probes*methods)
-    for (ProbeDefinition definition : definitions) {
+    for (Map.Entry<Where, List<ProbeDefinition>> entry : definitionByLocation.entrySet()) {
+      Where where = entry.getKey();
+      String methodName = where.getMethodName();
+      String[] lines = where.getLines();
       List<MethodNode> methodNodes;
-      String methodName = definition.getWhere().getMethodName();
-      String[] lines = definition.getWhere().getLines();
       if (methodName == null && lines != null) {
-        MethodNode methodNode = matchSourceFile(classNode, definition);
-        methodNodes =
-            methodNode != null ? Collections.singletonList(methodNode) : Collections.emptyList();
+        MethodNode methodNode = matchSourceFile(classNode, where);
+        methodNodes = methodNode != null ? singletonList(methodNode) : Collections.emptyList();
       } else {
-        methodNodes = matchMethodDescription(classNode, definition);
+        methodNodes = matchMethodDescription(classNode, where);
       }
+      List<ProbeDefinition> definitions = entry.getValue();
       if (methodNodes.isEmpty()) {
-        reportLocationNotFound(definition, classNode.name, methodName, lines);
+        reportLocationNotFound(definitions, classNode.name, methodName);
         continue;
       }
       for (MethodNode methodNode : methodNodes) {
-        log.debug(
-            "Instrumenting method: {}.{}{} for probe ids: {}",
-            fullyQualifiedClassName,
-            methodNode.name,
-            methodNode.desc,
-            definition.getAllProbeIds().collect(Collectors.toList()));
-        InstrumentationResult result =
-            applyInstrumentation(loader, classNode, definition, methodNode);
-        transformed |= result.isInstalled();
-        if (listener != null) {
-          listener.instrumentationResult(definition, result);
+        if (log.isDebugEnabled()) {
+          List<String> probeIds =
+              definitions.stream().map(ProbeDefinition::getId).collect(toList());
+          log.debug(
+              "Instrumenting method: {}.{}{} for probe ids: {}",
+              fullyQualifiedClassName,
+              methodNode.name,
+              methodNode.desc,
+              probeIds);
         }
-        if (!result.getDiagnostics().isEmpty()) {
-          DebuggerContext.reportDiagnostics(definition.getId(), result.getDiagnostics());
+        InstrumentationResult result =
+            applyInstrumentation(loader, classNode, definitions, methodNode);
+        transformed |= result.isInstalled();
+        for (ProbeDefinition definition : definitions) {
+          definition.buildLocation(result);
+          if (listener != null) {
+            listener.instrumentationResult(definition, result);
+          }
+          List<DiagnosticMessage> diagnosticMessages =
+              result.getDiagnostics().get(definition.getProbeId());
+          if (!result.getDiagnostics().isEmpty()) {
+            DebuggerAgent.getSink().addDiagnostics(definition.getProbeId(), diagnosticMessages);
+          }
         }
       }
     }
@@ -346,20 +420,24 @@ public class DebuggerTransformer implements ClassFileTransformer {
   }
 
   private void reportLocationNotFound(
-      ProbeDefinition definition, String className, String methodName, String[] lines) {
-    String format = CANNOT_FIND_LINE;
-    String location = "0";
+      List<ProbeDefinition> definitions, String className, String methodName) {
+    String format;
+    String location;
     if (methodName != null) {
       format = CANNOT_FIND_METHOD;
       location = methodName;
-    } else if (lines != null && lines.length > 0) {
-      location = lines[0];
+    } else {
+      // This is a line probe, so we don't report line not found because the line may be found later
+      // on a separate class files because probe was set on an inner/top-level class
+      return;
     }
     String msg = String.format(format, className, location);
     DiagnosticMessage diagnosticMessage = new DiagnosticMessage(DiagnosticMessage.Kind.ERROR, msg);
-    DebuggerContext.reportDiagnostics(
-        definition.getId(), Collections.singletonList(diagnosticMessage));
-    log.debug("{} for definition: {}", msg, definition);
+    for (ProbeDefinition definition : definitions) {
+      DebuggerAgent.getSink()
+          .addDiagnostics(definition.getProbeId(), singletonList(diagnosticMessage));
+      log.debug("{} for definition: {}", msg, definition);
+    }
   }
 
   private void notifyBlockedDefinitions(
@@ -374,35 +452,56 @@ public class DebuggerTransformer implements ClassFileTransformer {
   private InstrumentationResult applyInstrumentation(
       ClassLoader classLoader,
       ClassNode classNode,
-      ProbeDefinition definition,
+      List<ProbeDefinition> definitions,
       MethodNode methodNode) {
-    List<DiagnosticMessage> diagnostics = new ArrayList<>();
+    Map<ProbeId, List<DiagnosticMessage>> diagnostics = new HashMap<>();
+    definitions.forEach(
+        probeDefinition -> diagnostics.put(probeDefinition.getProbeId(), new ArrayList<>()));
     InstrumentationResult.Status status =
         preCheckInstrumentation(diagnostics, classLoader, methodNode);
     if (status != InstrumentationResult.Status.ERROR) {
       try {
-        definition.instrument(classLoader, classNode, methodNode, diagnostics);
+        List<ProbeDefinition> logProbes = new ArrayList<>();
+        for (ProbeDefinition definition : definitions) {
+          if (definition instanceof LogProbe) {
+            logProbes.add(definition);
+          } else {
+            List<DiagnosticMessage> probeDiagnostics = diagnostics.get(definition.getProbeId());
+            definition.instrument(classLoader, classNode, methodNode, probeDiagnostics);
+          }
+        }
+        if (logProbes.size() > 0) {
+          List<String> probesIds = logProbes.stream().map(ProbeDefinition::getId).collect(toList());
+          List<DiagnosticMessage> probeDiagnostics = diagnostics.get(logProbes.get(0).getProbeId());
+          logProbes
+              .get(0)
+              .instrument(classLoader, classNode, methodNode, probeDiagnostics, probesIds);
+        }
       } catch (Throwable t) {
         log.warn("Exception during instrumentation: ", t);
         status = InstrumentationResult.Status.ERROR;
-        diagnostics.add(new DiagnosticMessage(DiagnosticMessage.Kind.ERROR, t));
+        addDiagnosticForAllProbes(
+            new DiagnosticMessage(DiagnosticMessage.Kind.ERROR, t), diagnostics);
       }
     }
     return new InstrumentationResult(status, diagnostics, classNode, methodNode);
   }
 
   private InstrumentationResult.Status preCheckInstrumentation(
-      List<DiagnosticMessage> diagnostics, ClassLoader classLoader, MethodNode methodNode) {
+      Map<ProbeId, List<DiagnosticMessage>> diagnostics,
+      ClassLoader classLoader,
+      MethodNode methodNode) {
     if ((methodNode.access & (Opcodes.ACC_NATIVE | Opcodes.ACC_ABSTRACT)) != 0) {
       if (!instrumentTheWorld) {
-        diagnostics.add(
+        addDiagnosticForAllProbes(
             new DiagnosticMessage(
-                DiagnosticMessage.Kind.ERROR, "Cannot instrument an abstract or native method"));
+                DiagnosticMessage.Kind.ERROR, "Cannot instrument an abstract or native method"),
+            diagnostics);
       }
       return InstrumentationResult.Status.ERROR;
     }
     if (classLoader != null
-        && classLoader.getClass().getName().equals("sun.reflect.DelegatingClassLoader")) {
+        && classLoader.getClass().getTypeName().equals("sun.reflect.DelegatingClassLoader")) {
       // This classloader is used when using reflection. This is a special classloader known
       // by the JVM with special behavior. it cannot load other classes inside it (e.i. no
       // delegation to parent classloader).
@@ -412,20 +511,26 @@ public class DebuggerTransformer implements ClassFileTransformer {
       // source:
       // https://github.com/openjdk/jdk/blob/1581e3faa06358f192799b3a89718028c7f6a24b/src/hotspot/share/classfile/javaClasses.cpp#L4392-L4412
       if (!instrumentTheWorld) {
-        diagnostics.add(
+        addDiagnosticForAllProbes(
             new DiagnosticMessage(
-                DiagnosticMessage.Kind.ERROR, "Cannot instrument class in DelegatingClassLoader"));
+                DiagnosticMessage.Kind.ERROR, "Cannot instrument class in DelegatingClassLoader"),
+            diagnostics);
       }
       return InstrumentationResult.Status.ERROR;
     }
     return InstrumentationResult.Status.INSTALLED;
   }
 
-  private List<MethodNode> matchMethodDescription(ClassNode classNode, ProbeDefinition definition) {
+  private static void addDiagnosticForAllProbes(
+      DiagnosticMessage diagnosticMessage, Map<ProbeId, List<DiagnosticMessage>> diagnostics) {
+    diagnostics.forEach((probeId, diagnosticMessages) -> diagnosticMessages.add(diagnosticMessage));
+  }
+
+  private List<MethodNode> matchMethodDescription(ClassNode classNode, Where where) {
     List<MethodNode> result = new ArrayList<>();
     try {
       for (MethodNode methodNode : classNode.methods) {
-        if (definition.getWhere().isMethodMatching(methodNode.name, methodNode.desc)) {
+        if (where.isMethodMatching(methodNode.name, methodNode.desc)) {
           result.add(methodNode);
         }
       }
@@ -435,12 +540,13 @@ public class DebuggerTransformer implements ClassFileTransformer {
     return result;
   }
 
-  private MethodNode matchSourceFile(ClassNode classNode, ProbeDefinition definition) {
-    String[] lines = definition.getWhere().getLines();
+  private MethodNode matchSourceFile(ClassNode classNode, Where where) {
+    Where.SourceLine[] lines = where.getSourceLines();
     if (lines == null || lines.length == 0) {
       return null;
     }
-    int matchingLine = Integer.parseInt(lines[0]);
+    Where.SourceLine sourceLine = lines[0]; // assume only 1 range
+    int matchingLine = sourceLine.getFrom();
     for (MethodNode methodNode : classNode.methods) {
       AbstractInsnNode currentInsn = methodNode.instructions.getFirst();
       while (currentInsn != null) {
@@ -456,10 +562,6 @@ public class DebuggerTransformer implements ClassFileTransformer {
     }
     log.debug("Cannot find line: {} in class {}", matchingLine, classNode.name);
     return null;
-  }
-
-  private List<ProbeDefinition> filterActiveDefinitions(List<ProbeDefinition> definitions) {
-    return definitions.stream().filter(ProbeDefinition::isActive).collect(Collectors.toList());
   }
 
   private void dumpInstrumentedClassFile(String className, byte[] data) {
@@ -509,16 +611,25 @@ public class DebuggerTransformer implements ClassFileTransformer {
       // duplicate class definition for name: "okhttp3/RealCall"
       // for more info see:
       // https://stackoverflow.com/questions/69563714/linkageerror-attempted-duplicate-class-definition-when-dynamically-instrument
-      ClassFileLocator locator =
-          AgentStrategies.locationStrategy().classFileLocator(classLoader, null);
-      TypePool tp =
+      TypePool tpTargetClassLoader =
           new TypePool.Default.WithLazyResolution(
               TypePool.CacheProvider.Simple.withObjectType(),
-              locator,
+              AgentStrategies.locationStrategy().classFileLocator(classLoader, null),
               TypePool.Default.ReaderMode.FAST);
+      // Introduced the java agent DataDog classloader for resolving types introduced by other
+      // Datadog instrumentation (Tracing, AppSec, Profiling, ...)
+      // Here we assume that the current class is loaded in DataDog classloader
+      TypePool tpDatadogClassLoader =
+          new TypePool.Default.WithLazyResolution(
+              TypePool.CacheProvider.Simple.withObjectType(),
+              AgentStrategies.locationStrategy()
+                  .classFileLocator(getClass().getClassLoader(), null),
+              TypePool.Default.ReaderMode.FAST,
+              tpTargetClassLoader);
+
       try {
-        TypeDescription td1 = tp.describe(type1.replace('/', '.')).resolve();
-        TypeDescription td2 = tp.describe(type2.replace('/', '.')).resolve();
+        TypeDescription td1 = tpDatadogClassLoader.describe(type1.replace('/', '.')).resolve();
+        TypeDescription td2 = tpDatadogClassLoader.describe(type2.replace('/', '.')).resolve();
         TypeDescription common = null;
         if (td1.isAssignableFrom(td2)) {
           common = td1;
@@ -526,7 +637,7 @@ public class DebuggerTransformer implements ClassFileTransformer {
           common = td2;
         } else {
           if (td1.isInterface() || td2.isInterface()) {
-            common = tp.describe("java.lang.Object").resolve();
+            common = tpDatadogClassLoader.describe("java.lang.Object").resolve();
           } else {
             common = td1;
             do {
@@ -537,7 +648,7 @@ public class DebuggerTransformer implements ClassFileTransformer {
         return common.getInternalName();
       } catch (Exception ex) {
         ExceptionHelper.logException(log, ex, "getCommonSuperClass failed: ");
-        return tp.describe("java.lang.Object").resolve().getInternalName();
+        return tpDatadogClassLoader.describe("java.lang.Object").resolve().getInternalName();
       }
     }
   }

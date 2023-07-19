@@ -17,7 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class OTTracer implements Tracer {
-
+  private static final String INSTRUMENTATION_NAME = "opentracing";
   private static final Logger log = LoggerFactory.getLogger(OTTracer.class);
 
   private final TypeConverter converter = new TypeConverter(new DefaultLogHandler());
@@ -41,7 +41,7 @@ public class OTTracer implements Tracer {
 
   @Override
   public SpanBuilder buildSpan(final String operationName) {
-    return new OTSpanBuilder(tracer.buildSpan(operationName), converter);
+    return new OTSpanBuilder(tracer.buildSpan(INSTRUMENTATION_NAME, operationName));
   }
 
   @Override
@@ -70,11 +70,9 @@ public class OTTracer implements Tracer {
 
   public class OTSpanBuilder implements Tracer.SpanBuilder {
     private final AgentTracer.SpanBuilder delegate;
-    private final TypeConverter converter;
 
-    public OTSpanBuilder(final AgentTracer.SpanBuilder delegate, final TypeConverter converter) {
+    public OTSpanBuilder(final AgentTracer.SpanBuilder delegate) {
       this.delegate = delegate;
-      this.converter = converter;
     }
 
     @Override

@@ -5,8 +5,9 @@ import com.datadog.appsec.event.data.DataBundle;
 import com.datadog.appsec.event.data.KnownAddresses;
 import com.datadog.appsec.report.raw.events.AppSecEvent100;
 import com.datadog.appsec.util.StandardizedLogging;
-import datadog.trace.api.TraceSegment;
+import datadog.trace.api.gateway.BlockResponseFunction;
 import datadog.trace.api.http.StoredBodySupplier;
+import datadog.trace.api.internal.TraceSegment;
 import io.sqreen.powerwaf.Additive;
 import io.sqreen.powerwaf.PowerwafContext;
 import io.sqreen.powerwaf.PowerwafMetrics;
@@ -36,6 +37,9 @@ public class AppSecRequestContext implements DataBundle, Closeable {
               "via",
               "client-ip",
               "true-client-ip",
+              "fastly-client-ip",
+              "cf-connecting-ip",
+              "cf-connecting-ipv6",
               "content-length",
               "content-type",
               "content-encoding",
@@ -60,16 +64,17 @@ public class AppSecRequestContext implements DataBundle, Closeable {
   private boolean finishedResponseHeaders;
   private String peerAddress;
   private int peerPort;
+  private String inferredClientIp;
 
   private volatile StoredBodySupplier storedRequestBodySupplier;
 
   private int responseStatus;
-  private boolean blocked;
 
   private boolean reqDataPublished;
   private boolean rawReqBodyPublished;
   private boolean convertedReqBodyPublished;
   private boolean respDataPublished;
+  private BlockResponseFunction blockResponseFunction;
 
   // should be guarded by this
   private Additive additive;
@@ -199,7 +204,7 @@ public class AppSecRequestContext implements DataBundle, Closeable {
     }
 
     List<String> strings =
-        requestHeaders.computeIfAbsent(name.toLowerCase(), h -> new ArrayList<>(1));
+        requestHeaders.computeIfAbsent(name.toLowerCase(Locale.ROOT), h -> new ArrayList<>(1));
     strings.add(value);
   }
 
@@ -225,7 +230,7 @@ public class AppSecRequestContext implements DataBundle, Closeable {
     }
 
     List<String> strings =
-        responseHeaders.computeIfAbsent(name.toLowerCase(), h -> new ArrayList<>(1));
+        responseHeaders.computeIfAbsent(name.toLowerCase(Locale.ROOT), h -> new ArrayList<>(1));
     strings.add(value);
   }
 
@@ -272,6 +277,14 @@ public class AppSecRequestContext implements DataBundle, Closeable {
     this.peerPort = peerPort;
   }
 
+  void setInferredClientIp(String ipAddress) {
+    this.inferredClientIp = ipAddress;
+  }
+
+  String getInferredClientIp() {
+    return inferredClientIp;
+  }
+
   void setStoredRequestBodySupplier(StoredBodySupplier storedRequestBodySupplier) {
     this.storedRequestBodySupplier = storedRequestBodySupplier;
   }
@@ -282,14 +295,6 @@ public class AppSecRequestContext implements DataBundle, Closeable {
 
   public void setResponseStatus(int responseStatus) {
     this.responseStatus = responseStatus;
-  }
-
-  public boolean isBlocked() {
-    return blocked;
-  }
-
-  public void setBlocked(boolean blocked) {
-    this.blocked = blocked;
   }
 
   public boolean isReqDataPublished() {
@@ -326,6 +331,10 @@ public class AppSecRequestContext implements DataBundle, Closeable {
 
   public void setRespDataPublished(boolean respDataPublished) {
     this.respDataPublished = respDataPublished;
+  }
+
+  public void setBlockResponseFunction(BlockResponseFunction blockResponseFunction) {
+    this.blockResponseFunction = blockResponseFunction;
   }
 
   @Override

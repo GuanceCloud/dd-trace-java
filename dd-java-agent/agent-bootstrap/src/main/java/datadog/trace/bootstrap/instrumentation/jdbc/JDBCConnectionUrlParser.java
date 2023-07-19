@@ -5,7 +5,6 @@ import static datadog.trace.bootstrap.instrumentation.jdbc.DBInfo.DEFAULT;
 import datadog.trace.api.Pair;
 import datadog.trace.api.cache.DDCache;
 import datadog.trace.api.cache.DDCaches;
-import datadog.trace.api.function.Function;
 import datadog.trace.bootstrap.ExceptionLogger;
 import de.thetaphi.forbiddenapis.SuppressForbidden;
 import java.io.UnsupportedEncodingException;
@@ -14,8 +13,10 @@ import java.net.URLDecoder;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -763,13 +764,7 @@ public enum JDBCConnectionUrlParser {
   private static final DDCache<Pair<String, Properties>, DBInfo> CACHED_DB_INFO =
       DDCaches.newFixedSizeCache(32);
   private static final Function<Pair<String, Properties>, DBInfo> PARSE =
-      new Function<Pair<String, Properties>, DBInfo>() {
-
-        @Override
-        public DBInfo apply(Pair<String, Properties> input) {
-          return parse(input.getLeft(), input.getRight());
-        }
-      };
+      input -> parse(input.getLeft(), input.getRight());
 
   private final String[] typeKeys;
 
@@ -788,7 +783,7 @@ public enum JDBCConnectionUrlParser {
       return DEFAULT;
     }
     // Make this easier and ignore case.
-    connectionUrl = connectionUrl.toLowerCase();
+    connectionUrl = connectionUrl.toLowerCase(Locale.ROOT);
 
     if (!connectionUrl.startsWith("jdbc:")) {
       return DEFAULT;

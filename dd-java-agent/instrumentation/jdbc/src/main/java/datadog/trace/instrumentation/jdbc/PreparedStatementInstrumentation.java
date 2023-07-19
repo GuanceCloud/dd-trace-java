@@ -2,7 +2,7 @@ package datadog.trace.instrumentation.jdbc;
 
 import com.google.auto.service.AutoService;
 import datadog.trace.agent.tooling.Instrumenter;
-import datadog.trace.api.Config;
+import datadog.trace.api.InstrumenterConfig;
 
 @AutoService(Instrumenter.class)
 public final class PreparedStatementInstrumentation extends AbstractPreparedStatementInstrumentation
@@ -54,13 +54,17 @@ public final class PreparedStatementInstrumentation extends AbstractPreparedStat
     // covers mariadb
     "org.mariadb.jdbc.JdbcPreparedStatement",
     "org.mariadb.jdbc.JdbcCallableStatement",
-    "org.mariadb.jdbc.ServerSidePreparedStatement",
-    "org.mariadb.jdbc.ClientSidePreparedStatement",
     "org.mariadb.jdbc.MariaDbServerPreparedStatement",
     "org.mariadb.jdbc.MariaDbClientPreparedStatement",
     "org.mariadb.jdbc.MySQLPreparedStatement",
     "org.mariadb.jdbc.MySQLCallableStatement",
     "org.mariadb.jdbc.MySQLServerSidePreparedStatement",
+    // MariaDB Connector/J v2.x
+    "org.mariadb.jdbc.ServerSidePreparedStatement",
+    "org.mariadb.jdbc.ClientSidePreparedStatement",
+    // MariaDB Connector/J v3.x
+    "org.mariadb.jdbc.ServerPreparedStatement",
+    "org.mariadb.jdbc.ClientPreparedStatement",
     // should completely cover postgresql
     "org.postgresql.jdbc1.PreparedStatement",
     "org.postgresql.jdbc1.CallableStatement",
@@ -117,7 +121,7 @@ public final class PreparedStatementInstrumentation extends AbstractPreparedStat
   @Override
   public String configuredMatchingType() {
     // this won't match any class unless the property is set
-    return Config.get().getJdbcPreparedStatementClassName();
+    return InstrumenterConfig.get().getJdbcPreparedStatementClassName();
   }
 
   public PreparedStatementInstrumentation() {

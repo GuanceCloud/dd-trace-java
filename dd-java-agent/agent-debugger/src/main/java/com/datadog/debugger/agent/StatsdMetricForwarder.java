@@ -12,7 +12,7 @@ import org.slf4j.LoggerFactory;
 public class StatsdMetricForwarder
     implements DebuggerContext.MetricForwarder, StatsDClientErrorHandler {
   private static final Logger LOGGER = LoggerFactory.getLogger(StatsdMetricForwarder.class);
-  private static final String METRICPROBE_PREFIX = "debugger.metric.probe";
+  private static final String METRICPROBE_PREFIX = "dynamic.instrumentation.metric.probe";
 
   private final StatsDClient statsd;
 
@@ -38,8 +38,28 @@ public class StatsdMetricForwarder
   }
 
   @Override
+  public void gauge(String name, double value, String[] tags) {
+    statsd.gauge(name, value, tags);
+  }
+
+  @Override
   public void histogram(String name, long value, String[] tags) {
     statsd.histogram(name, value, tags);
+  }
+
+  @Override
+  public void histogram(String name, double value, String[] tags) {
+    statsd.histogram(name, value, tags);
+  }
+
+  @Override
+  public void distribution(String name, long value, String[] tags) {
+    statsd.distribution(name, value, tags);
+  }
+
+  @Override
+  public void distribution(String name, double value, String[] tags) {
+    statsd.distribution(name, value, tags);
   }
 
   @Override

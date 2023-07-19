@@ -9,6 +9,7 @@ import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
 
 import com.google.auto.service.AutoService;
 import datadog.trace.agent.tooling.Instrumenter;
+import datadog.trace.api.Platform;
 import datadog.trace.bootstrap.instrumentation.rmi.ContextDispatcher;
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.description.type.TypeDescription;
@@ -17,10 +18,21 @@ import sun.rmi.transport.Target;
 
 @AutoService(Instrumenter.class)
 public class RmiServerContextInstrumentation extends Instrumenter.Tracing
-    implements Instrumenter.ForTypeHierarchy {
+    implements Instrumenter.ForBootstrap, Instrumenter.ForTypeHierarchy {
 
   public RmiServerContextInstrumentation() {
     super("rmi", "rmi-context-propagator", "rmi-server-context-propagator");
+  }
+
+  @Override
+  protected boolean defaultEnabled() {
+    return super.defaultEnabled()
+        && !Platform.isNativeImageBuilder(); // not applicable in native-image
+  }
+
+  @Override
+  public String hierarchyMarkerType() {
+    return null; // bootstrap type
   }
 
   @Override

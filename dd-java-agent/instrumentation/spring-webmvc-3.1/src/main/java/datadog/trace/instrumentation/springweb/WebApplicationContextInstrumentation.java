@@ -1,6 +1,5 @@
 package datadog.trace.instrumentation.springweb;
 
-import static datadog.trace.agent.tooling.bytebuddy.matcher.ClassLoaderMatchers.hasClassesNamed;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.HierarchyMatchers.extendsClass;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.HierarchyMatchers.implementsInterface;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
@@ -23,21 +22,18 @@ import org.springframework.beans.factory.support.BeanDefinitionRegistry;
 public class WebApplicationContextInstrumentation extends Instrumenter.Tracing
     implements Instrumenter.ForTypeHierarchy {
   public WebApplicationContextInstrumentation() {
-    super("spring-web");
+    super("spring-web", "spring-path-filter");
   }
 
   @Override
-  public ElementMatcher<ClassLoader> classLoaderMatcher() {
-    // Optimization for expensive typeMatcher.
-    return hasClassesNamed(
-        "org.springframework.context.support.AbstractApplicationContext",
-        "org.springframework.web.context.WebApplicationContext");
+  public String hierarchyMarkerType() {
+    return "org.springframework.web.context.WebApplicationContext";
   }
 
   @Override
   public ElementMatcher<TypeDescription> hierarchyMatcher() {
     return extendsClass(named("org.springframework.context.support.AbstractApplicationContext"))
-        .and(implementsInterface(named("org.springframework.web.context.WebApplicationContext")));
+        .and(implementsInterface(named(hierarchyMarkerType())));
   }
 
   @Override

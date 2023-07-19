@@ -1,6 +1,5 @@
 package datadog.trace.instrumentation.netty40;
 
-import static datadog.trace.agent.tooling.bytebuddy.matcher.ClassLoaderMatchers.hasClassesNamed;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.HierarchyMatchers.implementsInterface;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSpan;
@@ -32,14 +31,13 @@ public class ChannelFutureListenerInstrumentation extends Instrumenter.Tracing
   }
 
   @Override
-  public ElementMatcher<ClassLoader> classLoaderMatcher() {
-    // Optimization for expensive typeMatcher.
-    return hasClassesNamed("io.netty.channel.ChannelFutureListener");
+  public String hierarchyMarkerType() {
+    return "io.netty.channel.ChannelFutureListener";
   }
 
   @Override
   public ElementMatcher<TypeDescription> hierarchyMatcher() {
-    return implementsInterface(named("io.netty.channel.ChannelFutureListener"));
+    return implementsInterface(named(hierarchyMarkerType()));
   }
 
   @Override
@@ -55,6 +53,9 @@ public class ChannelFutureListenerInstrumentation extends Instrumenter.Tracing
       // server helpers
       packageName + ".server.ResponseExtractAdapter",
       packageName + ".server.NettyHttpServerDecorator",
+      packageName + ".server.NettyHttpServerDecorator$NettyBlockResponseFunction",
+      packageName + ".server.BlockingResponseHandler",
+      packageName + ".server.BlockingResponseHandler$IgnoreAllWritesHandler",
       packageName + ".server.HttpServerRequestTracingHandler",
       packageName + ".server.HttpServerResponseTracingHandler",
       packageName + ".server.HttpServerTracingHandler"

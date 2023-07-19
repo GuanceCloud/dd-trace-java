@@ -24,11 +24,10 @@ public abstract class TestInstrumentationClasses {
   }
 
   public static class EmptyInst extends BaseInst {
-
-    @Override
-    protected ReferenceMatcher getInstrumentationMuzzle() {
-      // Couldn't figure out how to get the byte-buddy gradle plugin to apply here.
-      return new ReferenceMatcher();
+    public static class Muzzle {
+      public static ReferenceMatcher create() {
+        return ReferenceMatcher.NO_REFERENCES;
+      }
     }
   }
 
@@ -40,10 +39,10 @@ public abstract class TestInstrumentationClasses {
       };
     }
 
-    @Override
-    protected ReferenceMatcher getInstrumentationMuzzle() {
-      // Couldn't figure out how to get the byte-buddy gradle plugin to apply here.
-      return new ReferenceMatcher();
+    public static class Muzzle {
+      public static ReferenceMatcher create() {
+        return ReferenceMatcher.NO_REFERENCES;
+      }
     }
   }
 
@@ -55,10 +54,10 @@ public abstract class TestInstrumentationClasses {
       };
     }
 
-    @Override
-    protected ReferenceMatcher getInstrumentationMuzzle() {
-      // Couldn't figure out how to get the byte-buddy gradle plugin to apply here.
-      return new ReferenceMatcher();
+    public static class Muzzle {
+      public static ReferenceMatcher create() {
+        return ReferenceMatcher.NO_REFERENCES;
+      }
     }
   }
 
@@ -70,18 +69,18 @@ public abstract class TestInstrumentationClasses {
       };
     }
 
-    @Override
-    protected ReferenceMatcher getInstrumentationMuzzle() {
-      // Couldn't figure out how to get the byte-buddy gradle plugin to apply here.
-      return new ReferenceMatcher();
+    public static class Muzzle {
+      public static ReferenceMatcher create() {
+        return ReferenceMatcher.NO_REFERENCES;
+      }
     }
   }
 
   public static class BasicInst extends BaseInst {
-    @Override
-    protected ReferenceMatcher getInstrumentationMuzzle() {
-      // Couldn't figure out how to get the byte-buddy gradle plugin to apply here.
-      return new ReferenceMatcher(SOME_ADVICE_REFS);
+    public static class Muzzle {
+      public static ReferenceMatcher create() {
+        return new ReferenceMatcher(SOME_ADVICE_REFS);
+      }
     }
   }
 
@@ -96,10 +95,10 @@ public abstract class TestInstrumentationClasses {
       };
     }
 
-    @Override
-    protected ReferenceMatcher getInstrumentationMuzzle() {
-      // Couldn't figure out how to get the byte-buddy gradle plugin to apply here.
-      return new ReferenceMatcher(SOME_ADVICE_REFS);
+    public static class Muzzle {
+      public static ReferenceMatcher create() {
+        return new ReferenceMatcher(SOME_ADVICE_REFS);
+      }
     }
   }
 

@@ -28,7 +28,7 @@ public class QueryInstrumentation extends AbstractHibernateInstrumentation {
 
   @Override
   public Map<String, String> contextStore() {
-    return singletonMap("org.hibernate.Query", SessionState.class.getName());
+    return singletonMap("org.hibernate.Query", SESSION_STATE);
   }
 
   @Override
@@ -42,8 +42,13 @@ public class QueryInstrumentation extends AbstractHibernateInstrumentation {
   }
 
   @Override
+  public String hierarchyMarkerType() {
+    return "org.hibernate.Query";
+  }
+
+  @Override
   public ElementMatcher<TypeDescription> hierarchyMatcher() {
-    return implementsInterface(named("org.hibernate.Query"));
+    return implementsInterface(named(hierarchyMarkerType()));
   }
 
   @Override

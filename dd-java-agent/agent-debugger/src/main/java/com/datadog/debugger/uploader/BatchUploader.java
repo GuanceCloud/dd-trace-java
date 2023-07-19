@@ -1,17 +1,18 @@
 package com.datadog.debugger.uploader;
 
+import static datadog.trace.util.AgentThreadFactory.AgentThread.DEBUGGER_HTTP_DISPATCHER;
+
 import com.datadog.debugger.util.DebuggerMetrics;
 import datadog.common.container.ContainerInfo;
-import datadog.communication.http.SafeRequestBuilder;
 import datadog.trace.api.Config;
 import datadog.trace.relocate.api.RatelimitedLogger;
+import datadog.trace.util.AgentThreadFactory;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Phaser;
 import java.util.concurrent.SynchronousQueue;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -50,6 +51,7 @@ public class BatchUploader {
   private final String apiKey;
   private final DebuggerMetrics debuggerMetrics;
   private final boolean instrumentTheWorld;
+  private final RatelimitedLogger ratelimitedLogger;
 
   private final Phaser inflightRequests = new Phaser(1);
 
@@ -68,9 +70,10 @@ public class BatchUploader {
     if (url == null || url.length() == 0) {
       throw new IllegalArgumentException("Snapshot url is empty");
     }
-    urlBase = HttpUrl.parse(url);
+    urlBase = HttpUrl.get(url);
     log.debug("Started SnapshotUploader with target url {}", urlBase);
     apiKey = config.getApiKey();
+    this.ratelimitedLogger = ratelimitedLogger;
     responseCallback = new ResponseCallback(ratelimitedLogger, inflightRequests);
     // This is the same thing OkHttp Dispatcher is doing except thread naming and daemonization
     okHttpExecutorService =
@@ -80,7 +83,7 @@ public class BatchUploader {
             60,
             TimeUnit.SECONDS,
             new SynchronousQueue<>(),
-            new UploaderThreadFactory("dd-debugger-upload-http-dispatcher"));
+            new AgentThreadFactory(DEBUGGER_HTTP_DISPATCHER));
     this.containerId = containerId;
     // Reusing connections causes non daemon threads to be created which causes agent to prevent app
     // from exiting. See https://github.com/square/okhttp/issues/4029 for some details.
@@ -123,11 +126,11 @@ public class BatchUploader {
         debuggerMetrics.count("batch.uploaded", 1);
       } else {
         debuggerMetrics.count("request.queue.full", 1);
-        log.warn("Cannot upload batch data: too many enqueued requests!");
+        ratelimitedLogger.warn("Cannot upload batch data: too many enqueued requests!");
       }
     } catch (final IllegalStateException | IOException e) {
       debuggerMetrics.count("batch.upload.error", 1);
-      log.warn("Problem uploading batch!", e);
+      ratelimitedLogger.warn("Problem uploading batch!", e);
     }
   }
 
@@ -152,7 +155,7 @@ public class BatchUploader {
     if (!tags.isEmpty()) {
       builder.addQueryParameter("ddtags", tags);
     }
-    SafeRequestBuilder requestBuilder = new SafeRequestBuilder().url(builder.build()).post(body);
+    Request.Builder requestBuilder = new Request.Builder().url(builder.build()).post(body);
     if (apiKey != null) {
       if (apiKey.isEmpty()) {
         log.debug("API key is empty");
@@ -197,22 +200,6 @@ public class BatchUploader {
     return client.dispatcher().queuedCallsCount() < MAX_ENQUEUED_REQUESTS;
   }
 
-  // FIXME: we should unify all thread factories in common library
-  private static class UploaderThreadFactory implements ThreadFactory {
-    private final String name;
-
-    public UploaderThreadFactory(final String name) {
-      this.name = name;
-    }
-
-    @Override
-    public Thread newThread(final Runnable r) {
-      final Thread t = new Thread(r, name);
-      t.setDaemon(true);
-      return t;
-    }
-  }
-
   private static final class ResponseCallback implements Callback {
 
     private final RatelimitedLogger ratelimitedLogger;
@@ -240,16 +227,16 @@ public class BatchUploader {
           // Retrieve body content for detailed error messages
           if (body != null && MediaType.get("application/json").equals(body.contentType())) {
             try {
-              log.warn(
+              ratelimitedLogger.warn(
                   "Failed to upload batch: unexpected response code {} {} {}",
                   response.message(),
                   response.code(),
                   body.string());
             } catch (IOException ex) {
-              log.warn("error while getting error message body", ex);
+              ratelimitedLogger.warn("error while getting error message body", ex);
             }
           } else {
-            log.warn(
+            ratelimitedLogger.warn(
                 "Failed to upload batch: unexpected response code {} {}",
                 response.message(),
                 response.code());

@@ -2,24 +2,26 @@ package datadog.trace.instrumentation.tomcat6;
 
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
 import static datadog.trace.api.gateway.Events.EVENTS;
-import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activeSpan;
 import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
 import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
 
 import com.google.auto.service.AutoService;
+import datadog.appsec.api.blocking.BlockingException;
+import datadog.trace.advice.ActiveRequestContext;
+import datadog.trace.advice.RequiresRequestContext;
 import datadog.trace.agent.tooling.Instrumenter;
 import datadog.trace.agent.tooling.muzzle.Reference;
-import datadog.trace.api.function.BiFunction;
+import datadog.trace.api.gateway.BlockResponseFunction;
 import datadog.trace.api.gateway.CallbackProvider;
 import datadog.trace.api.gateway.Flow;
 import datadog.trace.api.gateway.RequestContext;
 import datadog.trace.api.gateway.RequestContextSlot;
 import datadog.trace.bootstrap.CallDepthThreadLocalMap;
-import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.api.AgentTracer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.BiFunction;
 import net.bytebuddy.asm.Advice;
 import org.apache.tomcat.util.http.Parameters;
 
@@ -82,6 +84,7 @@ public class ParsedBodyParametersInstrumentation extends Instrumenter.AppSec
   }
 
   @SuppressWarnings("Duplicates")
+  @RequiresRequestContext(RequestContextSlot.APPSEC)
   public static class ProcessParametersAdvice {
     @Advice.OnMethodEnter(suppress = Throwable.class)
     static int before(
@@ -95,13 +98,16 @@ public class ParsedBodyParametersInstrumentation extends Instrumenter.AppSec
         paramValuesField.clear();
       }
       return depth;
+      // if there is no request context, skips the body, returns 0 and will skip after()
     }
 
     @Advice.OnMethodExit(suppress = Throwable.class, onThrowable = Throwable.class)
     static void after(
         @Advice.Local("origParamHashValues") Map<String, ArrayList<String>> origParamValues,
         @Advice.FieldValue("paramHashValues") final Map<String, ArrayList<String>> paramValuesField,
-        @Advice.Enter final int depth) {
+        @Advice.Enter final int depth,
+        @ActiveRequestContext RequestContext reqCtx,
+        @Advice.Thrown(readOnly = false) Throwable t) {
       if (depth > 0) {
         return;
       }
@@ -112,19 +118,25 @@ public class ParsedBodyParametersInstrumentation extends Instrumenter.AppSec
           return;
         }
 
-        AgentSpan agentSpan = activeSpan();
-        if (agentSpan == null) {
-          return;
-        }
-
         CallbackProvider cbp = AgentTracer.get().getCallbackProvider(RequestContextSlot.APPSEC);
         BiFunction<RequestContext, Object, Flow<Void>> callback =
             cbp.getCallback(EVENTS.requestBodyProcessed());
-        RequestContext requestContext = agentSpan.getRequestContext();
-        if (requestContext == null || callback == null) {
+        if (reqCtx == null || callback == null) {
           return;
         }
-        callback.apply(requestContext, paramValuesField);
+        Flow<Void> flow = callback.apply(reqCtx, paramValuesField);
+        Flow.Action action = flow.getAction();
+        if (action instanceof Flow.Action.RequestBlockingAction) {
+          Flow.Action.RequestBlockingAction rba = (Flow.Action.RequestBlockingAction) action;
+          BlockResponseFunction blockResponseFunction = reqCtx.getBlockResponseFunction();
+          if (blockResponseFunction != null) {
+            blockResponseFunction.tryCommitBlockingResponse(
+                rba.getStatusCode(), rba.getBlockingContentType(), rba.getExtraHeaders());
+            if (t == null) {
+              t = new BlockingException("Blocked request (for processParameters)");
+            }
+          }
+        }
       } finally {
         if (origParamValues != null) {
           paramValuesField.putAll(origParamValues);

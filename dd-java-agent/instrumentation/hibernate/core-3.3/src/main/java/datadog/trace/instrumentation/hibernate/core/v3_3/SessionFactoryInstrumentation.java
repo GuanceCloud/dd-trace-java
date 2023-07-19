@@ -34,9 +34,9 @@ public class SessionFactoryInstrumentation extends AbstractHibernateInstrumentat
   @Override
   public Map<String, String> contextStore() {
     final Map<String, String> stores = new HashMap<>();
-    stores.put("org.hibernate.Session", SessionState.class.getName());
-    stores.put("org.hibernate.StatelessSession", SessionState.class.getName());
-    stores.put("org.hibernate.SharedSessionContract", SessionState.class.getName());
+    stores.put("org.hibernate.Session", SESSION_STATE);
+    stores.put("org.hibernate.StatelessSession", SESSION_STATE);
+    stores.put("org.hibernate.SharedSessionContract", SESSION_STATE);
     return Collections.unmodifiableMap(stores);
   }
 
@@ -46,8 +46,13 @@ public class SessionFactoryInstrumentation extends AbstractHibernateInstrumentat
   }
 
   @Override
+  public String hierarchyMarkerType() {
+    return "org.hibernate.SessionFactory";
+  }
+
+  @Override
   public ElementMatcher<TypeDescription> hierarchyMatcher() {
-    return implementsInterface(named("org.hibernate.SessionFactory"));
+    return implementsInterface(named(hierarchyMarkerType()));
   }
 
   @Override
@@ -68,7 +73,7 @@ public class SessionFactoryInstrumentation extends AbstractHibernateInstrumentat
     @Advice.OnMethodExit(suppress = Throwable.class)
     public static void openSession(@Advice.Return final Object session) {
 
-      final AgentSpan span = startSpan(HIBERNATE_SESSION, false);
+      final AgentSpan span = startSpan(HIBERNATE_SESSION);
       DECORATOR.afterStart(span);
       DECORATOR.onConnection(span, session);
 

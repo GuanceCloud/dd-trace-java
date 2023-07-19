@@ -1,23 +1,27 @@
 package com.datadog.debugger.agent;
 
-import static datadog.communication.http.OkHttpUtils.buildHttpClient;
 import static datadog.trace.util.AgentThreadFactory.AGENT_THREAD_GROUP;
 
-import com.datadog.debugger.poller.ConfigurationPoller;
 import com.datadog.debugger.sink.DebuggerSink;
+import com.datadog.debugger.sink.Sink;
 import com.datadog.debugger.uploader.BatchUploader;
 import datadog.communication.ddagent.DDAgentFeaturesDiscovery;
-import datadog.communication.monitor.Monitoring;
+import datadog.communication.ddagent.SharedCommunicationObjects;
+import datadog.remoteconfig.ConfigurationPoller;
+import datadog.remoteconfig.Product;
+import datadog.remoteconfig.SizeCheckedInputStream;
 import datadog.trace.api.Config;
 import datadog.trace.bootstrap.debugger.DebuggerContext;
-import datadog.trace.bootstrap.debugger.Snapshot;
+import java.io.ByteArrayOutputStream;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
 import java.lang.ref.WeakReference;
-import java.util.Collections;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Objects;
-import okhttp3.HttpUrl;
-import okhttp3.OkHttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,74 +29,120 @@ import org.slf4j.LoggerFactory;
 public class DebuggerAgent {
   private static final Logger log = LoggerFactory.getLogger(DebuggerAgent.class);
   private static ConfigurationPoller configurationPoller;
-  private static DebuggerSink sink;
+  private static Sink sink;
   private static String agentVersion;
+  private static JsonSnapshotSerializer snapshotSerializer;
 
-  public static synchronized void run(Instrumentation instrumentation) {
-    if (!Config.get().isDebuggerEnabled()) {
+  public static synchronized void run(
+      Instrumentation instrumentation, SharedCommunicationObjects sco) {
+    Config config = Config.get();
+    if (!config.isDebuggerEnabled()) {
       log.info("Debugger agent disabled");
       return;
     }
-
-    String finalDebuggerSnapshotUrl = Config.get().getFinalDebuggerSnapshotUrl();
-    String agentUrl = Config.get().getAgentUrl();
+    log.info("Starting Dynamic Instrumentation");
+    ClassesToRetransformFinder classesToRetransformFinder = new ClassesToRetransformFinder();
+    setupSourceFileTracking(instrumentation, classesToRetransformFinder);
+    String finalDebuggerSnapshotUrl = config.getFinalDebuggerSnapshotUrl();
+    String agentUrl = config.getAgentUrl();
     boolean isSnapshotUploadThroughAgent = Objects.equals(finalDebuggerSnapshotUrl, agentUrl);
-    String configEndpoint = null;
-    DDAgentFeaturesDiscovery ddAgentFeaturesDiscovery = getDdAgentFeaturesDiscovery();
-    ddAgentFeaturesDiscovery.discover();
-    agentVersion = ddAgentFeaturesDiscovery.getVersion();
-    if (isSnapshotUploadThroughAgent && !ddAgentFeaturesDiscovery.supportsDebugger()) {
-      log.error(
-          "No endpoint detected to upload snapshots to from datadog agent at "
-              + agentUrl
-              + ". Consider upgrading the datadog agent.");
-      return;
-    }
-    if (ddAgentFeaturesDiscovery.getConfigEndpoint() == null) {
-      log.error(
-          "No endpoint detected to read probe config from datadog agent at "
-              + agentUrl
-              + ". Consider upgrading the datadog agent.");
-      return;
-    }
-    configEndpoint = ddAgentFeaturesDiscovery.getConfigEndpoint();
 
-    sink = new DebuggerSink(Config.get());
-    sink.start();
+    DDAgentFeaturesDiscovery ddAgentFeaturesDiscovery = sco.featuresDiscovery(config);
+    ddAgentFeaturesDiscovery.discoverIfOutdated();
+    agentVersion = ddAgentFeaturesDiscovery.getVersion();
+
+    DebuggerSink debuggerSink = new DebuggerSink(config);
+    debuggerSink.start();
     ConfigurationUpdater configurationUpdater =
         new ConfigurationUpdater(
-            instrumentation, DebuggerAgent::createTransformer, Config.get(), sink);
-    StatsdMetricForwarder statsdMetricForwarder = new StatsdMetricForwarder(Config.get());
-    DebuggerContext.init(sink, configurationUpdater, statsdMetricForwarder);
+            instrumentation,
+            DebuggerAgent::createTransformer,
+            config,
+            debuggerSink,
+            classesToRetransformFinder);
+    sink = debuggerSink;
+    StatsdMetricForwarder statsdMetricForwarder = new StatsdMetricForwarder(config);
+    DebuggerContext.init(configurationUpdater, statsdMetricForwarder);
     DebuggerContext.initClassFilter(new DenyListHelper(null)); // default hard coded deny list
-    if (Config.get().isDebuggerInstrumentTheWorld()) {
-      setupInstrumentTheWorldTransformer(
-          Config.get(), instrumentation, sink, statsdMetricForwarder);
+    snapshotSerializer = new JsonSnapshotSerializer();
+    DebuggerContext.initValueSerializer(snapshotSerializer);
+    DebuggerContext.initTracer(new DebuggerTracer());
+    if (config.isDebuggerInstrumentTheWorld()) {
+      setupInstrumentTheWorldTransformer(config, instrumentation, sink, statsdMetricForwarder);
     }
-    configurationPoller =
-        new ConfigurationPoller(Config.get(), configurationUpdater, configEndpoint);
-    configurationPoller.start();
-    try {
-      /*
-      Note: shutdown hooks are tricky because JVM holds reference for them forever preventing
-      GC for anything that is reachable from it.
-       */
-      Runtime.getRuntime()
-          .addShutdownHook(new ShutdownHook(configurationPoller, sink.getSnapshotUploader()));
-    } catch (final IllegalStateException ex) {
-      // The JVM is already shutting down.
+
+    String probeFileLocation = config.getDebuggerProbeFileLocation();
+
+    if (probeFileLocation != null) {
+      Path probeFilePath = Paths.get(probeFileLocation);
+      loadFromFile(probeFilePath, configurationUpdater, config.getDebuggerMaxPayloadSize());
+      return;
     }
+
+    configurationPoller = sco.configurationPoller(config);
+    if (configurationPoller != null) {
+      subscribeConfigurationPoller(config, configurationUpdater);
+
+      try {
+        /*
+        Note: shutdown hooks are tricky because JVM holds reference for them forever preventing
+        GC for anything that is reachable from it.
+         */
+        Runtime.getRuntime()
+            .addShutdownHook(
+                new ShutdownHook(configurationPoller, debuggerSink.getSnapshotUploader()));
+      } catch (final IllegalStateException ex) {
+        // The JVM is already shutting down.
+      }
+    } else {
+      log.debug("No configuration poller available from SharedCommunicationObjects");
+    }
+  }
+
+  private static void setupSourceFileTracking(
+      Instrumentation instrumentation, ClassesToRetransformFinder finder) {
+    instrumentation.addTransformer(new SourceFileTrackingTransformer(finder));
+  }
+
+  private static void loadFromFile(
+      Path probeFilePath, ConfigurationUpdater configurationUpdater, long maxPayloadSize) {
+    log.debug("try to load from file...");
+    try (InputStream inputStream =
+        new SizeCheckedInputStream(new FileInputStream(probeFilePath.toFile()), maxPayloadSize)) {
+      byte[] buffer = new byte[4096];
+      ByteArrayOutputStream outputStream = new ByteArrayOutputStream(4096);
+      int bytesRead;
+      do {
+        bytesRead = inputStream.read(buffer);
+        if (bytesRead > -1) {
+          outputStream.write(buffer, 0, bytesRead);
+        }
+      } while (bytesRead > -1);
+      Configuration configuration =
+          DebuggerProductChangesListener.Adapter.deserializeConfiguration(
+              outputStream.toByteArray());
+      log.debug("Probe definitions loaded from file {}", probeFilePath);
+      configurationUpdater.accept(configuration);
+    } catch (IOException ex) {
+      log.error("Unable to load config file {}: {}", probeFilePath, ex);
+    }
+  }
+
+  private static void subscribeConfigurationPoller(
+      Config config, ConfigurationUpdater configurationUpdater) {
+    configurationPoller.addListener(
+        Product.LIVE_DEBUGGING, new DebuggerProductChangesListener(config, configurationUpdater));
   }
 
   static ClassFileTransformer setupInstrumentTheWorldTransformer(
       Config config,
       Instrumentation instrumentation,
-      DebuggerContext.Sink sink,
+      Sink sink,
       StatsdMetricForwarder statsdMetricForwarder) {
     log.info("install Instrument-The-World transformer");
-    DebuggerContext.init(sink, DebuggerAgent::instrumentTheWorldResolver, statsdMetricForwarder);
     DebuggerTransformer transformer =
-        createTransformer(config, new Configuration("", -1, Collections.emptyList()), null);
+        createTransformer(config, Configuration.builder().build(), null);
+    DebuggerContext.init(transformer::instrumentTheWorldResolver, statsdMetricForwarder);
     instrumentation.addTransformer(transformer);
     return transformer;
   }
@@ -101,11 +151,8 @@ public class DebuggerAgent {
     return agentVersion;
   }
 
-  private static DDAgentFeaturesDiscovery getDdAgentFeaturesDiscovery() {
-    HttpUrl httpUrl = HttpUrl.get(Config.get().getFinalDebuggerProbeUrl());
-    log.debug("Datadog agent features discovery from: {}", httpUrl);
-    OkHttpClient client = buildHttpClient(httpUrl, 30 * 1000);
-    return new DDAgentFeaturesDiscovery(client, Monitoring.DISABLED, httpUrl, false, false);
+  public static Sink getSink() {
+    return sink;
   }
 
   private static DebuggerTransformer createTransformer(
@@ -115,18 +162,27 @@ public class DebuggerAgent {
     return new DebuggerTransformer(config, configuration, listener);
   }
 
-  private static Snapshot.ProbeDetails instrumentTheWorldResolver(
-      String id, Class<?> callingClass) {
-    return Snapshot.ProbeDetails.ITW_PROBE;
-  }
-
   static void stop() {
     if (configurationPoller != null) {
       configurationPoller.stop();
     }
-    if (sink != null) {
-      sink.stop();
+    if (sink != null && sink instanceof DebuggerSink) {
+      ((DebuggerSink) sink).stop();
     }
+  }
+
+  // Used only for tests
+  static void initSink(Sink sink) {
+    DebuggerAgent.sink = sink;
+  }
+
+  // Used only for tests
+  static void initSnapshotSerializer(JsonSnapshotSerializer snapshotSerializer) {
+    DebuggerAgent.snapshotSerializer = snapshotSerializer;
+  }
+
+  public static JsonSnapshotSerializer getSnapshotSerializer() {
+    return DebuggerAgent.snapshotSerializer;
   }
 
   private static class ShutdownHook extends Thread {

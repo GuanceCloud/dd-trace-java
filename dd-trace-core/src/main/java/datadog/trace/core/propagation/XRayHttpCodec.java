@@ -6,13 +6,18 @@ import static datadog.trace.api.sampling.PrioritySampling.SAMPLER_KEEP;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
-import datadog.trace.api.DDId;
+import datadog.trace.api.Config;
+import datadog.trace.api.DD64bTraceId;
+import datadog.trace.api.DDSpanId;
 import datadog.trace.api.DDTags;
+import datadog.trace.api.DDTraceId;
+import datadog.trace.api.TraceConfig;
 import datadog.trace.api.sampling.PrioritySampling;
 import datadog.trace.bootstrap.instrumentation.api.AgentPropagation;
 import datadog.trace.core.DDSpanContext;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,11 +35,14 @@ class XRayHttpCodec {
   static final String SAMPLED = "Sampled";
   static final String SELF = "Self";
 
-  static final String DD_ROOT_PREFIX = ROOT + '=' + "1-00000000-00000000";
+  static final String ROOT_PREFIX = ROOT + "=1-";
+  static final String TRACE_ID_PADDING = "-00000000";
   static final String PARENT_PREFIX = PARENT + '=';
   static final String SAMPLED_PREFIX = SAMPLED + '=';
   static final String SELF_PREFIX = SELF + '=';
   static final String ORIGIN_PREFIX = ORIGIN_KEY + '=';
+
+  static final int ROOT_PREAMBLE = ROOT_PREFIX.length() + 8; // prefix plus 8-character epoch
 
   static final String E2E_START_KEY = DDTags.TRACE_START_TIME;
   static final String E2E_START_PREFIX = E2E_START_KEY + '=';
@@ -45,19 +53,36 @@ class XRayHttpCodec {
     // This class should not be created. This also makes code coverage checks happy.
   }
 
-  public static final HttpCodec.Injector INJECTOR = new Injector();
+  public static HttpCodec.Injector newInjector(Map<String, String> invertedBaggageMapping) {
+    return new Injector(invertedBaggageMapping);
+  }
 
   private static class Injector implements HttpCodec.Injector {
 
+    private final Map<String, String> invertedBaggageMapping;
+
+    public Injector(Map<String, String> invertedBaggageMapping) {
+      this.invertedBaggageMapping = invertedBaggageMapping;
+    }
+
     @Override
     public <C> void inject(DDSpanContext context, C carrier, AgentPropagation.Setter<C> setter) {
+      long e2eStart = context.getEndToEndStartTime();
 
       StringBuilder buf =
           new StringBuilder()
-              .append(DD_ROOT_PREFIX)
+              .append(ROOT_PREFIX)
+              .append(
+                  String.format(
+                      "%08x",
+                      e2eStart > 0
+                          ? NANOSECONDS.toSeconds(e2eStart)
+                          : MILLISECONDS.toSeconds(
+                              context.getTrace().getTimeSource().getCurrentTimeMillis())))
+              .append(TRACE_ID_PADDING)
               .append(context.getTraceId().toHexStringPadded(16))
               .append(';' + PARENT_PREFIX)
-              .append(context.getSpanId().toHexStringPadded(16));
+              .append(DDSpanId.toHexStringPadded(context.getSpanId()));
 
       if (context.lockSamplingPriority()) {
         buf.append(';' + SAMPLED_PREFIX)
@@ -70,15 +95,15 @@ class XRayHttpCodec {
       if (origin != null) {
         additionalPart(buf, ORIGIN_KEY, origin.toString(), maxCapacity);
       }
-      long e2eStart = context.getEndToEndStartTime();
       if (e2eStart > 0) {
         additionalPart(
             buf, E2E_START_KEY, Long.toString(NANOSECONDS.toMillis(e2eStart)), maxCapacity);
       }
 
       for (Map.Entry<String, String> entry : context.baggageItems()) {
-        if (!isReserved(entry.getKey())) {
-          additionalPart(buf, entry.getKey(), HttpCodec.encode(entry.getValue()), maxCapacity);
+        String header = invertedBaggageMapping.getOrDefault(entry.getKey(), entry.getKey());
+        if (!isReserved(header)) {
+          additionalPart(buf, header, HttpCodec.encode(entry.getValue()), maxCapacity);
         }
       }
 
@@ -100,21 +125,15 @@ class XRayHttpCodec {
     }
   }
 
-  public static HttpCodec.Extractor newExtractor(Map<String, String> tagMapping) {
-    return new TagContextExtractor(
-        tagMapping,
-        new ContextInterpreter.Factory() {
-          @Override
-          protected ContextInterpreter construct(Map<String, String> mapping) {
-            return new XRayContextInterpreter(mapping);
-          }
-        });
+  public static HttpCodec.Extractor newExtractor(
+      Config config, Supplier<TraceConfig> traceConfigSupplier) {
+    return new TagContextExtractor(traceConfigSupplier, () -> new XRayContextInterpreter(config));
   }
 
   static class XRayContextInterpreter extends ContextInterpreter {
 
-    private XRayContextInterpreter(Map<String, String> taggedHeaders) {
-      super(taggedHeaders);
+    private XRayContextInterpreter(Config config) {
+      super(config);
     }
 
     @Override
@@ -151,15 +170,14 @@ class XRayHttpCodec {
 
         if (handledIpHeaders(key, value)) {
           return true;
+        } else {
+          handleTags(key, value);
         }
 
-        if (!taggedHeaders.isEmpty()) {
-          String mappedKey = taggedHeaders.get(toLowerCase(key));
+        if (!baggageMapping.isEmpty()) {
+          String mappedKey = baggageMapping.get(toLowerCase(key));
           if (null != mappedKey) {
-            if (tags.isEmpty()) {
-              tags = new TreeMap<>();
-            }
-            tags.put(mappedKey, HttpCodec.decode(value));
+            addBaggageItem(this, mappedKey, HttpCodec.decode(value));
           }
         }
         return true;
@@ -171,44 +189,50 @@ class XRayHttpCodec {
     }
 
     static void handleXRayTraceHeader(ContextInterpreter interpreter, String value) {
-      if (null == value || !value.contains(DD_ROOT_PREFIX)) {
-        return; // header doesn't match our padded version, ignore it
-      }
-      int startPart = 0;
-      int length = value.length();
-      while (startPart < length) {
-        int endPart = value.indexOf(';', startPart);
-        if (endPart < 0) {
-          endPart = length;
+      if (null != value) {
+        int rootPart = value.indexOf(ROOT_PREFIX);
+        if (rootPart < 0
+            || !value.regionMatches(
+                rootPart + ROOT_PREAMBLE, TRACE_ID_PADDING, 0, TRACE_ID_PADDING.length())) {
+          return; // header doesn't match our padded version, ignore it
         }
-        String part = value.substring(startPart, endPart).trim();
-        if (part.startsWith(DD_ROOT_PREFIX)) {
-          if (interpreter.traceId == null || interpreter.traceId == DDId.ZERO) {
-            interpreter.traceId = DDId.fromHexWithOriginal(part.substring(DD_ROOT_PREFIX.length()));
+        int startPart = 0;
+        int length = value.length();
+        while (startPart < length) {
+          int endPart = value.indexOf(';', startPart);
+          if (endPart < 0) {
+            endPart = length;
           }
-        } else if (part.startsWith(PARENT_PREFIX)) {
-          if (interpreter.spanId == null || interpreter.spanId == DDId.ZERO) {
-            interpreter.spanId = DDId.fromHexWithOriginal(part.substring(PARENT_PREFIX.length()));
+          String part = value.substring(startPart, endPart).trim();
+          if (part.startsWith(ROOT_PREFIX)) {
+            if (interpreter.traceId == null || interpreter.traceId == DDTraceId.ZERO) {
+              interpreter.traceId =
+                  DD64bTraceId.fromHex(part.substring(ROOT_PREAMBLE + TRACE_ID_PADDING.length()));
+            }
+          } else if (part.startsWith(PARENT_PREFIX)) {
+            if (interpreter.spanId == DDSpanId.ZERO) {
+              interpreter.spanId = DDSpanId.fromHex(part.substring(PARENT_PREFIX.length()));
+            }
+          } else if (part.startsWith(SAMPLED_PREFIX)) {
+            if (interpreter.samplingPriority == PrioritySampling.UNSET) {
+              interpreter.samplingPriority =
+                  convertSamplingPriority(part.charAt(SAMPLED_PREFIX.length()));
+            }
+          } else if (part.startsWith(SELF_PREFIX)) {
+            // Self is added by load-balancers and should be ignored
+          } else if (part.startsWith(ORIGIN_PREFIX)) {
+            interpreter.origin = part.substring(ORIGIN_PREFIX.length());
+          } else if (part.startsWith(E2E_START_PREFIX)) {
+            interpreter.endToEndStartTime =
+                extractEndToEndStartTime(part.substring(E2E_START_PREFIX.length()));
+          } else {
+            int eqIndex = part.indexOf('=');
+            if (eqIndex > 0) {
+              addBaggageItem(interpreter, part.substring(0, eqIndex), part.substring(eqIndex + 1));
+            }
           }
-        } else if (part.startsWith(SAMPLED_PREFIX)) {
-          if (interpreter.samplingPriority == PrioritySampling.UNSET) {
-            interpreter.samplingPriority =
-                convertSamplingPriority(part.charAt(SAMPLED_PREFIX.length()));
-          }
-        } else if (part.startsWith(SELF_PREFIX)) {
-          // Self is added by load-balancers and should be ignored
-        } else if (part.startsWith(ORIGIN_PREFIX)) {
-          interpreter.origin = part.substring(ORIGIN_PREFIX.length());
-        } else if (part.startsWith(E2E_START_PREFIX)) {
-          interpreter.endToEndStartTime =
-              extractEndToEndStartTime(part.substring(E2E_START_PREFIX.length()));
-        } else {
-          int eqIndex = part.indexOf('=');
-          if (eqIndex > 0) {
-            addBaggageItem(interpreter, part.substring(0, eqIndex), part.substring(eqIndex + 1));
-          }
+          startPart = endPart + 1;
         }
-        startPart = endPart + 1;
       }
     }
 

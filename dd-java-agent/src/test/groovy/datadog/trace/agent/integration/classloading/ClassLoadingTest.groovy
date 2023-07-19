@@ -34,6 +34,7 @@ class ClassLoadingTest extends Specification {
     instrumentedClass.getClassLoader() == loader
   }
 
+  //@Flaky("awaitGC is flaky")
   def "make sure ByteBuddy does not hold strong references to ClassLoader"() {
     setup:
     URLClassLoader loader = new URLClassLoader(classpath, (ClassLoader) null)

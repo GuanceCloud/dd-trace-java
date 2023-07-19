@@ -2,19 +2,21 @@ package datadog.trace.instrumentation.jersey3;
 
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
 import static datadog.trace.api.gateway.Events.EVENTS;
-import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activeSpan;
 import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
 
 import com.google.auto.service.AutoService;
+import datadog.appsec.api.blocking.BlockingException;
+import datadog.trace.advice.ActiveRequestContext;
+import datadog.trace.advice.RequiresRequestContext;
 import datadog.trace.agent.tooling.Instrumenter;
-import datadog.trace.api.function.BiFunction;
+import datadog.trace.api.gateway.BlockResponseFunction;
 import datadog.trace.api.gateway.CallbackProvider;
 import datadog.trace.api.gateway.Flow;
 import datadog.trace.api.gateway.RequestContext;
 import datadog.trace.api.gateway.RequestContextSlot;
-import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.api.AgentTracer;
 import jakarta.ws.rs.core.Form;
+import java.util.function.BiFunction;
 import net.bytebuddy.asm.Advice;
 
 // keep in sync with jersey2 (javax packages)
@@ -23,6 +25,11 @@ public class MessageBodyReaderInstrumentation extends Instrumenter.AppSec
     implements Instrumenter.ForSingleType {
   public MessageBodyReaderInstrumentation() {
     super("jersey");
+  }
+
+  @Override
+  public String muzzleDirective() {
+    return "jersey-common";
   }
 
   // This is a caller for the MessageBodyReaders in jersey
@@ -39,14 +46,21 @@ public class MessageBodyReaderInstrumentation extends Instrumenter.AppSec
         getClass().getName() + "$ReaderInterceptorExecutorProceedAdvice");
   }
 
+  @RequiresRequestContext(RequestContextSlot.APPSEC)
   public static class ReaderInterceptorExecutorProceedAdvice {
-    @Advice.OnMethodExit(suppress = Throwable.class)
-    static void after(@Advice.Return final Object ret) {
-      if (ret == null) {
+    @Advice.OnMethodExit(suppress = Throwable.class, onThrowable = Throwable.class)
+    static void after(
+        @Advice.Return final Object ret,
+        @ActiveRequestContext RequestContext reqCtx,
+        @Advice.Thrown(readOnly = false) Throwable t) {
+      if (ret == null || t != null) {
         return;
       }
-      AgentSpan agentSpan = activeSpan();
-      if (agentSpan == null) {
+
+      if (ret.getClass()
+          .getName()
+          .equals("org.glassfish.jersey.media.multipart.FormDataMultiPart")) {
+        // likely handled already by MultiPartReaderServerSideInstrumentation
         return;
       }
 
@@ -60,11 +74,21 @@ public class MessageBodyReaderInstrumentation extends Instrumenter.AppSec
       CallbackProvider cbp = AgentTracer.get().getCallbackProvider(RequestContextSlot.APPSEC);
       BiFunction<RequestContext, Object, Flow<Void>> callback =
           cbp.getCallback(EVENTS.requestBodyProcessed());
-      RequestContext requestContext = agentSpan.getRequestContext();
-      if (requestContext == null || callback == null) {
+      if (callback == null) {
         return;
       }
-      callback.apply(requestContext, objToPass);
+
+      Flow<Void> flow = callback.apply(reqCtx, objToPass);
+      Flow.Action action = flow.getAction();
+      if (action instanceof Flow.Action.RequestBlockingAction) {
+        Flow.Action.RequestBlockingAction rba = (Flow.Action.RequestBlockingAction) action;
+        BlockResponseFunction blockResponseFunction = reqCtx.getBlockResponseFunction();
+        if (blockResponseFunction != null) {
+          blockResponseFunction.tryCommitBlockingResponse(
+              rba.getStatusCode(), rba.getBlockingContentType(), rba.getExtraHeaders());
+          t = new BlockingException("Blocked request (for ReaderInterceptorExecutor/proceed)");
+        }
+      }
     }
   }
 }
