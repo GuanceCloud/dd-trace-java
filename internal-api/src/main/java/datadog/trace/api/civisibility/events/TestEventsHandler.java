@@ -1,16 +1,14 @@
 package datadog.trace.api.civisibility.events;
 
+import datadog.trace.api.civisibility.config.SkippableTest;
+import java.io.Closeable;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.List;
 import javax.annotation.Nullable;
 
-public interface TestEventsHandler {
-
-  void onTestModuleStart();
-
-  void onTestModuleFinish(boolean itrTestsSkipped);
+public interface TestEventsHandler extends Closeable {
 
   void onTestSuiteStart(
       String testSuiteName,
@@ -74,8 +72,12 @@ public interface TestEventsHandler {
       @Nullable Method testMethod,
       @Nullable String reason);
 
+  boolean skip(SkippableTest test);
+
+  @Override
+  void close();
+
   interface Factory {
-    TestEventsHandler create(
-        String component, String testFramework, String testFrameworkVersion, Path path);
+    TestEventsHandler create(String component, Path path);
   }
 }

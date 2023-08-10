@@ -2,18 +2,14 @@ package datadog.trace.civisibility.events;
 
 import static datadog.trace.util.Strings.toJson;
 
-import datadog.trace.api.Config;
 import datadog.trace.api.DisableTestTrace;
+import datadog.trace.api.civisibility.config.SkippableTest;
 import datadog.trace.api.civisibility.events.TestEventsHandler;
-import datadog.trace.api.civisibility.source.SourcePathResolver;
 import datadog.trace.bootstrap.instrumentation.api.Tags;
 import datadog.trace.civisibility.DDTestImpl;
 import datadog.trace.civisibility.DDTestModuleImpl;
+import datadog.trace.civisibility.DDTestSessionImpl;
 import datadog.trace.civisibility.DDTestSuiteImpl;
-import datadog.trace.civisibility.codeowners.Codeowners;
-import datadog.trace.civisibility.context.EmptyTestContext;
-import datadog.trace.civisibility.decorator.TestDecorator;
-import datadog.trace.civisibility.source.MethodLinesResolver;
 import java.lang.reflect.Method;
 import java.util.Collection;
 import java.util.Collections;
@@ -28,14 +24,8 @@ public class TestEventsHandlerImpl implements TestEventsHandler {
 
   private static final Logger log = LoggerFactory.getLogger(TestEventsHandlerImpl.class);
 
-  private final String moduleName;
-  private final Config config;
-  private final TestDecorator testDecorator;
-  private final SourcePathResolver sourcePathResolver;
-  private final Codeowners codeowners;
-  private final MethodLinesResolver methodLinesResolver;
-
-  private volatile DDTestModuleImpl testModule;
+  private final DDTestSessionImpl testSession;
+  private final DDTestModuleImpl testModule;
 
   private final ConcurrentMap<TestSuiteDescriptor, Integer> testSuiteNestedCallCounters =
       new ConcurrentHashMap<>();
@@ -46,61 +36,9 @@ public class TestEventsHandlerImpl implements TestEventsHandler {
   private final ConcurrentMap<TestDescriptor, DDTestImpl> inProgressTests =
       new ConcurrentHashMap<>();
 
-  public TestEventsHandlerImpl(
-      String moduleName,
-      Config config,
-      TestDecorator testDecorator,
-      SourcePathResolver sourcePathResolver,
-      Codeowners codeowners,
-      MethodLinesResolver methodLinesResolver) {
-    this.moduleName = moduleName;
-    this.config = config;
-    this.testDecorator = testDecorator;
-    this.sourcePathResolver = sourcePathResolver;
-    this.codeowners = codeowners;
-    this.methodLinesResolver = methodLinesResolver;
-
-    // some framework/build system combinations fire "onTestModuleStart" event, some cannot do it,
-    // hence creating a module here
-    testModule =
-        new DDTestModuleImpl(
-            null,
-            moduleName,
-            null,
-            config,
-            null,
-            testDecorator,
-            sourcePathResolver,
-            codeowners,
-            methodLinesResolver,
-            null);
-  }
-
-  @Override
-  public void onTestModuleStart() {
-    // needed to support JVMs that run tests for multiple modules, e.g. Maven in non-forking mode
-    if (testModule == null) {
-      testModule =
-          new DDTestModuleImpl(
-              null,
-              moduleName,
-              null,
-              config,
-              null,
-              testDecorator,
-              sourcePathResolver,
-              codeowners,
-              methodLinesResolver,
-              null);
-    }
-  }
-
-  @Override
-  public void onTestModuleFinish(boolean itrTestsSkipped) {
-    if (testModule != null) {
-      testModule.end(null, itrTestsSkipped);
-      testModule = null;
-    }
+  public TestEventsHandlerImpl(DDTestSessionImpl testSession, DDTestModuleImpl testModule) {
+    this.testSession = testSession;
+    this.testModule = testModule;
   }
 
   @Override
@@ -208,25 +146,7 @@ public class TestEventsHandlerImpl implements TestEventsHandler {
 
     TestSuiteDescriptor suiteDescriptor = new TestSuiteDescriptor(testSuiteName, testClass);
     DDTestSuiteImpl testSuite = inProgressTestSuites.get(suiteDescriptor);
-    DDTestImpl test =
-        testSuite != null
-            ? testSuite.testStart(testName, testMethodName, testMethod, null)
-            // suite events are not reported in Cucumber / JUnit 4 combination
-            : new DDTestImpl(
-                EmptyTestContext.INSTANCE,
-                EmptyTestContext.INSTANCE,
-                null,
-                testSuiteName,
-                testName,
-                null,
-                testClass,
-                testMethodName,
-                testMethod,
-                config,
-                testDecorator,
-                sourcePathResolver,
-                methodLinesResolver,
-                codeowners);
+    DDTestImpl test = testSuite.testStart(testName, testMethodName, testMethod, null);
 
     if (testFramework != null) {
       test.setTag(Tags.TEST_FRAMEWORK, testFramework);
@@ -342,5 +262,16 @@ public class TestEventsHandlerImpl implements TestEventsHandler {
 
   private static boolean skipTrace(final Class<?> testClass) {
     return testClass != null && testClass.getAnnotation(DisableTestTrace.class) != null;
+  }
+
+  @Override
+  public boolean skip(SkippableTest test) {
+    return testModule.skip(test);
+  }
+
+  @Override
+  public void close() {
+    testModule.end(null);
+    testSession.end(null);
   }
 }

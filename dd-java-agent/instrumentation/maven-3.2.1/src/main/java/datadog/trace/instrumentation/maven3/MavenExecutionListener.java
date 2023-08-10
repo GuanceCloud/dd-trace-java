@@ -4,11 +4,11 @@ import datadog.trace.api.civisibility.events.BuildEventsHandler;
 import datadog.trace.api.config.CiVisibilityConfig;
 import datadog.trace.bootstrap.instrumentation.api.Tags;
 import datadog.trace.util.Strings;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 import org.apache.maven.execution.AbstractExecutionListener;
 import org.apache.maven.execution.ExecutionEvent;
+import org.apache.maven.execution.MavenExecutionRequest;
 import org.apache.maven.execution.MavenExecutionResult;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.model.Plugin;
@@ -26,23 +26,24 @@ public class MavenExecutionListener extends AbstractExecutionListener {
   private static final String SYSTEM_PROPERTY_VARIABLES_CONFIG = "systemPropertyVariables";
   private static final String SYSTEM_PROPERTIES_CONFIG = "systemProperties";
 
-  private final BuildEventsHandler<MavenSession> buildEventsHandler;
+  private final BuildEventsHandler<MavenExecutionRequest> buildEventsHandler;
 
-  public MavenExecutionListener(BuildEventsHandler<MavenSession> buildEventsHandler) {
+  public MavenExecutionListener(BuildEventsHandler<MavenExecutionRequest> buildEventsHandler) {
     this.buildEventsHandler = buildEventsHandler;
   }
 
   @Override
   public void sessionEnded(ExecutionEvent event) {
     MavenSession session = event.getSession();
+    MavenExecutionRequest request = session.getRequest();
 
     MavenExecutionResult result = session.getResult();
     if (result.hasExceptions()) {
       Throwable exception = MavenUtils.getException(result);
-      buildEventsHandler.onTestSessionFail(session, exception);
+      buildEventsHandler.onTestSessionFail(request, exception);
     }
 
-    buildEventsHandler.onTestSessionFinish(session);
+    buildEventsHandler.onTestSessionFinish(request);
   }
 
   @Override
@@ -50,13 +51,14 @@ public class MavenExecutionListener extends AbstractExecutionListener {
     MojoExecution mojoExecution = event.getMojoExecution();
     if (MavenUtils.isTestExecution(mojoExecution)) {
       MavenSession session = event.getSession();
+      MavenExecutionRequest request = session.getRequest();
       MavenProject project = event.getProject();
       String projectName = project.getName();
       String lifecyclePhase = mojoExecution.getLifecyclePhase();
       String moduleName = projectName + " " + lifecyclePhase;
 
       mojoStarted(event);
-      buildEventsHandler.onTestModuleSkip(session, moduleName, null);
+      buildEventsHandler.onTestModuleSkip(request, moduleName, null);
       mojoSucceeded(event);
     }
   }
@@ -66,6 +68,7 @@ public class MavenExecutionListener extends AbstractExecutionListener {
     MojoExecution mojoExecution = event.getMojoExecution();
     if (MavenUtils.isTestExecution(mojoExecution)) {
       MavenSession session = event.getSession();
+      MavenExecutionRequest request = session.getRequest();
       MavenProject project = event.getProject();
       String projectName = project.getName();
       String lifecyclePhase = mojoExecution.getLifecyclePhase();
@@ -82,20 +85,7 @@ public class MavenExecutionListener extends AbstractExecutionListener {
           Collections.singletonMap(Tags.TEST_EXECUTION, executionId);
 
       BuildEventsHandler.ModuleInfo moduleInfo =
-          buildEventsHandler.onTestModuleStart(session, moduleName, startCommand, additionalTags);
-
-      Collection<MavenUtils.TestFramework> testFrameworks =
-          MavenUtils.collectTestFrameworks(project);
-      if (testFrameworks.size() == 1) {
-        // if the module uses multiple test frameworks, we do not set the tags
-        MavenUtils.TestFramework testFramework = testFrameworks.iterator().next();
-        buildEventsHandler.onModuleTestFrameworkDetected(
-            session, moduleName, testFramework.name, testFramework.version);
-      } else if (testFrameworks.size() > 1) {
-        log.info(
-            "Multiple test frameworks detected: {}. Test framework data will not be populated",
-            testFrameworks);
-      }
+          buildEventsHandler.onTestModuleStart(request, moduleName, startCommand, additionalTags);
 
       Xpp3Dom configuration = mojoExecution.getConfiguration();
       boolean forkTestVm =
@@ -158,12 +148,13 @@ public class MavenExecutionListener extends AbstractExecutionListener {
     MojoExecution mojoExecution = event.getMojoExecution();
     if (MavenUtils.isTestExecution(mojoExecution)) {
       MavenSession session = event.getSession();
+      MavenExecutionRequest request = session.getRequest();
       MavenProject project = event.getProject();
 
       String projectName = project.getName();
       String lifecyclePhase = mojoExecution.getLifecyclePhase();
       String moduleName = projectName + " " + lifecyclePhase;
-      buildEventsHandler.onTestModuleFinish(session, moduleName);
+      buildEventsHandler.onTestModuleFinish(request, moduleName);
 
       System.clearProperty(
           Strings.propertyNameToSystemPropertyName(CiVisibilityConfig.CIVISIBILITY_SESSION_ID));
@@ -177,6 +168,7 @@ public class MavenExecutionListener extends AbstractExecutionListener {
     MojoExecution mojoExecution = event.getMojoExecution();
     if (MavenUtils.isTestExecution(mojoExecution)) {
       MavenSession session = event.getSession();
+      MavenExecutionRequest request = session.getRequest();
       MavenProject project = event.getProject();
 
       String projectName = project.getName();
@@ -184,8 +176,8 @@ public class MavenExecutionListener extends AbstractExecutionListener {
       String moduleName = projectName + " " + lifecyclePhase;
 
       Exception exception = event.getException();
-      buildEventsHandler.onTestModuleFail(session, moduleName, exception);
-      buildEventsHandler.onTestModuleFinish(session, moduleName);
+      buildEventsHandler.onTestModuleFail(request, moduleName, exception);
+      buildEventsHandler.onTestModuleFinish(request, moduleName);
 
       System.clearProperty(
           Strings.propertyNameToSystemPropertyName(CiVisibilityConfig.CIVISIBILITY_SESSION_ID));

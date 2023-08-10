@@ -54,6 +54,7 @@ public abstract class HttpServerDecorator<REQUEST, CONNECTION, RESPONSE, REQUEST
   public static final String DD_FIN_DISP_LIST_SPAN_ATTRIBUTE =
       "datadog.span.finish_dispatch_listener";
   public static final String DD_RESPONSE_ATTRIBUTE = "datadog.response";
+  public static final String DD_IGNORE_COMMIT_ATTRIBUTE = "datadog.commit.ignore";
 
   public static final LinkedHashMap<String, String> SERVER_PATHWAY_EDGE_TAGS;
 
@@ -294,14 +295,14 @@ public abstract class HttpServerDecorator<REQUEST, CONNECTION, RESPONSE, REQUEST
   public AgentSpan onResponseStatus(final AgentSpan span, final int status) {
     if (status > UNSET_STATUS) {
       span.setHttpStatusCode(status);
-    }
-    // explicitly set here because some other decorators might already set an error without
-    // looking at the status code
-    // XXX: the logic is questionable: span.error becomes equivalent to status 5xx,
-    // even if the server chooses not to respond with 5xx to an error.
-    // Anyway, we def don't want it applied to blocked requests
-    if (!BlockingException.class.getName().equals(span.getTag("error.type"))) {
-      span.setError(SERVER_ERROR_STATUSES.get(status), ErrorPriorities.HTTP_SERVER_DECORATOR);
+      // explicitly set here because some other decorators might already set an error without
+      // looking at the status code
+      // XXX: the logic is questionable: span.error becomes equivalent to status 5xx,
+      // even if the server chooses not to respond with 5xx to an error.
+      // Anyway, we def don't want it applied to blocked requests
+      if (!BlockingException.class.getName().equals(span.getTag("error.type"))) {
+        span.setError(SERVER_ERROR_STATUSES.get(status), ErrorPriorities.HTTP_SERVER_DECORATOR);
+      }
     }
 
     if (SHOULD_SET_404_RESOURCE_NAME && status == 404) {
@@ -400,20 +401,33 @@ public abstract class HttpServerDecorator<REQUEST, CONNECTION, RESPONSE, REQUEST
   }
 
   private Flow<Void> callIGCallbackRequestHeaders(AgentSpan span, REQUEST_CARRIER carrier) {
-    CallbackProvider cbp = tracer().getCallbackProvider(RequestContextSlot.APPSEC);
+    CallbackProvider cbpAppsec = tracer().getCallbackProvider(RequestContextSlot.APPSEC);
+    CallbackProvider cbpIast = tracer().getCallbackProvider(RequestContextSlot.IAST);
     RequestContext requestContext = span.getRequestContext();
     AgentPropagation.ContextVisitor<REQUEST_CARRIER> getter = getter();
-    if (requestContext == null || cbp == null || getter == null) {
+    if (requestContext == null || getter == null) {
       return Flow.ResultFlow.empty();
     }
-    IGKeyClassifier igKeyClassifier =
-        IGKeyClassifier.create(
-            requestContext,
-            cbp.getCallback(EVENTS.requestHeader()),
-            cbp.getCallback(EVENTS.requestHeaderDone()));
-    if (null != igKeyClassifier) {
-      getter.forEachKey(carrier, igKeyClassifier);
-      return igKeyClassifier.done();
+    if (cbpIast != null) {
+      IGKeyClassifier igKeyClassifier =
+          IGKeyClassifier.create(
+              requestContext,
+              cbpIast.getCallback(EVENTS.requestHeader()),
+              cbpIast.getCallback(EVENTS.requestHeaderDone()));
+      if (null != igKeyClassifier) {
+        getter.forEachKey(carrier, igKeyClassifier);
+      }
+    }
+    if (cbpAppsec != null) {
+      IGKeyClassifier igKeyClassifier =
+          IGKeyClassifier.create(
+              requestContext,
+              cbpAppsec.getCallback(EVENTS.requestHeader()),
+              cbpAppsec.getCallback(EVENTS.requestHeaderDone()));
+      if (null != igKeyClassifier) {
+        getter.forEachKey(carrier, igKeyClassifier);
+        return igKeyClassifier.done();
+      }
     }
     return Flow.ResultFlow.empty();
   }

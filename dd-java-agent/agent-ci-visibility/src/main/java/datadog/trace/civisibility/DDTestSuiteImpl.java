@@ -66,7 +66,7 @@ public class DDTestSuiteImpl implements DDTestSuite {
       span = startSpan(testDecorator.component() + ".test_suite", moduleSpanContext);
     }
 
-    context = new SpanTestContext(span, moduleContext.getId());
+    context = new SpanTestContext(span, moduleContext);
 
     span.setSpanType(InternalSpanTypes.TEST_SUITE_END);
     span.setTag(Tags.SPAN_KIND, Tags.SPAN_KIND_TEST_SUITE);
@@ -153,6 +153,10 @@ public class DDTestSuiteImpl implements DDTestSuite {
         span.finish();
       }
     }
+
+    moduleContext.reportChildTag(Tags.TEST_FRAMEWORK, span.getTag(Tags.TEST_FRAMEWORK));
+    moduleContext.reportChildTag(
+        Tags.TEST_FRAMEWORK_VERSION, span.getTag(Tags.TEST_FRAMEWORK_VERSION));
   }
 
   @Override

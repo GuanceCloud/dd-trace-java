@@ -127,6 +127,21 @@ abstract class AbstractIastSpringBootTest extends AbstractIastServerSmokeTest {
     }
   }
 
+  void 'hsts header missing vulnerability is present'() {
+    setup:
+    String url = "http://localhost:${httpPort}/hstsmissing"
+    def request = new Request.Builder().url(url).header("X-Forwarded-Proto", "https").get().build()
+
+    when:
+    def response = client.newCall(request).execute()
+
+    then:
+    response.isSuccessful()
+    hasVulnerability { vul ->
+      vul.type == 'HSTS_HEADER_MISSING'
+    }
+  }
+
   void 'no HttpOnly cookie vulnerability is present'() {
     setup:
     String url = "http://localhost:${httpPort}/insecure_cookie"
@@ -275,6 +290,51 @@ abstract class AbstractIastSpringBootTest extends AbstractIastServerSmokeTest {
     then:
     hasVulnerability { vul -> vul.type == 'XPATH_INJECTION' }
   }
+
+  void 'trust boundary violation is present'() {
+    setup:
+    final url = "http://localhost:${httpPort}/trust_boundary_violation?paramValue=test"
+    final request = new Request.Builder().url(url).get().build()
+
+    when:
+    client.newCall(request).execute()
+
+    then:
+    hasVulnerability { vul -> vul.type == 'TRUST_BOUNDARY_VIOLATION' }
+  }
+
+  void 'xss is present when write String'() {
+    setup:
+    final url = "http://localhost:${httpPort}/xss/write?string=test"
+    final request = new Request.Builder().url(url).get().build()
+
+    when:
+    client.newCall(request).execute()
+
+    then:
+    hasVulnerability { vul -> vul.type == 'XSS' && vul.location.method == 'xssWrite' }
+  }
+
+  void 'trust boundary violation with cookie propagation'() {
+    setup:
+    final url = "http://localhost:${httpPort}/trust_boundary_violation_for_cookie"
+    final request = new Request.Builder().url(url).get().addHeader("Cookie", "https%3A%2F%2Fuser-id2=https%3A%2F%2Fkkk").build()
+
+    when:
+    client.newCall(request).execute()
+
+    then:
+    hasVulnerability { vul -> vul.type == 'TRUST_BOUNDARY_VIOLATION' }
+    hasTainted { tainted ->
+      tainted.value == 'https%3A%2F%2Fuser-id2' &&
+        tainted.ranges[0].source.origin == 'http.request.cookie.name'
+    }
+    hasTainted { tainted ->
+      tainted.value == 'https://kkk' &&
+        tainted.ranges[0].source.origin == 'http.request.cookie.value'
+    }
+  }
+
 
   void 'path traversal is present with file'() {
     setup:
