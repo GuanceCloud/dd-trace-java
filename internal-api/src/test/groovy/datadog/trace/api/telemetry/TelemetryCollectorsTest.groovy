@@ -191,7 +191,7 @@ class TelemetryCollectorsTest extends DDSpecification {
 
   def "update-drain span core metrics"() {
     setup:
-    def spanMetrics = SpanMetricRegistryImpl.getInstance().get('test-update-drain')
+    def spanMetrics = SpanMetricRegistryImpl.getInstance().get('datadog')
     spanMetrics.onSpanCreated()
     spanMetrics.onSpanCreated()
     spanMetrics.onSpanFinished()
@@ -208,15 +208,15 @@ class TelemetryCollectorsTest extends DDSpecification {
     spanCreatedMetric.type == 'count'
     spanCreatedMetric.value == 2
     spanCreatedMetric.namespace == 'tracers'
-    spanCreatedMetric.metricName == 'span_created'
-    spanCreatedMetric.tags == ['test-update-drain']
+    spanCreatedMetric.metricName == 'spans_created'
+    spanCreatedMetric.tags == ['integration_name:datadog']
 
     def spanFinishedMetric = metrics[1]
     spanFinishedMetric.type == 'count'
     spanFinishedMetric.value == 1
     spanFinishedMetric.namespace == 'tracers'
-    spanFinishedMetric.metricName == 'span_finished'
-    spanFinishedMetric.tags == ['test-update-drain']
+    spanFinishedMetric.metricName == 'spans_finished'
+    spanFinishedMetric.tags == ['integration_name:datadog']
   }
 
   def "overflowing core metrics"() {

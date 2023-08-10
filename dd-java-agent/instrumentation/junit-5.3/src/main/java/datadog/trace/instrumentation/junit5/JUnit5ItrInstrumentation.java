@@ -7,6 +7,8 @@ import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
 import com.google.auto.service.AutoService;
 import datadog.trace.agent.tooling.Instrumenter;
 import datadog.trace.api.Config;
+import datadog.trace.api.civisibility.InstrumentationBridge;
+import datadog.trace.api.civisibility.config.SkippableTest;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.Set;
 import net.bytebuddy.asm.Advice;
@@ -43,7 +45,10 @@ public class JUnit5ItrInstrumentation extends Instrumenter.CiVisibility
   @Override
   public String[] helperClassNames() {
     return new String[] {
-      packageName + ".TestFrameworkUtils", packageName + ".ItrFilter",
+      packageName + ".JUnitPlatformUtils",
+      packageName + ".JUnitPlatformUtils$Cucumber",
+      packageName + ".JUnitPlatformUtils$Spock",
+      packageName + ".TestEventsHandlerHolder",
     };
   }
 
@@ -54,6 +59,12 @@ public class JUnit5ItrInstrumentation extends Instrumenter.CiVisibility
         JUnit5ItrInstrumentation.class.getName() + "$JUnit5ItrAdvice");
   }
 
+  /**
+   * !!!!!!!!!!!!!!!! IMPORTANT !!!!!!!!!!!!!!!! Do not use or refer to {@code
+   * datadog.trace.instrumentation.junit5.JunitPlatformLauncherUtils} or any classes from {@code
+   * org.junit.platform.launcher} package in here: in some Gradle projects this package is not
+   * available in CL where this instrumentation is injected
+   */
   public static class JUnit5ItrAdvice {
 
     @SuppressFBWarnings(
@@ -63,9 +74,19 @@ public class JUnit5ItrInstrumentation extends Instrumenter.CiVisibility
     public static void shouldBeSkipped(
         @Advice.This TestDescriptor testDescriptor,
         @Advice.Return(readOnly = false) Node.SkipResult skipResult) {
+      if (skipResult.isSkipped()) {
+        return;
+      }
 
-      if (!skipResult.isSkipped() && ItrFilter.INSTANCE.skip(testDescriptor)) {
-        skipResult = Node.SkipResult.skip("Skipped by Datadog Intelligent Test Runner");
+      if (TestEventsHandlerHolder.TEST_EVENTS_HANDLER == null) {
+        // should only happen in integration tests
+        // because we cannot avoid instrumenting ourselves
+        return;
+      }
+
+      SkippableTest test = JUnitPlatformUtils.toSkippableTest(testDescriptor);
+      if (test != null && TestEventsHandlerHolder.TEST_EVENTS_HANDLER.skip(test)) {
+        skipResult = Node.SkipResult.skip(InstrumentationBridge.ITR_SKIP_REASON);
       }
     }
 

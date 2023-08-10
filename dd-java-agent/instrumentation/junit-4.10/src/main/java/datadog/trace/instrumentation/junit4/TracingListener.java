@@ -1,15 +1,9 @@
 package datadog.trace.instrumentation.junit4;
 
-import datadog.trace.api.civisibility.InstrumentationBridge;
-import datadog.trace.api.civisibility.events.TestEventsHandler;
-import datadog.trace.util.AgentThreadFactory;
 import java.lang.reflect.Method;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.List;
 import junit.runner.Version;
 import org.junit.Ignore;
-import org.junit.Test;
 import org.junit.runner.Description;
 import org.junit.runner.Result;
 import org.junit.runner.notification.Failure;
@@ -18,73 +12,55 @@ import org.junit.runners.model.TestClass;
 
 public class TracingListener extends RunListener {
 
-  private static final String GRADLE_TEST_WORKER_ID_SYSTEM_PROP = "org.gradle.test.worker";
-
-  private final TestEventsHandler testEventsHandler;
+  private final String version;
 
   public TracingListener() {
-    String version = Version.id();
-    Path currentPath = Paths.get("").toAbsolutePath();
-    testEventsHandler =
-        InstrumentationBridge.createTestEventsHandler("junit", "junit4", version, currentPath);
-
-    boolean isRunByGradle = System.getProperty(GRADLE_TEST_WORKER_ID_SYSTEM_PROP) != null;
-    if (isRunByGradle) {
-      applyTestRunFinishedPatch();
-    }
-  }
-
-  /**
-   * Gradle uses its own custom JUnit 4 runner. The runner does not invoke
-   * org.junit.runner.notification.RunListener#testRunFinished, so we apply a "patch" to invoke it
-   * before the JVM is shutdown
-   */
-  private void applyTestRunFinishedPatch() {
-    Thread shutdownHook =
-        AgentThreadFactory.newAgentThread(
-            AgentThreadFactory.AgentThread.CI_GRADLE_JUNIT_SHUTDOWN_HOOK,
-            () -> testRunFinished(null),
-            false);
-    Runtime.getRuntime().addShutdownHook(shutdownHook);
+    version = Version.id();
   }
 
   @Override
   public void testRunStarted(Description description) {
-    testEventsHandler.onTestModuleStart();
+    // on op
   }
 
   @Override
   public void testRunFinished(Result result) {
-    testEventsHandler.onTestModuleFinish(ItrFilter.INSTANCE.testsSkipped());
+    // on op
   }
 
-  public void testSuiteStarted(final TestClass junitTestClass) {
-    boolean containsTestCases = !junitTestClass.getAnnotatedMethods(Test.class).isEmpty();
-    if (!containsTestCases) {
+  public void testSuiteStarted(final TestClass junitTestClass, final Description description) {
+    if (!JUnit4Utils.isSuiteContainingChildren(junitTestClass, description)) {
       // Not all test suites contain tests.
       // Given that test suites can be nested in other test suites,
       // we are only interested in the innermost ones where the actual test cases reside
       return;
     }
 
-    String testSuiteName = junitTestClass.getName();
     Class<?> testClass = junitTestClass.getJavaClass();
+    String testSuiteName = JUnit4Utils.getSuiteName(testClass, description);
+
+    String testFramework = JUnit4Utils.getTestFramework(description);
+    String testFrameworkVersion =
+        !JUnit4Utils.CUCUMBER_FRAMEWORK.equals(testFramework)
+            ? version
+            : JUnit4Utils.getCucumberVersion(description);
+
     List<String> categories = JUnit4Utils.getCategories(testClass, null);
-    testEventsHandler.onTestSuiteStart(testSuiteName, null, null, testClass, categories, false);
+    TestEventsHandlerHolder.TEST_EVENTS_HANDLER.onTestSuiteStart(
+        testSuiteName, testFramework, testFrameworkVersion, testClass, categories, false);
   }
 
-  public void testSuiteFinished(final TestClass junitTestClass) {
-    boolean containsTestCases = !junitTestClass.getAnnotatedMethods(Test.class).isEmpty();
-    if (!containsTestCases) {
+  public void testSuiteFinished(final TestClass junitTestClass, final Description description) {
+    if (!JUnit4Utils.isSuiteContainingChildren(junitTestClass, description)) {
       // Not all test suites contain tests.
       // Given that test suites can be nested in other test suites,
       // we are only interested in the innermost ones where the actual test cases reside
       return;
     }
 
-    String testSuiteName = junitTestClass.getName();
     Class<?> testClass = junitTestClass.getJavaClass();
-    testEventsHandler.onTestSuiteFinish(testSuiteName, testClass);
+    String testSuiteName = JUnit4Utils.getSuiteName(testClass, description);
+    TestEventsHandlerHolder.TEST_EVENTS_HANDLER.onTestSuiteFinish(testSuiteName, testClass);
   }
 
   @Override
@@ -93,17 +69,24 @@ public class TracingListener extends RunListener {
     Method testMethod = JUnit4Utils.getTestMethod(description);
     String testMethodName = testMethod != null ? testMethod.getName() : null;
 
-    String testSuiteName = description.getClassName();
+    String testSuiteName = JUnit4Utils.getSuiteName(testClass, description);
     String testName = JUnit4Utils.getTestName(description, testMethod);
+
+    String testFramework = JUnit4Utils.getTestFramework(description);
+    String testFrameworkVersion =
+        !JUnit4Utils.CUCUMBER_FRAMEWORK.equals(testFramework)
+            ? version
+            : JUnit4Utils.getCucumberVersion(description);
+
     String testParameters = JUnit4Utils.getParameters(description);
     List<String> categories = JUnit4Utils.getCategories(testClass, testMethod);
 
-    testEventsHandler.onTestStart(
+    TestEventsHandlerHolder.TEST_EVENTS_HANDLER.onTestStart(
         testSuiteName,
         testName,
         null,
-        null,
-        null,
+        testFramework,
+        testFrameworkVersion,
         testParameters,
         categories,
         testClass,
@@ -113,29 +96,31 @@ public class TracingListener extends RunListener {
 
   @Override
   public void testFinished(final Description description) {
-    String testSuiteName = description.getClassName();
     Class<?> testClass = description.getTestClass();
+    String testSuiteName = JUnit4Utils.getSuiteName(testClass, description);
     Method testMethod = JUnit4Utils.getTestMethod(description);
     String testName = JUnit4Utils.getTestName(description, testMethod);
     String testParameters = JUnit4Utils.getParameters(description);
-    testEventsHandler.onTestFinish(testSuiteName, testClass, testName, null, testParameters);
+    TestEventsHandlerHolder.TEST_EVENTS_HANDLER.onTestFinish(
+        testSuiteName, testClass, testName, null, testParameters);
   }
 
   // same callback is executed both for test cases and test suites (for setup/teardown errors)
   @Override
   public void testFailure(final Failure failure) {
     Description description = failure.getDescription();
-    String testSuiteName = description.getClassName();
     Class<?> testClass = description.getTestClass();
+    String testSuiteName = JUnit4Utils.getSuiteName(testClass, description);
     if (JUnit4Utils.isTestSuiteDescription(description)) {
       Throwable throwable = failure.getException();
-      testEventsHandler.onTestSuiteFailure(testSuiteName, testClass, throwable);
+      TestEventsHandlerHolder.TEST_EVENTS_HANDLER.onTestSuiteFailure(
+          testSuiteName, testClass, throwable);
     } else {
       Method testMethod = JUnit4Utils.getTestMethod(description);
       String testName = JUnit4Utils.getTestName(description, testMethod);
       String testParameters = JUnit4Utils.getParameters(description);
       Throwable throwable = failure.getException();
-      testEventsHandler.onTestFailure(
+      TestEventsHandlerHolder.TEST_EVENTS_HANDLER.onTestFailure(
           testSuiteName, testClass, testName, null, testParameters, throwable);
     }
   }
@@ -151,11 +136,11 @@ public class TracingListener extends RunListener {
     }
 
     Description description = failure.getDescription();
-    String testSuiteName = description.getClassName();
     Class<?> testClass = description.getTestClass();
+    String testSuiteName = JUnit4Utils.getSuiteName(testClass, description);
 
     if (JUnit4Utils.isTestSuiteDescription(description)) {
-      testEventsHandler.onTestSuiteSkip(testSuiteName, testClass, reason);
+      TestEventsHandlerHolder.TEST_EVENTS_HANDLER.onTestSuiteSkip(testSuiteName, testClass, reason);
 
       List<Method> testMethods = JUnit4Utils.getTestMethods(description.getTestClass());
       for (Method testMethod : testMethods) {
@@ -166,7 +151,7 @@ public class TracingListener extends RunListener {
       String testName = JUnit4Utils.getTestName(description, testMethod);
       String testParameters = JUnit4Utils.getParameters(description);
 
-      testEventsHandler.onTestSkip(
+      TestEventsHandlerHolder.TEST_EVENTS_HANDLER.onTestSkip(
           testSuiteName, testClass, testName, null, testParameters, reason);
     }
   }
@@ -183,19 +168,26 @@ public class TracingListener extends RunListener {
     } else if (JUnit4Utils.isTestSuiteDescription(description)) {
 
       Class<?> testClass = description.getTestClass();
-      String testSuiteName = testClass.getName();
+      String testSuiteName = JUnit4Utils.getSuiteName(testClass, description);
+
+      String testFramework = JUnit4Utils.getTestFramework(description);
+      String testFrameworkVersion =
+          !JUnit4Utils.CUCUMBER_FRAMEWORK.equals(testFramework)
+              ? version
+              : JUnit4Utils.getCucumberVersion(description);
 
       List<String> categories = JUnit4Utils.getCategories(testClass, null);
 
-      testEventsHandler.onTestSuiteStart(testSuiteName, null, null, testClass, categories, false);
-      testEventsHandler.onTestSuiteSkip(testSuiteName, testClass, reason);
+      TestEventsHandlerHolder.TEST_EVENTS_HANDLER.onTestSuiteStart(
+          testSuiteName, testFramework, testFrameworkVersion, testClass, categories, false);
+      TestEventsHandlerHolder.TEST_EVENTS_HANDLER.onTestSuiteSkip(testSuiteName, testClass, reason);
 
       List<Method> testMethods = JUnit4Utils.getTestMethods(testClass);
       for (Method testMethod : testMethods) {
         testIgnored(description, testMethod, reason);
       }
 
-      testEventsHandler.onTestSuiteFinish(testSuiteName, testClass);
+      TestEventsHandlerHolder.TEST_EVENTS_HANDLER.onTestSuiteFinish(testSuiteName, testClass);
     }
   }
 
@@ -203,17 +195,24 @@ public class TracingListener extends RunListener {
     Class<?> testClass = description.getTestClass();
     String testMethodName = testMethod != null ? testMethod.getName() : null;
 
-    String testSuiteName = description.getClassName();
+    String testSuiteName = JUnit4Utils.getSuiteName(testClass, description);
     String testName = JUnit4Utils.getTestName(description, testMethod);
+
+    String testFramework = JUnit4Utils.getTestFramework(description);
+    String testFrameworkVersion =
+        !JUnit4Utils.CUCUMBER_FRAMEWORK.equals(testFramework)
+            ? version
+            : JUnit4Utils.getCucumberVersion(description);
+
     String testParameters = JUnit4Utils.getParameters(description);
     List<String> categories = JUnit4Utils.getCategories(testClass, testMethod);
 
-    testEventsHandler.onTestIgnore(
+    TestEventsHandlerHolder.TEST_EVENTS_HANDLER.onTestIgnore(
         testSuiteName,
         testName,
         null,
-        null,
-        null,
+        testFramework,
+        testFrameworkVersion,
         testParameters,
         categories,
         testClass,

@@ -5,6 +5,7 @@ import ddtest.client.sources.Hasher;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.io.File;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.net.HttpCookie;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -262,6 +263,42 @@ public class IastWebController {
     XPath xPath = XPathFactory.newInstance().newXPath();
     xPath.evaluate(expression, doc.getDocumentElement(), XPathConstants.NODESET);
     return "XPath Injection page";
+  }
+
+  @GetMapping("/xss/write")
+  @SuppressFBWarnings
+  public void xssWrite(final HttpServletRequest request, final HttpServletResponse response) {
+    try {
+      response.getWriter().write(request.getParameter("string"));
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  @GetMapping("/trust_boundary_violation")
+  public String trustBoundaryViolation(final HttpServletRequest request) {
+    String paramValue = request.getParameter("paramValue");
+    request.getSession().setAttribute("name", paramValue);
+    return "Trust Boundary violation page";
+  }
+
+  @GetMapping("/trust_boundary_violation_for_cookie")
+  public String trustBoundaryViolationForCookie(final HttpServletRequest request)
+      throws UnsupportedEncodingException {
+
+    for (Cookie theCookie : request.getCookies()) {
+      if (theCookie.getName().equals("https%3A%2F%2Fuser-id2")) {
+        String value = java.net.URLDecoder.decode(theCookie.getValue(), "UTF-8");
+        request.getSession().putValue(value, "88888");
+      }
+    }
+    return "Trust Boundary violation with cookie page";
+  }
+
+  @GetMapping(value = "/hstsmissing", produces = "text/html")
+  public String hstsHeaderMissing(HttpServletResponse response) {
+    response.setStatus(HttpStatus.OK.value());
+    return "ok";
   }
 
   private void withProcess(final Operation<Process> op) {

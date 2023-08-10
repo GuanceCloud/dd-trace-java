@@ -39,6 +39,7 @@ public final class ConfigDefaults {
   public static final String DEFAULT_AGENT_WRITER_TYPE = "DDAgentWriter";
   public static final boolean DEFAULT_STARTUP_LOGS_ENABLED = true;
 
+  static final boolean DEFAULT_WRITER_BAGGAGE_INJECT = true;
   static final String DEFAULT_SITE = "datadoghq.com";
 
   static final boolean DEFAULT_TRACE_ENABLED = true;
@@ -113,7 +114,6 @@ public final class ConfigDefaults {
   static final boolean DEFAULT_CIVISIBILITY_AUTO_CONFIGURATION_ENABLED = true;
   static final boolean DEFAULT_CIVISIBILITY_COMPILER_PLUGIN_AUTO_CONFIGURATION_ENABLED = true;
   static final String DEFAULT_CIVISIBILITY_COMPILER_PLUGIN_VERSION = "0.1.6";
-  static final int DEFAULT_CIVISIBILITY_TEST_EVENTS_HANDLER_CACHE_SIZE = 4;
   static final String DEFAULT_CIVISIBILITY_JACOCO_PLUGIN_EXCLUDES =
       "datadog.trace.*:org.apache.commons.*";
   static final boolean DEFAULT_CIVISIBILITY_GIT_UPLOAD_ENABLED = true;
@@ -183,6 +183,8 @@ public final class ConfigDefaults {
   static final float DEFAULT_TRACE_FLUSH_INTERVAL = 1;
 
   static final boolean DEFAULT_ELASTICSEARCH_BODY_AND_PARAMS_ENABLED = true;
+
+  static final boolean DEFAULT_SPARK_TASK_HISTOGRAM_ENABLED = true;
 
   private ConfigDefaults() {}
 }

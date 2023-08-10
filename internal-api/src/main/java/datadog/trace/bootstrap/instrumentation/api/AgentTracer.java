@@ -22,18 +22,20 @@ import datadog.trace.api.profiling.Timer;
 import datadog.trace.api.sampling.PrioritySampling;
 import datadog.trace.api.scopemanager.ScopeListener;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan.Context;
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 
 public class AgentTracer {
+  private static final String DEFAULT_INSTRUMENTATION_NAME = "datadog";
 
   // Implicit parent
   /** Deprecated. Use {@link #startSpan(String, CharSequence)} instead. */
   @Deprecated
   public static AgentSpan startSpan(final CharSequence spanName) {
-    return startSpan("default", spanName);
+    return startSpan(DEFAULT_INSTRUMENTATION_NAME, spanName);
   }
 
   /** @see TracerAPI#startSpan(String, CharSequence) */
@@ -45,7 +47,7 @@ public class AgentTracer {
   /** Deprecated. Use {@link #startSpan(String, CharSequence, long)} instead. */
   @Deprecated
   public static AgentSpan startSpan(final CharSequence spanName, final long startTimeMicros) {
-    return startSpan("default", spanName, startTimeMicros);
+    return startSpan(DEFAULT_INSTRUMENTATION_NAME, spanName, startTimeMicros);
   }
 
   /** @see TracerAPI#startSpan(String, CharSequence, long) */
@@ -58,7 +60,7 @@ public class AgentTracer {
   /** Deprecated. Use {@link #startSpan(String, CharSequence, AgentSpan.Context)} instead. */
   @Deprecated
   public static AgentSpan startSpan(final CharSequence spanName, final AgentSpan.Context parent) {
-    return startSpan("default", spanName, parent);
+    return startSpan(DEFAULT_INSTRUMENTATION_NAME, spanName, parent);
   }
 
   /** @see TracerAPI#startSpan(String, CharSequence, AgentSpan.Context) */
@@ -74,7 +76,7 @@ public class AgentTracer {
   @Deprecated
   public static AgentSpan startSpan(
       final CharSequence spanName, final AgentSpan.Context parent, final long startTimeMicros) {
-    return startSpan("default", spanName, parent, startTimeMicros);
+    return startSpan(DEFAULT_INSTRUMENTATION_NAME, spanName, parent, startTimeMicros);
   }
 
   /** @see TracerAPI#startSpan(String, CharSequence, AgentSpan.Context, long) */
@@ -116,13 +118,7 @@ public class AgentTracer {
   }
 
   public static TraceConfig traceConfig(final AgentSpan span) {
-    if (null != span) {
-      TraceConfig traceConfig = span.traceConfig();
-      if (null != traceConfig) {
-        return traceConfig;
-      }
-    }
-    return get().captureTraceConfig();
+    return null != span ? span.traceConfig() : traceConfig();
   }
 
   public static TraceConfig traceConfig() {
@@ -244,7 +240,7 @@ public class AgentTracer {
     /** Deprecated. Use {@link #buildSpan(String, CharSequence)} instead. */
     @Deprecated
     default SpanBuilder buildSpan(CharSequence spanName) {
-      return buildSpan("default", spanName);
+      return buildSpan(DEFAULT_INSTRUMENTATION_NAME, spanName);
     }
 
     SpanBuilder buildSpan(String instrumentationName, CharSequence spanName);
@@ -301,6 +297,8 @@ public class AgentTracer {
     TraceConfig captureTraceConfig();
 
     ProfilingContextIntegration getProfilingContext();
+
+    AgentHistogram newHistogram(double relativeAccuracy, int maxNumBins);
   }
 
   public interface SpanBuilder {
@@ -329,6 +327,8 @@ public class AgentTracer {
     SpanBuilder withSpanType(CharSequence spanType);
 
     <T> SpanBuilder withRequestContextData(RequestContextSlot slot, T data);
+
+    SpanBuilder withLink(AgentSpanLink link);
   }
 
   static class NoopTracerAPI implements TracerAPI {
@@ -563,7 +563,12 @@ public class AgentTracer {
 
     @Override
     public TraceConfig captureTraceConfig() {
-      return null;
+      return NoopTraceConfig.INSTANCE;
+    }
+
+    @Override
+    public AgentHistogram newHistogram(double relativeAccuracy, int maxNumBins) {
+      return NoopAgentHistogram.INSTANCE;
     }
   }
 
@@ -855,7 +860,7 @@ public class AgentTracer {
 
     @Override
     public TraceConfig traceConfig() {
-      return null;
+      return NoopTraceConfig.INSTANCE;
     }
   }
 
@@ -1112,6 +1117,99 @@ public class AgentTracer {
 
     @Override
     public String strEncode() {
+      return null;
+    }
+  }
+
+  public static class NoopAgentHistogram implements AgentHistogram {
+    public static final NoopAgentHistogram INSTANCE = new NoopAgentHistogram();
+
+    @Override
+    public double getCount() {
+      return 0;
+    }
+
+    @Override
+    public boolean isEmpty() {
+      return true;
+    }
+
+    @Override
+    public void accept(double value) {}
+
+    @Override
+    public void accept(double value, double count) {}
+
+    @Override
+    public double getValueAtQuantile(double quantile) {
+      return 0;
+    }
+
+    @Override
+    public double getMinValue() {
+      return 0;
+    }
+
+    @Override
+    public double getMaxValue() {
+      return 0;
+    }
+
+    @Override
+    public void clear() {}
+
+    @Override
+    public ByteBuffer serialize() {
+      return null;
+    }
+  }
+
+  /** TraceConfig when there is no tracer; this is not the same as a default config. */
+  public static final class NoopTraceConfig implements TraceConfig {
+    public static final NoopTraceConfig INSTANCE = new NoopTraceConfig();
+
+    @Override
+    public boolean isDebugEnabled() {
+      return false;
+    }
+
+    @Override
+    public boolean isRuntimeMetricsEnabled() {
+      return false;
+    }
+
+    @Override
+    public boolean isLogsInjectionEnabled() {
+      return false;
+    }
+
+    @Override
+    public boolean isDataStreamsEnabled() {
+      return false;
+    }
+
+    @Override
+    public Map<String, String> getServiceMapping() {
+      return Collections.emptyMap();
+    }
+
+    @Override
+    public Map<String, String> getRequestHeaderTags() {
+      return Collections.emptyMap();
+    }
+
+    @Override
+    public Map<String, String> getResponseHeaderTags() {
+      return Collections.emptyMap();
+    }
+
+    @Override
+    public Map<String, String> getBaggageMapping() {
+      return Collections.emptyMap();
+    }
+
+    @Override
+    public Double getTraceSampleRate() {
       return null;
     }
   }

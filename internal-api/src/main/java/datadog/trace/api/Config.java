@@ -24,7 +24,6 @@ import static datadog.trace.api.ConfigDefaults.DEFAULT_CIVISIBILITY_SIGNAL_SERVE
 import static datadog.trace.api.ConfigDefaults.DEFAULT_CIVISIBILITY_SIGNAL_SERVER_PORT;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_CIVISIBILITY_SOURCE_DATA_ENABLED;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_CIVISIBILITY_SOURCE_DATA_ROOT_CHECK_ENABLED;
-import static datadog.trace.api.ConfigDefaults.DEFAULT_CIVISIBILITY_TEST_EVENTS_HANDLER_CACHE_SIZE;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_CLIENT_IP_ENABLED;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_CLOCK_SYNC_PERIOD;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_CWS_ENABLED;
@@ -97,6 +96,7 @@ import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_RATE_LIMIT;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_REPORT_HOSTNAME;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_RESOLVER_ENABLED;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_X_DATADOG_TAGS_MAX_LENGTH;
+import static datadog.trace.api.ConfigDefaults.DEFAULT_WRITER_BAGGAGE_INJECT;
 import static datadog.trace.api.DDTags.HOST_TAG;
 import static datadog.trace.api.DDTags.INTERNAL_HOST_NAME;
 import static datadog.trace.api.DDTags.LANGUAGE_TAG_KEY;
@@ -131,6 +131,7 @@ import static datadog.trace.api.config.CiVisibilityConfig.CIVISIBILITY_CIPROVIDE
 import static datadog.trace.api.config.CiVisibilityConfig.CIVISIBILITY_CODE_COVERAGE_ENABLED;
 import static datadog.trace.api.config.CiVisibilityConfig.CIVISIBILITY_COMPILER_PLUGIN_AUTO_CONFIGURATION_ENABLED;
 import static datadog.trace.api.config.CiVisibilityConfig.CIVISIBILITY_COMPILER_PLUGIN_VERSION;
+import static datadog.trace.api.config.CiVisibilityConfig.CIVISIBILITY_COVERAGE_SEGMENTS_ENABLED;
 import static datadog.trace.api.config.CiVisibilityConfig.CIVISIBILITY_DEBUG_PORT;
 import static datadog.trace.api.config.CiVisibilityConfig.CIVISIBILITY_GIT_COMMAND_TIMEOUT_MILLIS;
 import static datadog.trace.api.config.CiVisibilityConfig.CIVISIBILITY_GIT_REMOTE_NAME;
@@ -141,15 +142,15 @@ import static datadog.trace.api.config.CiVisibilityConfig.CIVISIBILITY_ITR_ENABL
 import static datadog.trace.api.config.CiVisibilityConfig.CIVISIBILITY_JACOCO_PLUGIN_EXCLUDES;
 import static datadog.trace.api.config.CiVisibilityConfig.CIVISIBILITY_JACOCO_PLUGIN_INCLUDES;
 import static datadog.trace.api.config.CiVisibilityConfig.CIVISIBILITY_JACOCO_PLUGIN_VERSION;
+import static datadog.trace.api.config.CiVisibilityConfig.CIVISIBILITY_MODULE_EXECUTION_SETTINGS_CACHE_SIZE;
 import static datadog.trace.api.config.CiVisibilityConfig.CIVISIBILITY_MODULE_ID;
 import static datadog.trace.api.config.CiVisibilityConfig.CIVISIBILITY_REPO_INDEX_SHARING_ENABLED;
 import static datadog.trace.api.config.CiVisibilityConfig.CIVISIBILITY_SESSION_ID;
 import static datadog.trace.api.config.CiVisibilityConfig.CIVISIBILITY_SIGNAL_SERVER_HOST;
 import static datadog.trace.api.config.CiVisibilityConfig.CIVISIBILITY_SIGNAL_SERVER_PORT;
-import static datadog.trace.api.config.CiVisibilityConfig.CIVISIBILITY_SKIPPABLE_TESTS;
 import static datadog.trace.api.config.CiVisibilityConfig.CIVISIBILITY_SOURCE_DATA_ENABLED;
 import static datadog.trace.api.config.CiVisibilityConfig.CIVISIBILITY_SOURCE_DATA_ROOT_CHECK_ENABLED;
-import static datadog.trace.api.config.CiVisibilityConfig.CIVISIBILITY_TEST_EVENTS_HANDLER_CACHE_SIZE;
+import static datadog.trace.api.config.CiVisibilityConfig.CIVISIBILITY_TRACE_SANITATION_ENABLED;
 import static datadog.trace.api.config.CrashTrackingConfig.CRASH_TRACKING_AGENTLESS;
 import static datadog.trace.api.config.CrashTrackingConfig.CRASH_TRACKING_AGENTLESS_DEFAULT;
 import static datadog.trace.api.config.CrashTrackingConfig.CRASH_TRACKING_TAGS;
@@ -280,6 +281,7 @@ import static datadog.trace.api.config.TraceInstrumentationConfig.GRPC_IGNORED_O
 import static datadog.trace.api.config.TraceInstrumentationConfig.GRPC_SERVER_ERROR_STATUSES;
 import static datadog.trace.api.config.TraceInstrumentationConfig.GRPC_SERVER_TRIM_PACKAGE_RESOURCE;
 import static datadog.trace.api.config.TraceInstrumentationConfig.HTTP_CLIENT_HOST_SPLIT_BY_DOMAIN;
+import static datadog.trace.api.config.TraceInstrumentationConfig.HTTP_CLIENT_TAG_HEADERS;
 import static datadog.trace.api.config.TraceInstrumentationConfig.HTTP_CLIENT_TAG_QUERY_STRING;
 import static datadog.trace.api.config.TraceInstrumentationConfig.HTTP_SERVER_RAW_QUERY_STRING;
 import static datadog.trace.api.config.TraceInstrumentationConfig.HTTP_SERVER_RAW_RESOURCE;
@@ -304,6 +306,7 @@ import static datadog.trace.api.config.TraceInstrumentationConfig.RABBIT_PROPAGA
 import static datadog.trace.api.config.TraceInstrumentationConfig.SERVLET_ASYNC_TIMEOUT_ERROR;
 import static datadog.trace.api.config.TraceInstrumentationConfig.SERVLET_PRINCIPAL_ENABLED;
 import static datadog.trace.api.config.TraceInstrumentationConfig.SERVLET_ROOT_CONTEXT_SERVICE_NAME;
+import static datadog.trace.api.config.TraceInstrumentationConfig.SPARK_TASK_HISTOGRAM_ENABLED;
 import static datadog.trace.api.config.TraceInstrumentationConfig.SPRING_DATA_REPOSITORY_INTERFACE_RESOURCE_NAME;
 import static datadog.trace.api.config.TracerConfig.AGENT_HOST;
 import static datadog.trace.api.config.TracerConfig.AGENT_NAMED_PIPE;
@@ -318,6 +321,7 @@ import static datadog.trace.api.config.TracerConfig.HEADER_TAGS;
 import static datadog.trace.api.config.TracerConfig.HTTP_CLIENT_ERROR_STATUSES;
 import static datadog.trace.api.config.TracerConfig.HTTP_SERVER_ERROR_STATUSES;
 import static datadog.trace.api.config.TracerConfig.ID_GENERATION_STRATEGY;
+import static datadog.trace.api.config.TracerConfig.PARTIAL_FLUSH_ENABLED;
 import static datadog.trace.api.config.TracerConfig.PARTIAL_FLUSH_MIN_SPANS;
 import static datadog.trace.api.config.TracerConfig.PRIORITY_SAMPLING;
 import static datadog.trace.api.config.TracerConfig.PRIORITY_SAMPLING_FORCE;
@@ -365,14 +369,13 @@ import static datadog.trace.api.config.TracerConfig.TRACE_SAMPLING_SERVICE_RULES
 import static datadog.trace.api.config.TracerConfig.TRACE_SPAN_ATTRIBUTE_SCHEMA;
 import static datadog.trace.api.config.TracerConfig.TRACE_STRICT_WRITES_ENABLED;
 import static datadog.trace.api.config.TracerConfig.TRACE_X_DATADOG_TAGS_MAX_LENGTH;
+import static datadog.trace.api.config.TracerConfig.WRITER_BAGGAGE_INJECT;
 import static datadog.trace.api.config.TracerConfig.WRITER_TYPE;
 import static datadog.trace.api.iast.IastDetectionMode.DEFAULT;
 import static datadog.trace.util.CollectionUtils.tryMakeImmutableList;
 import static datadog.trace.util.CollectionUtils.tryMakeImmutableSet;
 import static datadog.trace.util.Strings.propertyNameToEnvironmentVariableName;
 
-import datadog.trace.api.civisibility.config.SkippableTest;
-import datadog.trace.api.civisibility.config.SkippableTestsSerializer;
 import datadog.trace.api.config.GeneralConfig;
 import datadog.trace.api.config.TracerConfig;
 import datadog.trace.api.iast.IastDetectionMode;
@@ -405,7 +408,6 @@ import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -477,6 +479,7 @@ public class Config {
   private final String rootContextServiceName;
   private final boolean integrationSynapseLegacyOperationName;
   private final String writerType;
+  private final boolean injectBaggageAsTagsEnabled;
   private final boolean agentConfiguredUsingDefault;
   private final String agentUrl;
   private final String agentHost;
@@ -509,6 +512,7 @@ public class Config {
   private final Map<String, String> httpClientPathResourceNameMapping;
   private final boolean httpResourceRemoveTrailingSlash;
   private final boolean httpClientTagQueryString;
+  private final boolean httpClientTagHeaders;
   private final boolean httpClientSplitByDomain;
   private final boolean dbClientSplitByInstance;
   private final boolean dbClientSplitByInstanceTypeSuffix;
@@ -621,6 +625,7 @@ public class Config {
   private final String iastRedactionNamePattern;
   private final String iastRedactionValuePattern;
 
+  private final boolean ciVisibilityTraceSanitationEnabled;
   private final boolean ciVisibilityAgentlessEnabled;
   private final String ciVisibilityAgentlessUrl;
 
@@ -639,7 +644,6 @@ public class Config {
   private final List<String> ciVisibilityJacocoPluginExcludes;
   private final String[] ciVisibilityJacocoPluginExcludedClassnames;
   private final Integer ciVisibilityDebugPort;
-  private final int ciVisibilityTestEventsHandlerCacheSize;
   private final boolean ciVisibilityGitUploadEnabled;
   private final boolean ciVisibilityGitUnshallowEnabled;
   private final long ciVisibilityGitCommandTimeoutMillis;
@@ -649,9 +653,10 @@ public class Config {
   private final String ciVisibilitySignalServerHost;
   private final int ciVisibilitySignalServerPort;
   private final boolean ciVisibilityItrEnabled;
-  private final Set<SkippableTest> ciVisibilitySkippableTests;
   private final boolean ciVisibilityCiProviderIntegrationEnabled;
   private final boolean ciVisibilityRepoIndexSharingEnabled;
+  private final int ciVisibilityModuleExecutionSettingsCacheSize;
+  private final boolean ciVisibilityCoverageSegmentsEnabled;
 
   private final boolean remoteConfigEnabled;
   private final boolean remoteConfigIntegrityCheckEnabled;
@@ -763,6 +768,7 @@ public class Config {
   private final boolean longRunningTraceEnabled;
   private final long longRunningTraceFlushInterval;
   private final boolean elasticsearchBodyAndParamsEnabled;
+  private final boolean sparkTaskHistogramEnabled;
 
   private final float traceFlushIntervalSeconds;
 
@@ -832,7 +838,8 @@ public class Config {
     integrationSynapseLegacyOperationName =
         configProvider.getBoolean(INTEGRATION_SYNAPSE_LEGACY_OPERATION_NAME, false);
     writerType = configProvider.getString(WRITER_TYPE, DEFAULT_AGENT_WRITER_TYPE);
-
+    injectBaggageAsTagsEnabled =
+        configProvider.getBoolean(WRITER_BAGGAGE_INJECT, DEFAULT_WRITER_BAGGAGE_INJECT);
     String lambdaInitType = getEnv("AWS_LAMBDA_INITIALIZATION_TYPE");
     if (lambdaInitType != null && lambdaInitType.equals("snap-start")) {
       secureRandom = true;
@@ -1027,6 +1034,8 @@ public class Config {
         configProvider.getBoolean(
             HTTP_CLIENT_TAG_QUERY_STRING, DEFAULT_HTTP_CLIENT_TAG_QUERY_STRING);
 
+    httpClientTagHeaders = configProvider.getBoolean(HTTP_CLIENT_TAG_HEADERS, true);
+
     httpClientSplitByDomain =
         configProvider.getBoolean(
             HTTP_CLIENT_HOST_SPLIT_BY_DOMAIN, DEFAULT_HTTP_CLIENT_SPLIT_BY_DOMAIN);
@@ -1058,8 +1067,11 @@ public class Config {
     scopeIterationKeepAlive =
         configProvider.getInteger(SCOPE_ITERATION_KEEP_ALIVE, DEFAULT_SCOPE_ITERATION_KEEP_ALIVE);
 
+    boolean partialFlushEnabled = configProvider.getBoolean(PARTIAL_FLUSH_ENABLED, true);
     partialFlushMinSpans =
-        configProvider.getInteger(PARTIAL_FLUSH_MIN_SPANS, DEFAULT_PARTIAL_FLUSH_MIN_SPANS);
+        !partialFlushEnabled
+            ? 0
+            : configProvider.getInteger(PARTIAL_FLUSH_MIN_SPANS, DEFAULT_PARTIAL_FLUSH_MIN_SPANS);
 
     traceStrictWritesEnabled = configProvider.getBoolean(TRACE_STRICT_WRITES_ENABLED, false);
 
@@ -1416,6 +1428,9 @@ public class Config {
         configProvider.getString(
             IAST_REDACTION_VALUE_PATTERN, DEFAULT_IAST_REDACTION_VALUE_PATTERN);
 
+    ciVisibilityTraceSanitationEnabled =
+        configProvider.getBoolean(CIVISIBILITY_TRACE_SANITATION_ENABLED, true);
+
     ciVisibilityAgentlessEnabled =
         configProvider.getBoolean(
             CIVISIBILITY_AGENTLESS_ENABLED, DEFAULT_CIVISIBILITY_AGENTLESS_ENABLED);
@@ -1433,11 +1448,6 @@ public class Config {
         configProvider.getBoolean(
             CIVISIBILITY_BUILD_INSTRUMENTATION_ENABLED,
             DEFAULT_CIVISIBILITY_BUILD_INSTRUMENTATION_ENABLED);
-
-    ciVisibilityTestEventsHandlerCacheSize =
-        configProvider.getInteger(
-            CIVISIBILITY_TEST_EVENTS_HANDLER_CACHE_SIZE,
-            DEFAULT_CIVISIBILITY_TEST_EVENTS_HANDLER_CACHE_SIZE);
 
     ciVisibilitySessionId = configProvider.getLong(CIVISIBILITY_SESSION_ID);
     ciVisibilityModuleId = configProvider.getLong(CIVISIBILITY_MODULE_ID);
@@ -1512,16 +1522,14 @@ public class Config {
         configProvider.getInteger(
             CIVISIBILITY_SIGNAL_SERVER_PORT, DEFAULT_CIVISIBILITY_SIGNAL_SERVER_PORT);
     ciVisibilityItrEnabled = configProvider.getBoolean(CIVISIBILITY_ITR_ENABLED, true);
-    ciVisibilitySkippableTests =
-        !Platform.isNativeImageBuilder()
-            ? new HashSet<>(
-                SkippableTestsSerializer.deserialize(
-                    configProvider.getString(CIVISIBILITY_SKIPPABLE_TESTS)))
-            : Collections.emptySet();
     ciVisibilityCiProviderIntegrationEnabled =
         configProvider.getBoolean(CIVISIBILITY_CIPROVIDER_INTEGRATION_ENABLED, true);
     ciVisibilityRepoIndexSharingEnabled =
         configProvider.getBoolean(CIVISIBILITY_REPO_INDEX_SHARING_ENABLED, true);
+    ciVisibilityModuleExecutionSettingsCacheSize =
+        configProvider.getInteger(CIVISIBILITY_MODULE_EXECUTION_SETTINGS_CACHE_SIZE, 16);
+    ciVisibilityCoverageSegmentsEnabled =
+        configProvider.getBoolean(CIVISIBILITY_COVERAGE_SEGMENTS_ENABLED, false);
 
     remoteConfigEnabled =
         configProvider.getBoolean(REMOTE_CONFIG_ENABLED, DEFAULT_REMOTE_CONFIG_ENABLED);
@@ -1690,6 +1698,10 @@ public class Config {
     longRunningTraceEnabled = longRunningEnabled;
     this.longRunningTraceFlushInterval = longRunningTraceFlushInterval;
 
+    this.sparkTaskHistogramEnabled =
+        configProvider.getBoolean(
+            SPARK_TASK_HISTOGRAM_ENABLED, ConfigDefaults.DEFAULT_SPARK_TASK_HISTOGRAM_ENABLED);
+
     this.traceFlushIntervalSeconds =
         configProvider.getFloat(
             TracerConfig.TRACE_FLUSH_INTERVAL, ConfigDefaults.DEFAULT_TRACE_FLUSH_INTERVAL);
@@ -1786,6 +1798,10 @@ public class Config {
 
   public String getWriterType() {
     return writerType;
+  }
+
+  public boolean isInjectBaggageAsTagsEnabled() {
+    return injectBaggageAsTagsEnabled;
   }
 
   public boolean isAgentConfiguredUsingDefault() {
@@ -1914,6 +1930,10 @@ public class Config {
 
   public boolean isHttpClientTagQueryString() {
     return httpClientTagQueryString;
+  }
+
+  public boolean isHttpClientTagHeaders() {
+    return httpClientTagHeaders;
   }
 
   public boolean isHttpClientSplitByDomain() {
@@ -2364,6 +2384,10 @@ public class Config {
     return instrumenterConfig.isUsmEnabled();
   }
 
+  public boolean isCiVisibilityTraceSanitationEnabled() {
+    return ciVisibilityTraceSanitationEnabled;
+  }
+
   public boolean isCiVisibilityAgentlessEnabled() {
     return ciVisibilityAgentlessEnabled;
   }
@@ -2382,10 +2406,6 @@ public class Config {
 
   public boolean isCiVisibilityBuildInstrumentationEnabled() {
     return ciVisibilityBuildInstrumentationEnabled;
-  }
-
-  public int getCiVisibilityTestEventsHandlerCacheSize() {
-    return ciVisibilityTestEventsHandlerCacheSize;
   }
 
   public Long getCiVisibilitySessionId() {
@@ -2485,16 +2505,20 @@ public class Config {
     return ciVisibilityItrEnabled;
   }
 
-  public Set<SkippableTest> getCiVisibilitySkippableTests() {
-    return ciVisibilitySkippableTests;
-  }
-
   public boolean isCiVisibilityCiProviderIntegrationEnabled() {
     return ciVisibilityCiProviderIntegrationEnabled;
   }
 
   public boolean isCiVisibilityRepoIndexSharingEnabled() {
     return ciVisibilityRepoIndexSharingEnabled;
+  }
+
+  public int getCiVisibilityModuleExecutionSettingsCacheSize() {
+    return ciVisibilityModuleExecutionSettingsCacheSize;
+  }
+
+  public boolean isCiVisibilityCoverageSegmentsEnabled() {
+    return ciVisibilityCoverageSegmentsEnabled;
   }
 
   public String getAppSecRulesFile() {
@@ -2761,6 +2785,10 @@ public class Config {
 
   public boolean isElasticsearchBodyAndParamsEnabled() {
     return elasticsearchBodyAndParamsEnabled;
+  }
+
+  public boolean isSparkTaskHistogramEnabled() {
+    return sparkTaskHistogramEnabled;
   }
 
   /** @return A map of tags to be applied only to the local application root span. */
@@ -3771,8 +3799,12 @@ public class Config {
         + elasticsearchBodyAndParamsEnabled
         + ", traceFlushInterval="
         + traceFlushIntervalSeconds
+        + ", injectBaggageAsTagsEnabled="
+        + injectBaggageAsTagsEnabled
         + ", logsInjectionEnabled="
         + logsInjectionEnabled
+        + ", sparkTaskHistogramEnabled="
+        + sparkTaskHistogramEnabled
         + '}';
   }
 }
