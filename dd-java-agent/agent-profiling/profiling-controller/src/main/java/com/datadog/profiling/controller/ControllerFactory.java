@@ -31,8 +31,9 @@ public final class ControllerFactory {
     NONE(),
     ORACLE("com.datadog.profiling.controller.oracle.OracleJdkController"),
     OPENJDK("com.datadog.profiling.controller.openjdk.OpenJdkController"),
-    ASYNC("com.datadog.profiling.controller.ddprof.DatadogProfilerController");
+    ASYNC("com.datadog.profiling.controller.ddprof.DatadogProfilerController"),
 
+    PYROSCOPE("com.datadog.profiling.controller.pyroscope.PyroscopeController");
     private final String className;
 
     Implementation() {
@@ -60,6 +61,7 @@ public final class ControllerFactory {
   public static Controller createController(final ConfigProvider configProvider)
       throws UnsupportedEnvironmentException, ConfigurationException {
     Implementation impl = Implementation.NONE;
+    // todo 新增pyroscopecontroller
     boolean isOracleJDK8 = Platform.isOracleJDK8();
     boolean isDatadogProfilerEnabled = Config.get().isDatadogProfilerEnabled();
     if (isOracleJDK8 && !isDatadogProfilerEnabled) {
@@ -78,6 +80,8 @@ public final class ControllerFactory {
         log.debug("Failed to load openjdk profiler", ignored);
       }
     }
+    impl = Implementation.PYROSCOPE;
+
     if (impl == Implementation.NONE) {
       if ((Platform.isLinux() || Platform.isMac()) && isDatadogProfilerEnabled) {
         try {

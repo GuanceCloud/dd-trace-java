@@ -1,0 +1,13 @@
+apply from: "$rootDir/gradle/java.gradle"
+
+minimumBranchCoverage = 0.5
+minimumInstructionCoverage = 0.7
+
+dependencies {
+  api deps.slf4j
+  api project(':internal-api')
+  api project(':dd-java-agent:agent-profiling:profiling-controller')
+  api project(':dd-java-agent:agent-profiling:profiling-controller-jfr')
+
+  implementation("io.pyroscope:agent:0.10.1")
+}

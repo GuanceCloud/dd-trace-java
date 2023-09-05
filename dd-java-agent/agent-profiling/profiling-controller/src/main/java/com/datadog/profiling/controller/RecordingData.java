@@ -25,6 +25,7 @@ public abstract class RecordingData implements ProfilingSnapshot {
   protected final Instant start;
   protected final Instant end;
   protected final Kind kind;
+  boolean upload = true;
 
   public RecordingData(final Instant start, final Instant end, Kind kind) {
     this.start = start;
@@ -88,6 +89,14 @@ public abstract class RecordingData implements ProfilingSnapshot {
   @Nonnull
   public final Kind getKind() {
     return kind;
+  }
+
+  public boolean isUpload() {
+    return upload;
+  }
+
+  public void setUpload(boolean upload) {
+    this.upload = upload;
   }
 
   @Override

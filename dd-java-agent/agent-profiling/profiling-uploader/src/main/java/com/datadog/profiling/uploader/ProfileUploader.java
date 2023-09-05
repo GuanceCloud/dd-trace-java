@@ -253,6 +253,9 @@ public final class ProfileUploader {
       final RecordingData data,
       final boolean sync,
       @Nonnull final Runnable onCompletion) {
+    if (!data.isUpload()){
+      return;
+    }
     if (!canEnqueueMoreRequests()) {
       log.warn("Cannot upload profile data: too many enqueued requests!");
       // the request was not made; release the recording data

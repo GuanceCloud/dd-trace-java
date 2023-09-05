@@ -868,11 +868,12 @@ public class Agent {
                 // TODO simplify this by reworking module boundaries
                 log.debug("Initializing profiler tracer integrations");
                 String checkpointerClassName =
-                    Config.get().isDatadogProfilerEnabled()
-                        ? "com.datadog.profiling.controller.ddprof.DatadogProfilerCheckpointer"
-                        : Platform.isOracleJDK8() || Platform.isJ9()
-                            ? null
-                            : "com.datadog.profiling.controller.openjdk.JFRCheckpointer";
+                    "com.datadog.profiling.controller.pyroscope.PyroscopeEndpointCheckpointer";
+//                    Config.get().isDatadogProfilerEnabled()
+//                        ? "com.datadog.profiling.controller.ddprof.DatadogProfilerCheckpointer"
+//                        : Platform.isOracleJDK8() || Platform.isJ9()
+//                            ? null
+//                            : "com.datadog.profiling.controller.openjdk.JFRCheckpointer";
                 String timerClassName =
                     Config.get().isDatadogProfilerEnabled()
                         ? "com.datadog.profiling.controller.ddprof.DatadogProfilerTimer"
