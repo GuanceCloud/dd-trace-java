@@ -1,9 +1,12 @@
 package datadog.trace.bootstrap.debugger;
 
+import static datadog.trace.bootstrap.debugger.util.Redaction.REDACTED_VALUE;
+
 import datadog.trace.bootstrap.debugger.el.ReflectiveFieldValueResolver;
 import datadog.trace.bootstrap.debugger.el.ValueReferenceResolver;
 import datadog.trace.bootstrap.debugger.el.ValueReferences;
 import datadog.trace.bootstrap.debugger.el.Values;
+import datadog.trace.bootstrap.debugger.util.Redaction;
 import datadog.trace.bootstrap.debugger.util.TimeoutChecker;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -105,6 +108,9 @@ public class CapturedContext implements ValueReferenceResolver {
   public Object getMember(Object target, String memberName) {
     if (target == Values.UNDEFINED_OBJECT) {
       return target;
+    }
+    if (Redaction.isRedactedKeyword(memberName)) {
+      return REDACTED_VALUE;
     }
     if (target instanceof CapturedValue) {
       Map<String, CapturedValue> fields = ((CapturedValue) target).fields;
@@ -318,7 +324,7 @@ public class CapturedContext implements ValueReferenceResolver {
     if (methodLocation == MethodLocation.EXIT) {
       duration = System.nanoTime() - startTimestamp;
       addExtension(
-          ValueReferences.DURATION_EXTENSION_NAME, duration / 1000 / 1000); // convert to ms
+          ValueReferences.DURATION_EXTENSION_NAME, duration / 1_000_000.0); // convert to ms
     }
     this.thisClassName = thisClassName;
     boolean shouldEvaluate = resolveEvaluateAt(probeImplementation, methodLocation);
@@ -537,6 +543,9 @@ public class CapturedContext implements ValueReferenceResolver {
 
     private static CapturedValue build(
         String name, String declaredType, Object value, Limits limits, String notCapturedReason) {
+      if (Redaction.isRedactedKeyword(name)) {
+        value = REDACTED_VALUE;
+      }
       CapturedValue val =
           new CapturedValue(
               name, declaredType, value, limits, Collections.emptyMap(), notCapturedReason);

@@ -1,5 +1,7 @@
 package com.datadog.iast.model.json;
 
+import static com.datadog.iast.model.json.TruncationUtils.writeTruncableValue;
+
 import com.datadog.iast.model.Evidence;
 import com.datadog.iast.model.Range;
 import com.datadog.iast.model.Source;
@@ -29,8 +31,12 @@ import java.util.Queue;
 import java.util.stream.Collectors;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class EvidenceAdapter extends FormattingAdapter<Evidence> {
+
+  private static final Logger log = LoggerFactory.getLogger(EvidenceAdapter.class);
 
   private final JsonAdapter<Source> sourceAdapter;
   private final JsonAdapter<Evidence> defaultAdapter;
@@ -57,7 +63,11 @@ public class EvidenceAdapter extends FormattingAdapter<Evidence> {
   }
 
   private String substring(final String value, final Ranged range) {
-    final int end = Math.min(range.getStart() + range.getLength(), value.length());
+    int end = Math.min(range.getStart() + range.getLength(), value.length());
+    if (end < 0) {
+      log.debug("Invalid negative end parameter for substring. Value: {} Range: {}", value, range);
+      end = value.length();
+    }
     return value.substring(range.getStart(), end);
   }
 
@@ -217,8 +227,12 @@ public class EvidenceAdapter extends FormattingAdapter<Evidence> {
         }
       }
       if (nextSensitive != null) {
-        addNextStringValuePart(nextSensitive.getStart(), next); // pending string chunk
-        handleSensitiveValue(nextSensitive);
+        if (nextSensitive.isBefore(nextTainted)) {
+          addNextStringValuePart(nextSensitive.getStart(), next); // pending string chunk
+          handleSensitiveValue(nextSensitive);
+        } else {
+          sensitive.addFirst(nextSensitive);
+        }
       }
       return next.poll();
     }
@@ -324,7 +338,7 @@ public class EvidenceAdapter extends FormattingAdapter<Evidence> {
       }
       writer.beginObject();
       writer.name("value");
-      writer.value(value);
+      writeTruncableValue(writer, value);
       writer.endObject();
     }
   }
@@ -339,7 +353,7 @@ public class EvidenceAdapter extends FormattingAdapter<Evidence> {
 
     @Override
     public void write(final Context ctx, final JsonWriter writer) throws IOException {
-      if (value == null || value.isEmpty()) {
+      if (value == null) {
         return;
       }
       writer.beginObject();
@@ -385,7 +399,7 @@ public class EvidenceAdapter extends FormattingAdapter<Evidence> {
       } else {
         writer.beginObject();
         writer.name("value");
-        writer.value(value);
+        writeTruncableValue(writer, value);
         writer.name("source");
         adapter.toJson(writer, source);
         writer.endObject();
@@ -470,7 +484,7 @@ public class EvidenceAdapter extends FormattingAdapter<Evidence> {
 
     @Override
     public void write(final Context ctx, final JsonWriter writer) throws IOException {
-      if (value == null || value.isEmpty()) {
+      if (value == null) {
         return;
       }
       writer.beginObject();
@@ -483,7 +497,7 @@ public class EvidenceAdapter extends FormattingAdapter<Evidence> {
       } else {
         writer.name("value");
       }
-      writer.value(value);
+      writeTruncableValue(writer, value);
       writer.endObject();
     }
   }

@@ -39,6 +39,7 @@ class IastSystemTest extends DDSpecification {
     1 * ss.registerCallback(Events.get().requestStarted(), _)
     1 * ss.registerCallback(Events.get().requestEnded(), _)
     1 * ss.registerCallback(Events.get().requestHeader(), _)
+    1 * ss.registerCallback(Events.get().grpcServerRequestMessage(), _)
     0 * _
 
     when:
@@ -58,8 +59,8 @@ class IastSystemTest extends DDSpecification {
     1 * iastContext.getTaintedObjects()
     1 * iastContext.getMetricCollector()
     1 * traceSegment.setTagTop('_dd.iast.enabled', 1)
-    1 * igSpanInfo.getTags()
-    1 * iastContext.getHstsHeaderIsSet()
+    1 * iastContext.getxContentTypeOptions() >> 'nosniff'
+    1 * iastContext.getStrictTransportSecurity() >> 'max-age=35660'
     0 * _
     noExceptionThrown()
   }
