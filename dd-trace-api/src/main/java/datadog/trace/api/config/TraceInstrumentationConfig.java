@@ -40,6 +40,8 @@ public final class TraceInstrumentationConfig {
   public static final String HTTP_SERVER_TAG_QUERY_STRING = "http.server.tag.query-string";
   public static final String HTTP_SERVER_RAW_QUERY_STRING = "http.server.raw.query-string";
   public static final String HTTP_SERVER_RAW_RESOURCE = "http.server.raw.resource";
+  public static final String HTTP_SERVER_DECODED_RESOURCE_PRESERVE_SPACES =
+      "http.server.decoded.resource.preserve-spaces";
   public static final String HTTP_SERVER_ROUTE_BASED_NAMING = "http.server.route-based-naming";
   public static final String HTTP_CLIENT_TAG_QUERY_STRING = "http.client.tag.query-string";
   public static final String HTTP_CLIENT_TAG_HEADERS = "http.client.tag.headers";
@@ -90,6 +92,9 @@ public final class TraceInstrumentationConfig {
 
   public static final String GRPC_IGNORED_INBOUND_METHODS = "trace.grpc.ignored.inbound.methods";
   public static final String GRPC_IGNORED_OUTBOUND_METHODS = "trace.grpc.ignored.outbound.methods";
+
+  public static final String GOOGLE_PUBSUB_IGNORED_GRPC_METHODS =
+      "trace.google-pubsub.ignored.grpc.methods";
   public static final String GRPC_SERVER_TRIM_PACKAGE_RESOURCE =
       "trace.grpc.server.trim-package-resource";
   public static final String GRPC_SERVER_ERROR_STATUSES = "grpc.server.error.statuses";
