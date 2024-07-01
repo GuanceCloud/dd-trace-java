@@ -29,7 +29,6 @@ public final class SpanDecoratingContextDataInjector implements ContextDataInjec
   public StringMap injectContextData(List<Property> list, StringMap reusable) {
     StringMap contextData = delegate.injectContextData(list, reusable);
     AgentSpan span = activeSpan();
-
     if (!traceConfig(span).isLogsInjectionEnabled()) {
       return contextData;
     }

@@ -79,6 +79,8 @@ public final class TraceInstrumentationConfig {
 
   public static final String LOGS_PATTERN = "logs.pattern";
   public static final String LOGS_PATTERN_REPLACE = "logs.pattern.replace";
+
+  public static final String LOG4J2_TRACE_ASYNC_PATTERN = "log4j2.trace.async.pattern";
   public static final String LOGS_MDC_TAGS_INJECTION_ENABLED = "logs.mdc.tags.injection";
   public static final String TRACE_128_BIT_TRACEID_LOGGING_ENABLED =
       "trace.128.bit.traceid.logging.enabled";
