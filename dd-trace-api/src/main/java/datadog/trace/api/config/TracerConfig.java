@@ -55,6 +55,7 @@ public final class TracerConfig {
   // a global rate used for all services (that don’t have a dedicated rule defined).
   public static final String TRACE_SAMPLE_RATE = "trace.sample.rate";
   public static final String TRACE_RATE_LIMIT = "trace.rate.limit";
+  public static final String TRACE_BUFFER_SIZE = "trace.buffer.size";
   public static final String TRACE_REPORT_HOSTNAME = "trace.report-hostname";
   public static final String TRACE_CLIENT_IP_HEADER = "trace.client-ip-header";
   public static final String TRACE_CLIENT_IP_RESOLVER_ENABLED = "trace.client-ip.resolver.enabled";

@@ -169,6 +169,7 @@ import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_ANALYTICS_ENABLED;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_BAGGAGE_MAX_BYTES;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_BAGGAGE_MAX_ITEMS;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_BAGGAGE_TAG_KEYS;
+import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_BUFFER_SIZE;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_CLOUD_PAYLOAD_TAGGING_SERVICES;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_DUBBO_PROVIDER_PROPAGATE_ENABLED;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_DUBBO_REQUEST_ENABLED;
@@ -655,6 +656,7 @@ import static datadog.trace.api.config.TracerConfig.TRACE_ANALYTICS_ENABLED;
 import static datadog.trace.api.config.TracerConfig.TRACE_BAGGAGE_MAX_BYTES;
 import static datadog.trace.api.config.TracerConfig.TRACE_BAGGAGE_MAX_ITEMS;
 import static datadog.trace.api.config.TracerConfig.TRACE_BAGGAGE_TAG_KEYS;
+import static datadog.trace.api.config.TracerConfig.TRACE_BUFFER_SIZE;
 import static datadog.trace.api.config.TracerConfig.TRACE_CLIENT_IP_HEADER;
 import static datadog.trace.api.config.TracerConfig.TRACE_CLIENT_IP_RESOLVER_ENABLED;
 import static datadog.trace.api.config.TracerConfig.TRACE_CLOUD_PAYLOAD_TAGGING_MAX_DEPTH;
@@ -986,6 +988,7 @@ public class Config {
   private final String traceSamplingRules;
   private final Double traceSampleRate;
   private final int traceRateLimit;
+  private final int traceBufferSize;
   private final String spanSamplingRules;
   private final String spanSamplingRulesFile;
 
@@ -2096,6 +2099,7 @@ public class Config {
     traceSamplingRules = configProvider.getString(TRACE_SAMPLING_RULES);
     traceSampleRate = configProvider.getDouble(TRACE_SAMPLE_RATE);
     traceRateLimit = configProvider.getInteger(TRACE_RATE_LIMIT, DEFAULT_TRACE_RATE_LIMIT);
+    traceBufferSize = configProvider.getInteger(TRACE_BUFFER_SIZE, DEFAULT_TRACE_BUFFER_SIZE);
     spanSamplingRules = configProvider.getString(SPAN_SAMPLING_RULES);
     spanSamplingRulesFile = configProvider.getString(SPAN_SAMPLING_RULES_FILE);
 
@@ -3708,6 +3712,10 @@ public class Config {
 
   public int getTraceRateLimit() {
     return traceRateLimit;
+  }
+
+  public int getTraceBufferSize() {
+    return traceBufferSize;
   }
 
   public String getSpanSamplingRules() {
@@ -6173,6 +6181,8 @@ public class Config {
         + traceSampleRate
         + ", traceRateLimit="
         + traceRateLimit
+        + ", traceBufferSize="
+        + traceBufferSize
         + ", spanSamplingRules="
         + spanSamplingRules
         + ", spanSamplingRulesFile="

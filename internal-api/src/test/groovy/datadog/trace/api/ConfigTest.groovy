@@ -116,6 +116,7 @@ import static datadog.trace.api.config.TracerConfig.SPAN_TAGS
 import static datadog.trace.api.config.TracerConfig.SPLIT_BY_TAGS
 import static datadog.trace.api.config.TracerConfig.TRACE_AGENT_PORT
 import static datadog.trace.api.config.TracerConfig.TRACE_AGENT_URL
+import static datadog.trace.api.config.TracerConfig.TRACE_BUFFER_SIZE
 import static datadog.trace.api.config.TracerConfig.TRACE_EXPERIMENTAL_FEATURES_ENABLED
 import static datadog.trace.api.config.TracerConfig.TRACE_LONG_RUNNING_ENABLED
 import static datadog.trace.api.config.TracerConfig.TRACE_LONG_RUNNING_FLUSH_INTERVAL
@@ -283,6 +284,7 @@ class ConfigTest extends DDSpecification {
     prop.setProperty(TRACE_SAMPLING_OPERATION_RULES, "b:1")
     prop.setProperty(TRACE_SAMPLE_RATE, ".5")
     prop.setProperty(TRACE_RATE_LIMIT, "200")
+    prop.setProperty(TRACE_BUFFER_SIZE, "2048")
     prop.setProperty(TRACE_LONG_RUNNING_ENABLED, "true")
     prop.setProperty(TRACE_LONG_RUNNING_FLUSH_INTERVAL, "250")
 
@@ -396,6 +398,7 @@ class ConfigTest extends DDSpecification {
     config.traceSamplingOperationRules == [b: "1"]
     config.traceSampleRate == 0.5
     config.traceRateLimit == 200
+    config.traceBufferSize == 2048
     config.isLongRunningTraceEnabled()
     config.getLongRunningTraceFlushInterval() == 250
 
@@ -695,6 +698,7 @@ class ConfigTest extends DDSpecification {
     System.setProperty(PREFIX + TRACE_SAMPLING_OPERATION_RULES, "b:1")
     System.setProperty(PREFIX + TRACE_SAMPLE_RATE, ".5")
     System.setProperty(PREFIX + TRACE_RATE_LIMIT, "200")
+    System.setProperty(PREFIX + TRACE_BUFFER_SIZE, "2048")
     System.setProperty(PREFIX + TRACE_LONG_RUNNING_ENABLED, "true")
     System.setProperty(PREFIX + TRACE_LONG_RUNNING_FLUSH_INTERVAL, "333")
 
@@ -806,6 +810,7 @@ class ConfigTest extends DDSpecification {
     config.traceSamplingOperationRules == [b: "1"]
     config.traceSampleRate == 0.5
     config.traceRateLimit == 200
+    config.traceBufferSize == 2048
     config.isLongRunningTraceEnabled()
     config.getLongRunningTraceFlushInterval() == 333
     config.traceRateLimit == 200
