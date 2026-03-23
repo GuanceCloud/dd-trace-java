@@ -31,6 +31,7 @@ class WriterFactoryTest extends DDSpecification {
     def config = Mock(Config)
     config.apiKey >> "my-api-key"
     config.agentUrl >> "http://my-agent.url"
+    config.traceBufferSize >> 1024
     config.getEnumValue(PRIORITIZATION_TYPE, _, _) >> Prioritization.FAST_LANE
     config.tracerMetricsEnabled >> true
     config.isCiVisibilityEnabled() >> true
@@ -103,6 +104,7 @@ class WriterFactoryTest extends DDSpecification {
     def config = Mock(Config)
     config.apiKey >> "my-api-key"
     config.agentUrl >> "http://my-agent.url"
+    config.traceBufferSize >> 1024
     config.getEnumValue(PRIORITIZATION_TYPE, _, _) >> Prioritization.FAST_LANE
     config.tracerMetricsEnabled >> true
     config.isLlmObsEnabled() >> true
