@@ -10,9 +10,10 @@ import com.datadog.debugger.probe.ExceptionProbe;
 import com.datadog.debugger.probe.LogProbe;
 import com.datadog.debugger.probe.ProbeDefinition;
 import com.datadog.debugger.probe.Sampled;
-import com.datadog.debugger.probe.Sampling;
 import com.datadog.debugger.sink.DebuggerSink;
 import com.datadog.debugger.util.ExceptionHelper;
+import com.datadog.debugger.util.SpringHelper;
+import datadog.environment.JavaVirtualMachine;
 import datadog.trace.api.Config;
 import datadog.trace.bootstrap.debugger.DebuggerContext;
 import datadog.trace.bootstrap.debugger.ProbeId;
@@ -21,6 +22,9 @@ import datadog.trace.bootstrap.debugger.ProbeRateLimiter;
 import datadog.trace.relocate.api.RatelimitedLogger;
 import datadog.trace.util.TagsHelper;
 import java.lang.instrument.Instrumentation;
+import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -40,6 +44,8 @@ import org.slf4j.LoggerFactory;
  * re-transformation of required classes
  */
 public class ConfigurationUpdater implements DebuggerContext.ProbeResolver, ConfigurationAcceptor {
+
+  private static final boolean JAVA_AT_LEAST_19 = JavaVirtualMachine.isJavaVersionAtLeast(19);
 
   public interface TransformerSupplier {
     DebuggerTransformer supply(
@@ -89,6 +95,7 @@ public class ConfigurationUpdater implements DebuggerContext.ProbeResolver, Conf
   @Override
   public void accept(Source source, Collection<? extends ProbeDefinition> definitions) {
     try {
+      // 1 有变化，在这里执行
       LOGGER.debug("Received new definitions from {}", source);
       definitionSources.put(source, definitions);
       Configuration newConfiguration = createConfiguration(definitionSources);
@@ -136,8 +143,8 @@ public class ConfigurationUpdater implements DebuggerContext.ProbeResolver, Conf
           new ConfigurationComparer(
               originalConfiguration, newConfiguration, instrumentationResults);
       if (changes.hasRateLimitRelatedChanged()) {
-        // apply rate limit config first to avoid racing with execution/instrumentation of log
-        // probes
+        // apply rate limit config first to avoid racing with execution/instrumentation
+        // of probes requiring samplers
         applyRateLimiter(changes, newConfiguration.getSampling());
       }
       currentConfiguration = newConfiguration;
@@ -178,11 +185,61 @@ public class ConfigurationUpdater implements DebuggerContext.ProbeResolver, Conf
     }
     List<Class<?>> changedClasses =
         finder.getAllLoadedChangedClasses(instrumentation.getAllLoadedClasses(), changes);
+    changedClasses = detectMethodParameters(changes, changedClasses);
     retransformClasses(changedClasses);
     // ensures that we have at least re-transformed 1 class
     if (changedClasses.size() > 0) {
       LOGGER.debug("Re-transformation done");
     }
+  }
+
+  /*
+   * Because of this bug (https://bugs.openjdk.org/browse/JDK-8240908), classes compiled with
+   * method parameters (javac -parameters) strip this attribute once retransformed
+   * Spring 6/Spring boot 3 rely exclusively on this attribute and may throw an exception
+   * if no attribute found.
+   */
+  private List<Class<?>> detectMethodParameters(
+      ConfigurationComparer changes, List<Class<?>> changedClasses) {
+    if (JAVA_AT_LEAST_19) {
+      // bug is fixed since JDK19, no need to perform detection
+      return changedClasses;
+    }
+    List<Class<?>> result = new ArrayList<>();
+    for (Class<?> changedClass : changedClasses) {
+      Method[] declaredMethods = changedClass.getDeclaredMethods();
+      boolean addClass = true;
+      // capping scanning of methods to 100 to avoid generated class with thousand of methods
+      // assuming that in those first 100 methods there is at least one with at least one parameter
+      for (int methodIdx = 0; methodIdx < declaredMethods.length && methodIdx < 100; methodIdx++) {
+        Method method = declaredMethods[methodIdx];
+        Parameter[] parameters = method.getParameters();
+        if (parameters.length == 0) {
+          continue;
+        }
+        if (parameters[0].isNamePresent()) {
+          if (!SpringHelper.isSpringUsingOnlyMethodParameters(instrumentation)) {
+            return changedClasses;
+          }
+          LOGGER.debug(
+              "Detecting method parameter: method={} param={}, Skipping retransforming this class",
+              method.getName(),
+              parameters[0].getName());
+          // skip the class: compiled with -parameters
+          reportError(
+              changes,
+              "Method Parameters detected, instrumentation not supported for "
+                  + changedClass.getTypeName());
+          addClass = false;
+        }
+        // we found at leat a method with one parameter if name is not present we can stop there
+        break;
+      }
+      if (addClass) {
+        result.add(changedClass);
+      }
+    }
+    return result;
   }
 
   private void reportReceived(ConfigurationComparer changes) {
@@ -195,6 +252,16 @@ public class ConfigurationUpdater implements DebuggerContext.ProbeResolver, Conf
     }
     for (ProbeDefinition def : changes.getRemovedDefinitions()) {
       sink.removeDiagnostics(def.getProbeId());
+    }
+  }
+
+  private void reportError(ConfigurationComparer changes, String errorMsg) {
+    for (ProbeDefinition def : changes.getAddedDefinitions()) {
+      if (def instanceof ExceptionProbe) {
+        // do not report received for exception probes
+        continue;
+      }
+      sink.addError(def.getProbeId(), errorMsg);
     }
   }
 
@@ -225,6 +292,28 @@ public class ConfigurationUpdater implements DebuggerContext.ProbeResolver, Conf
   }
 
   private void retransformClasses(List<Class<?>> classesToBeTransformed) {
+    int classCount = classesToBeTransformed.size();
+    if (classCount <= 10) {
+      retransformIndividualClasses(classesToBeTransformed);
+    } else if (classCount <= 1000) {
+      retransformClassesAtOnce(classesToBeTransformed);
+    } else {
+      throw new IllegalStateException("Too many classes to retransform: " + classCount);
+    }
+  }
+
+  private void retransformClassesAtOnce(List<Class<?>> classesToBeTransformed) {
+    LOGGER.debug("Re-transforming classes: {}", classesToBeTransformed);
+    try {
+      instrumentation.retransformClasses(classesToBeTransformed.toArray(new Class[0]));
+    } catch (Exception ex) {
+      ExceptionHelper.logException(LOGGER, ex, "Re-transform error:");
+    } catch (Throwable ex) {
+      ExceptionHelper.logException(LOGGER, ex, "Re-transform throwable:");
+    }
+  }
+
+  private void retransformIndividualClasses(List<Class<?>> classesToBeTransformed) {
     for (Class<?> clazz : classesToBeTransformed) {
       try {
         LOGGER.debug("Re-transforming class: {}", clazz.getTypeName());
@@ -260,30 +349,13 @@ public class ConfigurationUpdater implements DebuggerContext.ProbeResolver, Conf
     for (ProbeDefinition added : changes.getAddedDefinitions()) {
       if (added instanceof Sampled) {
         Sampled probe = (Sampled) added;
-        Sampling sampling = probe.getSampling();
-        double rate = getDefaultRateLimitPerProbe(probe);
-        if (sampling != null && sampling.getEventsPerSecond() != 0) {
-          rate = sampling.getEventsPerSecond();
-        }
-        ProbeRateLimiter.setRate(probe.getId(), rate, probe.isCaptureSnapshot());
-      }
-    }
-    // remove rate for all removed probes
-    for (ProbeDefinition removedDefinition : changes.getRemovedDefinitions()) {
-      if (removedDefinition instanceof LogProbe) {
-        ProbeRateLimiter.resetRate(removedDefinition.getId());
+        probe.initSamplers();
       }
     }
     // set global sampling
     if (globalSampling != null) {
       ProbeRateLimiter.setGlobalSnapshotRate(globalSampling.getSnapshotsPerSecond());
     }
-  }
-
-  private static double getDefaultRateLimitPerProbe(Sampled probe) {
-    return probe.isCaptureSnapshot()
-        ? ProbeRateLimiter.DEFAULT_SNAPSHOT_RATE
-        : ProbeRateLimiter.DEFAULT_LOG_RATE;
   }
 
   private void removeCurrentTransformer() {

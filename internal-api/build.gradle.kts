@@ -1,3 +1,4 @@
+import de.thetaphi.forbiddenapis.gradle.CheckForbiddenApis
 import groovy.lang.Closure
 
 plugins {
@@ -6,7 +7,6 @@ plugins {
 }
 
 apply(from = "$rootDir/gradle/java.gradle")
-apply(from = "$rootDir/gradle/tries.gradle")
 
 java {
   toolchain {
@@ -22,6 +22,11 @@ fun AbstractCompile.configureCompiler(javaVersionInteger: Int, compatibilityVers
   (project.extra["configureCompiler"] as Closure<*>).call(this, javaVersionInteger, compatibilityVersion, unsetReleaseFlagReason)
 }
 
+tasks.named<CheckForbiddenApis>("forbiddenApisMain") {
+  // sun.* are accessible in JDK8, but maybe not accessible when this task is running
+  failOnMissingClasses = false
+}
+
 val minimumBranchCoverage by extra(0.7)
 val minimumInstructionCoverage by extra(0.8)
 
@@ -31,11 +36,7 @@ val excludedClassesCoverage by extra(
     "datadog.trace.api.ClassloaderConfigurationOverrides.Lazy",
     // Interface
     "datadog.trace.api.EndpointTracker",
-    // Noop implementation
-    "datadog.trace.api.NoOpStatsDClient",
     "datadog.trace.api.Platform",
-    // Interface
-    "datadog.trace.api.StatsDClient",
     // Noop implementation
     "datadog.trace.api.TraceSegment.NoOp",
     "datadog.trace.api.WithGlobalTracer.1",
@@ -68,6 +69,7 @@ val excludedClassesCoverage by extra(
     "datadog.trace.api.datastreams.InboxItem",
     "datadog.trace.api.datastreams.NoopDataStreamsMonitoring",
     "datadog.trace.api.datastreams.NoopPathwayContext",
+    "datadog.trace.api.datastreams.SchemaRegistryUsage",
     "datadog.trace.api.datastreams.StatsPoint",
     // Debugger
     "datadog.trace.api.debugger.DebuggerConfigUpdate",
@@ -176,8 +178,6 @@ val excludedClassesCoverage by extra(
     "datadog.trace.util.AgentTaskScheduler.ShutdownHook",
     "datadog.trace.util.AgentThreadFactory",
     "datadog.trace.util.AgentThreadFactory.1",
-    "datadog.trace.util.ClassNameTrie.Builder",
-    "datadog.trace.util.ClassNameTrie.JavaGenerator",
     "datadog.trace.util.CollectionUtils",
     "datadog.trace.util.ComparableVersion",
     "datadog.trace.util.ComparableVersion.BigIntegerItem",
@@ -197,7 +197,6 @@ val excludedClassesCoverage by extra(
     "datadog.trace.api.cache.FixedSizeCache.IdentityHash",
     "datadog.trace.api.cache.FixedSizeWeakKeyCache",
     // Interface with default method
-    "datadog.trace.api.StatsDClientManager",
     "datadog.trace.api.iast.Taintable",
     "datadog.trace.api.Stateful",
     "datadog.trace.api.Stateful.1",
@@ -257,10 +256,6 @@ val excludedClassesInstructionCoverage by extra(
   )
 )
 
-tasks.compileTestJava {
-  dependsOn("generateTestClassNameTries")
-}
-
 dependencies {
   // references TraceScope and Continuation from public api
   api(project(":dd-trace-api"))
@@ -268,7 +263,6 @@ dependencies {
   api(project(":components:context"))
   api(project(":components:environment"))
   api(project(":components:json"))
-  api(project(":components:yaml"))
   api(project(":utils:config-utils"))
   api(project(":utils:time-utils"))
 

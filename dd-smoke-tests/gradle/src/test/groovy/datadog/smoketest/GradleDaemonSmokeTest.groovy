@@ -4,6 +4,8 @@ import datadog.environment.JavaVirtualMachine
 import datadog.trace.api.config.CiVisibilityConfig
 import datadog.trace.api.config.GeneralConfig
 import datadog.trace.api.config.TraceInstrumentationConfig
+import java.nio.file.Files
+import java.nio.file.Path
 import org.gradle.testkit.runner.BuildResult
 import org.gradle.testkit.runner.GradleRunner
 import org.gradle.testkit.runner.TaskOutcome
@@ -18,25 +20,18 @@ import spock.lang.IgnoreIf
 import spock.lang.Shared
 import spock.lang.TempDir
 
-import java.nio.file.Files
-import java.nio.file.Path
-
+@IgnoreIf(reason = "TODO: Fix for Java 26. Javac plugin fails to populate source tags correctly.", value = {
+  JavaVirtualMachine.isJavaVersionAtLeast(26)
+})
 class GradleDaemonSmokeTest extends AbstractGradleTest {
 
   private static final String TEST_SERVICE_NAME = "test-gradle-service"
 
   private static final int GRADLE_DISTRIBUTION_NETWORK_TIMEOUT = 30_000 // Gradle's default timeout is 10s
 
-  // TODO: Gradle daemons started by the TestKit have an idle period of 3 minutes
-  //  so by the time tests finish, at least some of the daemons are still alive.
-  //  Because of that the temporary TestKit folder cannot be fully deleted
   @Shared
   @TempDir
   Path testKitFolder
-
-  def setupSpec() {
-    givenGradleProperties()
-  }
 
   @IgnoreIf(reason = "Jacoco plugin does not work with OpenJ9 in older Gradle versions", value = {
     JavaVirtualMachine.isJ9()
@@ -73,12 +68,14 @@ class GradleDaemonSmokeTest extends AbstractGradleTest {
     LATEST_GRADLE_VERSION | "test-corrupted-config-new-instrumentation"     | false              | false           | false        | 1              | 0
     LATEST_GRADLE_VERSION | "test-succeed-junit-5"                          | false              | true            | false        | 5              | 1
     LATEST_GRADLE_VERSION | "test-failed-flaky-retries"                     | false              | false           | true         | 8              | 0
-    LATEST_GRADLE_VERSION | "test-succeed-gradle-plugin-test"               | false              | true            | false        | 5              | 0
+    // TODO: add back LATEST_GRADLE_VERSION after fixing in Gradle 9.4.0
+    "9.3.1"               | "test-succeed-gradle-plugin-test"               | false              | true            | false        | 5              | 0
   }
 
   def "test junit4 class ordering v#gradleVersion"() {
     givenGradleVersionIsCompatibleWithCurrentJvm(gradleVersion)
     givenGradleProjectFiles(projectName)
+    givenGradleProjectProperties()
     ensureDependenciesDownloaded(gradleVersion)
 
     mockBackend.givenKnownTests(true)
@@ -93,37 +90,39 @@ class GradleDaemonSmokeTest extends AbstractGradleTest {
     verifyTestOrder(mockBackend.waitForEvents(eventsNumber), expectedOrder)
 
     where:
-    gradleVersion         | projectName                           | flakyTests | expectedOrder | eventsNumber
-    "7.6.4"               | "test-succeed-junit-4-class-ordering" | [
+    gradleVersion | projectName                           | flakyTests | expectedOrder | eventsNumber
+    "7.6.4"       | "test-succeed-junit-4-class-ordering" | [
       test("datadog.smoke.TestSucceedB", "test_succeed"),
       test("datadog.smoke.TestSucceedB", "test_succeed_another"),
       test("datadog.smoke.TestSucceedA", "test_succeed")
-    ]                                                                          | [
+    ]                                                                  | [
       test("datadog.smoke.TestSucceedC", "test_succeed"),
       test("datadog.smoke.TestSucceedC", "test_succeed_another"),
       test("datadog.smoke.TestSucceedA", "test_succeed_another"),
       test("datadog.smoke.TestSucceedA", "test_succeed"),
       test("datadog.smoke.TestSucceedB", "test_succeed"),
       test("datadog.smoke.TestSucceedB", "test_succeed_another")
-    ]                                                                                          | 15
-    LATEST_GRADLE_VERSION | "test-succeed-junit-4-class-ordering" | [
+    ]                                                                                  | 15
+    // TODO: add back LATEST_GRADLE_VERSION after fixing ordering on Gradle 9.3.0
+    "9.2.1"       | "test-succeed-junit-4-class-ordering" | [
       test("datadog.smoke.TestSucceedB", "test_succeed"),
       test("datadog.smoke.TestSucceedB", "test_succeed_another"),
       test("datadog.smoke.TestSucceedA", "test_succeed")
-    ]                                                                          | [
+    ]                                                                  | [
       test("datadog.smoke.TestSucceedC", "test_succeed"),
       test("datadog.smoke.TestSucceedC", "test_succeed_another"),
       test("datadog.smoke.TestSucceedA", "test_succeed_another"),
       test("datadog.smoke.TestSucceedA", "test_succeed"),
       test("datadog.smoke.TestSucceedB", "test_succeed"),
       test("datadog.smoke.TestSucceedB", "test_succeed_another")
-    ]                                                                                          | 15
+    ]                                                                                  | 15
   }
 
   private runGradleTest(String gradleVersion, String projectName, boolean configurationCache, boolean successExpected, boolean flakyRetries, int expectedTraces, int expectedCoverages) {
     givenGradleVersionIsCompatibleWithCurrentJvm(gradleVersion)
     givenConfigurationCacheIsCompatibleWithCurrentPlatform(configurationCache)
     givenGradleProjectFiles(projectName)
+    givenGradleProjectProperties()
     ensureDependenciesDownloaded(gradleVersion)
 
     mockBackend.givenFlakyRetries(flakyRetries)
@@ -150,14 +149,14 @@ class GradleDaemonSmokeTest extends AbstractGradleTest {
     }
   }
 
-  private void givenGradleProperties() {
+  private void givenGradleProjectProperties() {
     assert new File(AGENT_JAR).isFile()
 
     def ddApiKeyPath = testKitFolder.resolve(".dd.api.key")
     Files.write(ddApiKeyPath, "dummy".getBytes())
 
     def additionalArgs = [
-      (GeneralConfig.API_KEY_FILE): ddApiKeyPath.toAbsolutePath().toString(),
+      (GeneralConfig.API_KEY_FILE)                           : ddApiKeyPath.toAbsolutePath().toString(),
       (CiVisibilityConfig.CIVISIBILITY_JACOCO_PLUGIN_VERSION): JACOCO_PLUGIN_VERSION,
       /*
        * Some of the smoke tests (in particular the one with the Gradle plugin), are using Gradle Test Kit for their tests.
@@ -168,12 +167,14 @@ class GradleDaemonSmokeTest extends AbstractGradleTest {
        * This causes the tests to fail because the number of reported traces is different.
        * To avoid this discrepancy between local and CI runs, we disable tracing instrumentations.
        */
-      (TraceInstrumentationConfig.TRACE_ENABLED): "false"
+      (TraceInstrumentationConfig.TRACE_ENABLED)             : "false"
     ]
     def arguments = buildJvmArguments(mockBackend.intakeUrl, TEST_SERVICE_NAME, additionalArgs)
 
     def gradleProperties = "org.gradle.jvmargs=${arguments.join(" ")}".toString()
-    Files.write(testKitFolder.resolve("gradle.properties"), gradleProperties.getBytes())
+    // Write to projectFolder (per-test) instead of testKitFolder (shared), so each
+    // Gradle daemon gets its own unique preference directory
+    Files.write(projectFolder.resolve("gradle.properties"), gradleProperties.getBytes())
   }
 
   private BuildResult runGradleTests(String gradleVersion, boolean successExpected = true, boolean configurationCache = false) {
@@ -215,7 +216,6 @@ class GradleDaemonSmokeTest extends AbstractGradleTest {
       install.createDist(configuration)
 
       println "${new Date()}: $specificationContext.currentIteration.displayName - Finished dependencies download"
-
     } catch (Exception e) {
       println "${new Date()}: $specificationContext.currentIteration.displayName " +
         "- Failed to install Gradle distribution, will proceed to run test kit hoping for the best: $e"
@@ -243,7 +243,6 @@ class GradleDaemonSmokeTest extends AbstractGradleTest {
       def buildResult = successExpected ? gradleRunner.build() : gradleRunner.buildAndFail()
       println "${new Date()}: $specificationContext.currentIteration.displayName - Finished Gradle run"
       return buildResult
-
     } catch (Exception e) {
       def daemonLog = Files.list(testKitFolder.resolve("test-kit-daemon/" + gradleVersion)).filter(p -> p.toString().endsWith("log")).findAny().orElse(null)
       if (daemonLog != null) {

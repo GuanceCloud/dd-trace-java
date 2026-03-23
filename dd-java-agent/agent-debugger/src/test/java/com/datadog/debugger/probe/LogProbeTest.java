@@ -30,7 +30,7 @@ import datadog.trace.bootstrap.instrumentation.api.AgentTracer.TracerAPI;
 import datadog.trace.bootstrap.instrumentation.api.Tags;
 import datadog.trace.core.CoreTracer;
 import java.util.stream.Stream;
-import org.jetbrains.annotations.NotNull;
+import javax.annotation.Nonnull;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -109,7 +109,7 @@ public class LogProbeTest {
     }
   }
 
-  @NotNull
+  @Nonnull
   private Result getResult(
       TracerAPI tracer, String sessionId, boolean captureSnapshot, Integer line) {
     BudgetSink sink = new BudgetSink(getConfig(), mock(ProbeStatusSink.class));
@@ -143,7 +143,7 @@ public class LogProbeTest {
         builder.tags("session_id:" + sessionId);
       }
       LogProbe logProbe = builder.build();
-      ProbeRateLimiter.setRate(logProbe.id, -1, captureSnapshot);
+      logProbe.initSamplers();
 
       CapturedContext entryContext = capturedContext(span, logProbe);
       CapturedContext exitContext = capturedContext(span, logProbe);

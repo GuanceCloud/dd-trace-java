@@ -31,12 +31,10 @@ abstract class MuzzleTask @Inject constructor(
   objects: ObjectFactory,
   providers: ProviderFactory,
 ) : AbstractMuzzleTask() {
-  override fun getDescription(): String {
-    return if (muzzleDirective.isPresent) {
-      "Run instrumentation muzzle on ${muzzleDirective.get().name} dependency"
-    } else {
-      "Run instrumentation muzzle on compile time dependencies"
-    }
+  override fun getDescription(): String = if (muzzleDirective.isPresent) {
+    "Run instrumentation muzzle on ${muzzleDirective.get().name} dependency"
+  } else {
+    "Run instrumentation muzzle on compile time dependencies"
   }
 
   @get:Inject
@@ -68,22 +66,24 @@ abstract class MuzzleTask @Inject constructor(
   @get:Optional
   val muzzleDirective: Property<MuzzleDirective> = objects.property()
 
-  // This output is only used to make the task cacheable, this is not exposed
   @get:OutputFile
-  @get:Optional
-  protected val result: RegularFileProperty = objects.fileProperty().convention(
-    project.layout.buildDirectory.file("reports/${name}.txt")
+  val result: RegularFileProperty = objects.fileProperty().convention(
+    project.layout.buildDirectory.file("reports/$name.txt")
   )
 
   @TaskAction
   fun muzzle() {
     when {
+        // Version-specific task: created by MuzzlePlugin for each resolved artifact.
+        muzzleDirective.isPresent -> {
+          assertMuzzle(muzzleDirective.get())
+        }
+        // Fallback for the root "muzzle" lifecycle task when no pass{} directives are
+        // declared. In that case there are no version-specific pass tasks, so we assert
+        // the instrumentation against its own compile-time classpath as a basic sanity check.
         !project.extensions.getByType<MuzzleExtension>().directives.any { it.assertPass } -> {
           project.logger.info("No muzzle pass directives configured. Asserting pass against instrumentation compile-time dependencies")
           assertMuzzle()
-        }
-        muzzleDirective.isPresent -> {
-          assertMuzzle(muzzleDirective.get())
         }
     }
   }
@@ -98,6 +98,10 @@ abstract class MuzzleTask @Inject constructor(
       // See https://github.com/gradle/gradle/issues/33987
       workerExecutor.processIsolation {
         forkOptions {
+          // datadog.trace.agent.tooling.muzzle.MuzzleVersionScanPlugin needs reflective access to ClassLoader.findLoadedClass
+          if(javaLauncher.metadata.languageVersion > JavaLanguageVersion.of(9)) {
+            jvmArgs("--add-opens=java.base/java.lang=ALL-UNNAMED")
+          }
           executable(javaLauncher.executablePath)
         }
       }

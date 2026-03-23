@@ -1,6 +1,7 @@
 package datadog.trace.bootstrap.instrumentation.decorator;
 
 import static datadog.trace.api.gateway.Events.EVENTS;
+import static datadog.trace.bootstrap.instrumentation.api.ServiceNameSources.DB_CLIENT_SPLIT_BY_HOST;
 import static datadog.trace.bootstrap.instrumentation.api.Tags.DB_TYPE;
 
 import datadog.appsec.api.blocking.BlockingException;
@@ -76,7 +77,7 @@ public abstract class DatabaseClientDecorator<CONNECTION> extends ClientDecorato
         span.setTag(Tags.PEER_HOSTNAME, hostName);
 
         if (Config.get().isDbClientSplitByHost()) {
-          span.setServiceName(hostName.toString());
+          span.setServiceName(hostName.toString(), DB_CLIENT_SPLIT_BY_HOST);
         }
       }
     }
@@ -88,7 +89,7 @@ public abstract class DatabaseClientDecorator<CONNECTION> extends ClientDecorato
       span.setTag(Tags.DB_INSTANCE, dbInstance);
       String serviceName = dbClientService(dbInstance);
       if (null != serviceName) {
-        span.setServiceName(serviceName);
+        span.setServiceName(serviceName, component());
       }
     }
     return span;
@@ -137,11 +138,7 @@ public abstract class DatabaseClientDecorator<CONNECTION> extends ClientDecorato
             BlockResponseFunction brf = ctx.getBlockResponseFunction();
             if (brf != null) {
               Flow.Action.RequestBlockingAction rba = (Flow.Action.RequestBlockingAction) action;
-              brf.tryCommitBlockingResponse(
-                  ctx.getTraceSegment(),
-                  rba.getStatusCode(),
-                  rba.getBlockingContentType(),
-                  rba.getExtraHeaders());
+              brf.tryCommitBlockingResponse(ctx.getTraceSegment(), rba);
             }
             throw new BlockingException("Blocked request (for SQL query)");
           }

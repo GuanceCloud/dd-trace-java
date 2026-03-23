@@ -4,8 +4,10 @@ import datadog.trace.api.ConfigDefaults;
 import datadog.trace.api.DDTraceId;
 import datadog.trace.api.EndpointCheckpointer;
 import datadog.trace.api.EndpointTracker;
+import datadog.trace.api.Pair;
 import datadog.trace.api.TraceConfig;
 import datadog.trace.api.datastreams.AgentDataStreamsMonitoring;
+import datadog.trace.api.datastreams.DataStreamsTransactionExtractor;
 import datadog.trace.api.datastreams.NoopDataStreamsMonitoring;
 import datadog.trace.api.experimental.DataStreamsCheckpointer;
 import datadog.trace.api.gateway.CallbackProvider;
@@ -17,7 +19,6 @@ import datadog.trace.api.internal.TraceSegment;
 import datadog.trace.api.sampling.SamplingRule;
 import datadog.trace.api.scopemanager.ScopeListener;
 import datadog.trace.context.TraceScope;
-import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +34,9 @@ public class AgentTracer {
     return startSpan(DEFAULT_INSTRUMENTATION_NAME, spanName);
   }
 
-  /** @see TracerAPI#startSpan(String, CharSequence) */
+  /**
+   * @see TracerAPI#startSpan(String, CharSequence)
+   */
   public static AgentSpan startSpan(final String instrumentationName, final CharSequence spanName) {
     return get().startSpan(instrumentationName, spanName);
   }
@@ -45,7 +48,9 @@ public class AgentTracer {
     return startSpan(DEFAULT_INSTRUMENTATION_NAME, spanName, startTimeMicros);
   }
 
-  /** @see TracerAPI#startSpan(String, CharSequence, long) */
+  /**
+   * @see TracerAPI#startSpan(String, CharSequence, long)
+   */
   public static AgentSpan startSpan(
       final String instrumentationName, final CharSequence spanName, final long startTimeMicros) {
     return get().startSpan(instrumentationName, spanName, startTimeMicros);
@@ -58,7 +63,9 @@ public class AgentTracer {
     return startSpan(DEFAULT_INSTRUMENTATION_NAME, spanName, parent);
   }
 
-  /** @see TracerAPI#startSpan(String, CharSequence, AgentSpanContext) */
+  /**
+   * @see TracerAPI#startSpan(String, CharSequence, AgentSpanContext)
+   */
   public static AgentSpan startSpan(
       final String instrumentationName,
       final CharSequence spanName,
@@ -74,7 +81,9 @@ public class AgentTracer {
     return startSpan(DEFAULT_INSTRUMENTATION_NAME, spanName, parent, startTimeMicros);
   }
 
-  /** @see TracerAPI#startSpan(String, CharSequence, AgentSpanContext, long) */
+  /**
+   * @see TracerAPI#startSpan(String, CharSequence, AgentSpanContext, long)
+   */
   public static AgentSpan startSpan(
       final String instrumentationName,
       final CharSequence spanName,
@@ -373,6 +382,11 @@ public class AgentTracer {
       return buildSpan(DEFAULT_INSTRUMENTATION_NAME, spanName);
     }
 
+    @Deprecated
+    default SpanBuilder singleSpanBuilder(CharSequence spanName) {
+      return singleSpanBuilder(DEFAULT_INSTRUMENTATION_NAME, spanName);
+    }
+
     /**
      * Returns a SpanBuilder that can be used to produce multiple spans. To minimize overhead, use
      * of {@link #singleSpanBuilder(String, CharSequence)} is preferred when only a single span is
@@ -401,9 +415,9 @@ public class AgentTracer {
 
     CallbackProvider getUniversalCallbackProvider();
 
-    AgentSpanContext notifyExtensionStart(Object event);
+    AgentSpanContext notifyExtensionStart(Object event, String lambdaRequestId);
 
-    void notifyExtensionEnd(AgentSpan span, Object result, boolean isError);
+    void notifyExtensionEnd(AgentSpan span, Object result, boolean isError, String lambdaRequestId);
 
     AgentDataStreamsMonitoring getDataStreamsMonitoring();
 
@@ -415,14 +429,13 @@ public class AgentTracer {
 
     ProfilingContextIntegration getProfilingContext();
 
-    AgentHistogram newHistogram(double relativeAccuracy, int maxNumBins);
-
     /**
      * Sets the new service name to be used as a default.
      *
      * @param serviceName The service name to use as default.
+     * @param source the source which is setting it.
      */
-    void updatePreferredServiceName(String serviceName);
+    void updatePreferredServiceName(String serviceName, CharSequence source);
 
     void addShutdownListener(Runnable listener);
   }
@@ -648,12 +661,13 @@ public class AgentTracer {
     }
 
     @Override
-    public AgentSpanContext notifyExtensionStart(Object event) {
+    public AgentSpanContext notifyExtensionStart(Object event, String lambdaRequestId) {
       return null;
     }
 
     @Override
-    public void notifyExtensionEnd(AgentSpan span, Object result, boolean isError) {}
+    public void notifyExtensionEnd(
+        AgentSpan span, Object result, boolean isError, String lambdaRequestId) {}
 
     @Override
     public AgentDataStreamsMonitoring getDataStreamsMonitoring() {
@@ -666,12 +680,7 @@ public class AgentTracer {
     }
 
     @Override
-    public AgentHistogram newHistogram(double relativeAccuracy, int maxNumBins) {
-      return NoopAgentHistogram.INSTANCE;
-    }
-
-    @Override
-    public void updatePreferredServiceName(String serviceName) {
+    public void updatePreferredServiceName(String serviceName, CharSequence preferredServiceName) {
       // no ops
     }
   }
@@ -684,49 +693,6 @@ public class AgentTracer {
 
     @Override
     public void removeContinuation(final AgentScope.Continuation continuation) {}
-  }
-
-  public static class NoopAgentHistogram implements AgentHistogram {
-    public static final NoopAgentHistogram INSTANCE = new NoopAgentHistogram();
-
-    @Override
-    public double getCount() {
-      return 0;
-    }
-
-    @Override
-    public boolean isEmpty() {
-      return true;
-    }
-
-    @Override
-    public void accept(double value) {}
-
-    @Override
-    public void accept(double value, double count) {}
-
-    @Override
-    public double getValueAtQuantile(double quantile) {
-      return 0;
-    }
-
-    @Override
-    public double getMinValue() {
-      return 0;
-    }
-
-    @Override
-    public double getMaxValue() {
-      return 0;
-    }
-
-    @Override
-    public void clear() {}
-
-    @Override
-    public ByteBuffer serialize() {
-      return null;
-    }
   }
 
   /** TraceConfig when there is no tracer; this is not the same as a default config. */
@@ -784,7 +750,7 @@ public class AgentTracer {
     }
 
     @Override
-    public String getPreferredServiceName() {
+    public Pair<String, CharSequence> getPreferredServiceNameAndSource() {
       return null;
     }
 
@@ -796,6 +762,11 @@ public class AgentTracer {
     @Override
     public List<? extends SamplingRule.TraceSamplingRule> getTraceSamplingRules() {
       return Collections.emptyList();
+    }
+
+    @Override
+    public List<DataStreamsTransactionExtractor> getDataStreamsTransactionExtractors() {
+      return null;
     }
   }
 }

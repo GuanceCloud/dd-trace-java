@@ -17,6 +17,7 @@ import datadog.trace.api.DDTraceId;
 import datadog.trace.api.TraceConfig;
 import datadog.trace.api.TracePropagationStyle;
 import datadog.trace.api.internal.util.LongStringUtils;
+import datadog.trace.api.propagation.W3CTraceParent;
 import datadog.trace.api.sampling.PrioritySampling;
 import datadog.trace.api.sampling.SamplingMechanism;
 import datadog.trace.bootstrap.instrumentation.api.TagContext;
@@ -70,13 +71,10 @@ class W3CHttpCodec {
     }
 
     private <C> void injectTraceParent(DDSpanContext context, C carrier, CarrierSetter<C> setter) {
-      StringBuilder sb = new StringBuilder(TRACE_PARENT_LENGTH);
-      sb.append("00-");
-      sb.append(context.getTraceId().toHexString());
-      sb.append('-');
-      sb.append(DDSpanId.toHexStringPadded(context.getSpanId()));
-      sb.append(context.getSamplingPriority() > 0 ? "-01" : "-00");
-      setter.set(carrier, TRACE_PARENT_KEY, sb.toString());
+      String traceparent =
+          W3CTraceParent.from(
+              context.getTraceId(), context.getSpanId(), context.getSamplingPriority() > 0);
+      setter.set(carrier, TRACE_PARENT_KEY, traceparent);
     }
 
     private <C> void injectTraceState(DDSpanContext context, C carrier, CarrierSetter<C> setter) {
@@ -179,7 +177,6 @@ class W3CHttpCodec {
           break;
         default:
       }
-
       if (classification != IGNORE) {
         try {
           if (null != value) {
@@ -288,7 +285,7 @@ class W3CHttpCodec {
       long version = LongStringUtils.parseUnsignedLongHex(tp, 0, 2, true);
       if (version == 255) {
         throw new IllegalStateException("Illegal version number " + tp.substring(0, 2));
-      } else if (version == 0 && length > TRACE_PARENT_LENGTH) {
+      } else if (version == 1 && length > TRACE_PARENT_LENGTH) {
         throw new IllegalStateException("The length of traceparent '" + tp + "' is too long");
       }
       DDTraceId traceId = DD128bTraceId.fromHex(tp, TRACE_PARENT_TID_START, 32, true);

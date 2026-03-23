@@ -23,9 +23,13 @@ class TracerVersionPlugin @Inject constructor(
     val extension = targetProject.extensions.getByType(TracerVersionExtension::class.java)
 
     extension.detectDirty.set(
-       providerFactory.gradleProperty("tracerVersion.dirtiness")
-         .map { it.trim().toBoolean() }
-         .orElse(false)
+      providerFactory.gradleProperty("tracerVersion.dirtiness")
+        .map { it.trim().toBoolean() }
+        .orElse(false)
+    )
+
+    extension.versionQualifier.set(
+      providerFactory.gradleProperty("tracerVersion.qualifier")
     )
 
     val versionProvider = versionProvider(targetProject, extension)
@@ -54,6 +58,7 @@ class TracerVersionPlugin @Inject constructor(
               logger.info("Incrementing patch because release branch : $currentBranch")
               nextPatchVersion()
             }
+
             else -> {
               logger.info("Incrementing minor")
               nextMinorVersion()
@@ -104,7 +109,11 @@ class TracerVersionPlugin @Inject constructor(
     }
   }
 
-  private fun toTracerVersion(describeString: String, extension: TracerVersionExtension, nextVersion: Version.() -> Version): String {
+  private fun toTracerVersion(
+    describeString: String,
+    extension: TracerVersionExtension,
+    nextVersion: Version.() -> Version
+  ): String {
     logger.info("Git describe output: {}", describeString)
 
     val tagPrefix = extension.tagVersionPrefix.get()
@@ -114,16 +123,25 @@ class TracerVersionPlugin @Inject constructor(
 
     val (lastTagVersion, describeTrailer) = matchResult.destructured
     val hasLaterCommits = describeTrailer.isNotBlank()
-    val version = Version.parse(lastTagVersion).let {
-      if (hasLaterCommits) {
-        it.nextVersion()
-      } else {
-        it
+    val version = if (describeString.contains("-ext")) {
+      // 如果包含 -ext，直接返回完整的 describeString，或者根据需求截取
+      return describeString.replace(tagPrefix, "")
+    } else {
+      Version.parse(lastTagVersion).let {
+        if (hasLaterCommits) it.nextVersion() else it
       }
     }
 
     return buildString {
       append(version.toString())
+
+      // Add optional version qualifier (e.g., "-ddprof")
+      if (extension.versionQualifier.isPresent) {
+        val qualifier = extension.versionQualifier.get()
+        if (qualifier.isNotBlank()) {
+          append("-").append(qualifier)
+        }
+      }
 
       if (hasLaterCommits) {
         append(if (extension.useSnapshot.get()) "-SNAPSHOT" else describeTrailer)
@@ -143,5 +161,6 @@ class TracerVersionPlugin @Inject constructor(
     val useSnapshot = objectFactory.property(Boolean::class)
       .convention(true)
     val detectDirty = objectFactory.property(Boolean::class)
+    val versionQualifier = objectFactory.property(String::class)
   }
 }

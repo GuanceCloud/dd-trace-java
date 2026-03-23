@@ -3,10 +3,6 @@ plugins {
   id 'me.champeau.jmh'
 }
 
-ext {
-  latestDepJava11TestMinJavaVersionForTests = JavaVersion.VERSION_11
-}
-
 muzzle {
   pass {
     coreJdk()
@@ -16,7 +12,7 @@ muzzle {
 }
 
 apply from: "$rootDir/gradle/java.gradle"
-apply plugin: 'call-site-instrumentation'
+apply plugin: 'dd-trace-java.call-site-instrumentation'
 
 addTestSuiteForDir('oldH2Test', 'test')
 addTestSuiteForDir('oldPostgresTest', 'test')
@@ -47,9 +43,9 @@ dependencies {
   testImplementation group: 'org.testcontainers', name:'mysql', version: libs.versions.testcontainers.get()
   testImplementation group: 'org.testcontainers', name:'postgresql', version: libs.versions.testcontainers.get()
   testImplementation group: 'org.testcontainers', name:'mssqlserver', version: libs.versions.testcontainers.get()
-  testImplementation group: 'org.testcontainers', name:'oracle-xe', version: '1.20.4'
+  testImplementation group: 'org.testcontainers', name:'oracle-xe', version: libs.versions.testcontainers.get()
 
-  testRuntimeOnly project(':dd-java-agent:instrumentation:iast-instrumenter')
+  testRuntimeOnly project(':dd-java-agent:instrumentation:datadog:asm:iast-instrumenter')
 
   // Test pre jdk 1.6 H2
   oldH2TestImplementation(group: 'com.h2database', name: 'h2') {
@@ -98,4 +94,10 @@ tasks.withType(GroovyCompile).configureEach {
 
 tasks.withType(Test).configureEach {
   usesService(testcontainersLimit)
+}
+
+tasks.named("latestDepJava11Test", Test) {
+  testJvmConstraints {
+    minJavaVersion = JavaVersion.VERSION_11
+  }
 }

@@ -58,6 +58,7 @@ import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -358,7 +359,7 @@ public class GatewayBridge {
         new MapDataBundle.Builder(CAPACITY_3_4)
             .add(KnownAddresses.IO_NET_URL, request.getUrl())
             .add(KnownAddresses.IO_NET_REQUEST_METHOD, request.getMethod())
-            .add(KnownAddresses.IO_NET_REQUEST_HEADERS, request.getHeaders());
+            .add(KnownAddresses.IO_NET_REQUEST_HEADERS, toLowerCaseHeaders(request.getHeaders()));
 
     if (downstreamSampler().isSampled(ctx, request.getRequestId())) {
       final Object body = parseHttpClientBody(ctx, request);
@@ -398,7 +399,7 @@ public class GatewayBridge {
     final MapDataBundle.Builder bundleBuilder =
         new MapDataBundle.Builder(CAPACITY_3_4)
             .add(KnownAddresses.IO_NET_RESPONSE_STATUS, Integer.toString(response.getStatus()))
-            .add(KnownAddresses.IO_NET_RESPONSE_HEADERS, response.getHeaders());
+            .add(KnownAddresses.IO_NET_RESPONSE_HEADERS, toLowerCaseHeaders(response.getHeaders()));
     // ignore the response if not sampled
     if (downstreamSampler().isSampled(ctx, response.getRequestId())) {
       final Object body = parseHttpClientBody(ctx, response);
@@ -427,6 +428,19 @@ public class GatewayBridge {
         httpClientResponseSubInfo = null;
       }
     }
+  }
+
+  private Map<String, List<String>> toLowerCaseHeaders(final Map<String, List<String>> headers) {
+    if (headers == null || headers.isEmpty()) {
+      return headers;
+    }
+    final Map<String, List<String>> result = new HashMap<>(headers.size());
+    for (final Map.Entry<String, List<String>> entry : headers.entrySet()) {
+      final String key = entry.getKey();
+      final List<String> value = entry.getValue();
+      result.put(key == null ? null : key.toLowerCase(Locale.ROOT), value);
+    }
+    return result;
   }
 
   private Object parseHttpClientBody(
@@ -906,10 +920,14 @@ public class GatewayBridge {
         // Report all collected request headers on user tracking event
         writeRequestHeaders(
             ctx, traceSeg, REQUEST_HEADERS_ALLOW_LIST, ctx.getRequestHeaders(), false);
+        writeResponseHeaders(
+            ctx, traceSeg, RESPONSE_HEADERS_ALLOW_LIST, ctx.getResponseHeaders(), false);
       } else {
         // Report minimum set of collected request headers
         writeRequestHeaders(
             ctx, traceSeg, DEFAULT_REQUEST_HEADERS_ALLOW_LIST, ctx.getRequestHeaders(), false);
+        writeResponseHeaders(
+            ctx, traceSeg, RESPONSE_HEADERS_ALLOW_LIST, ctx.getResponseHeaders(), false);
       }
       // If extracted any derivatives - commit them
       if (!ctx.commitDerivatives(traceSeg)) {
@@ -935,10 +953,15 @@ public class GatewayBridge {
   private boolean maybeSampleForApiSecurity(
       AppSecRequestContext ctx, IGSpanInfo spanInfo, Map<String, Object> tags) {
     log.debug("Checking API Security for end of request handler on span: {}", spanInfo.getSpanId());
-    // API Security sampling requires http.route tag.
+    // API Security sampling requires http.route tag or http.url for endpoint inference.
     final Object route = tags.get(Tags.HTTP_ROUTE);
     if (route != null) {
       ctx.setRoute(route.toString());
+    }
+    // Pass http.url to enable endpoint inference when route is absent
+    final Object url = tags.get(Tags.HTTP_URL);
+    if (url != null) {
+      ctx.setHttpUrl(url.toString());
     }
     ApiSecuritySampler requestSampler = requestSamplerSupplier.get();
     return requestSampler.preSampleRequest(ctx);
@@ -966,21 +989,28 @@ public class GatewayBridge {
     }
     ctx.setMethod(method);
     ctx.setScheme(uri.scheme());
-    if (uri.supportsRaw()) {
-      ctx.setRawURI(uri.raw());
-    } else {
-      try {
-        URI encodedUri = new URI(null, null, uri.path(), uri.query(), null);
-        String q = encodedUri.getRawQuery();
-        StringBuilder encoded = new StringBuilder();
-        encoded.append(encodedUri.getRawPath());
-        if (null != q && !q.isEmpty()) {
-          encoded.append('?').append(q);
+    if (ctx.getSavedRawURI() == null) {
+      if (uri.supportsRaw()) {
+        ctx.setRawURI(uri.raw());
+      } else {
+        try {
+          URI encodedUri = new URI(null, null, uri.path(), uri.query(), null);
+          String q = encodedUri.getRawQuery();
+          StringBuilder encoded = new StringBuilder();
+          encoded.append(encodedUri.getRawPath());
+          if (null != q && !q.isEmpty()) {
+            encoded.append('?').append(q);
+          }
+          ctx.setRawURI(encoded.toString());
+        } catch (URISyntaxException e) {
+          log.debug("Failed to encode URI '{}{}'", uri.path(), uri.query());
         }
-        ctx.setRawURI(encoded.toString());
-      } catch (URISyntaxException e) {
-        log.debug("Failed to encode URI '{}{}'", uri.path(), uri.query());
       }
+    } else {
+      log.debug(
+          SEND_TELEMETRY,
+          "Raw URI already set to '{}'; ignoring new URI callback",
+          ctx.getSavedRawURI());
     }
     return maybePublishRequestData(ctx);
   }

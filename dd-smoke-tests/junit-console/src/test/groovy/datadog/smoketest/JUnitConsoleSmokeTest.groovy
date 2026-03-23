@@ -2,6 +2,7 @@ package datadog.smoketest
 
 
 import datadog.trace.api.config.CiVisibilityConfig
+import datadog.trace.api.config.DebuggerConfig
 import datadog.trace.api.config.GeneralConfig
 import datadog.trace.civisibility.CiVisibilitySmokeTest
 import java.nio.file.FileVisitResult
@@ -52,7 +53,8 @@ class JUnitConsoleSmokeTest extends CiVisibilitySmokeTest {
 
     def exitCode = whenRunningJUnitConsole([
       (CiVisibilityConfig.CIVISIBILITY_FLAKY_RETRY_COUNT): "3",
-      (GeneralConfig.AGENTLESS_LOG_SUBMISSION_URL): mockBackend.intakeUrl
+      (GeneralConfig.AGENTLESS_LOG_SUBMISSION_URL): mockBackend.intakeUrl,
+      (DebuggerConfig.DYNAMIC_INSTRUMENTATION_UPLOAD_FLUSH_INTERVAL): "999999" // avoid possible race conditions on shutdown
     ],
     [:])
     assert exitCode == 1
@@ -192,6 +194,7 @@ class JUnitConsoleSmokeTest extends CiVisibilitySmokeTest {
 
     List<String> command = new ArrayList<>()
     command.add(javaPath())
+    command.add("-Ddatadog.slf4j.simpleLogger.defaultLogLevel=DEBUG")
     command.addAll((String[]) ["-jar", JUNIT_CONSOLE_JAR_PATH])
     command.addAll(consoleCommand)
     command.addAll([
@@ -219,7 +222,7 @@ class JUnitConsoleSmokeTest extends CiVisibilitySmokeTest {
 
   String javaToolOptions(Map<String, String> additionalAgentArgs) {
     additionalAgentArgs.put(CiVisibilityConfig.CIVISIBILITY_BUILD_INSTRUMENTATION_ENABLED, "false")
-    return buildJvmArguments(mockBackend.intakeUrl, TEST_SERVICE_NAME, additionalAgentArgs).join("\\ ")
+    return buildJvmArguments(mockBackend.intakeUrl, TEST_SERVICE_NAME, additionalAgentArgs).join(" ")
   }
 
   private static class StreamConsumer extends Thread {

@@ -4,10 +4,14 @@ import java.util.Map;
 
 public interface MutableSpan {
 
-  /** @return Start time with nanosecond scale, but millisecond resolution. */
+  /**
+   * @return Start time with nanosecond scale, but millisecond resolution.
+   */
   long getStartTime();
 
-  /** @return Duration with nanosecond scale. */
+  /**
+   * @return Duration with nanosecond scale.
+   */
   long getDurationNano();
 
   CharSequence getOperationName();
@@ -55,13 +59,17 @@ public interface MutableSpan {
 
   MutableSpan setMetric(final CharSequence metric, final long value);
 
+  MutableSpan setMetric(final CharSequence metric, final float value);
+
   MutableSpan setMetric(final CharSequence metric, final double value);
 
   boolean isError();
 
   MutableSpan setError(boolean value);
 
-  /** @deprecated Use {@link #getLocalRootSpan()} instead. */
+  /**
+   * @deprecated Use {@link #getLocalRootSpan()} instead.
+   */
   @Deprecated
   MutableSpan getRootSpan();
 

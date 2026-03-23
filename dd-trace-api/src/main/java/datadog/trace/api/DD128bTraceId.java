@@ -18,15 +18,19 @@ import java.util.Locale;
 public class DD128bTraceId extends DDTraceId {
   public static final DD128bTraceId ZERO =
       new DD128bTraceId(0, 0, "00000000000000000000000000000000");
+
   /** Represents the high-order 64 bits of the 128-bit trace id. */
   private final long highOrderBits;
+
   /** Represents the low-order 64 bits of the 128-bit trace id. */
   private final long lowOrderBits;
+
   /**
    * The lower-case, zero-padded, 32 hexadecimal characters {@link String} representation of the
    * {@link DDTraceId} instance.
    */
   private String hexStr;
+
   /** The 64-bit only decimal {@link String} representation of the {@link DDTraceId} instance. */
   private String str;
 
@@ -166,12 +170,12 @@ public class DD128bTraceId extends DDTraceId {
 
   @Override
   public String toString() {
-    String s = this.str;
+    // String s = this.str;
     // This race condition is intentional and benign.
     // The worst that can happen is that an identical value is produced and written into the field.
-    if (s == null) {
-      this.str = s = Long.toUnsignedString(this.lowOrderBits);
-    }
-    return s;
+    // if (s == null) {
+    //   this.str = s = Long.toUnsignedString(this.lowOrderBits);
+    // }
+    return toHexString();
   }
 }

@@ -51,7 +51,14 @@ class GradleLauncherSmokeTest extends AbstractGradleTest {
   }
 
   private void givenGradleWrapper(String gradleVersion) {
-    def shellCommandExecutor = new ShellCommandExecutor(projectFolder.toFile(), GRADLE_BUILD_TIMEOUT_MILLIS, ["JAVA_HOME": JAVA_HOME])
+    def shellCommandExecutor = new ShellCommandExecutor(
+    projectFolder.toFile(),
+    GRADLE_BUILD_TIMEOUT_MILLIS,
+    [
+      "JAVA_HOME": JAVA_HOME,
+      "GRADLE_OPTS": "" // avoids inheriting CI's GRADLE_OPTS which might be incompatible with the tested JVM
+    ])
+
     for (int attempt = 0; attempt < GRADLE_WRAPPER_RETRIES; attempt++) {
       try {
         shellCommandExecutor.executeCommand(IOUtils::readFully, "./gradlew", "wrapper", "--gradle-version", gradleVersion)
@@ -72,13 +79,23 @@ class GradleLauncherSmokeTest extends AbstractGradleTest {
       "DD_CIVISIBILITY_AGENTLESS_ENABLED" : "true",
       "DD_CIVISIBILITY_AGENTLESS_URL"     : "${mockBackend.intakeUrl}".toString(),
       "DD_CIVISIBILITY_GIT_UPLOAD_ENABLED": "false",
+      "DD_CIVISIBILITY_GIT_CLIENT_ENABLED": "false",
+      "DD_CODE_ORIGIN_FOR_SPANS_ENABLED"  : "false",
       "DD_API_KEY"                        : "dummy"
     ])
     String[] command = ["./gradlew", "--no-daemon", "--info"]
     if (gradleDaemonCmdLineParams) {
       command += "-Dorg.gradle.jvmargs=$gradleDaemonCmdLineParams".toString()
     }
-    return shellCommandExecutor.executeCommand(IOUtils::readFully, command)
+
+    try {
+      return shellCommandExecutor.executeCommand(IOUtils::readFully, command)
+    } catch (Exception e) {
+      println "=============================================================="
+      println "${new Date()}: $specificationContext.currentIteration.displayName - Gradle Launcher execution failed with exception:\n ${e.message}"
+      println "=============================================================="
+      throw e
+    }
   }
 
   private static boolean gradleDaemonStartCommandContains(String buildOutput, String... tokens) {

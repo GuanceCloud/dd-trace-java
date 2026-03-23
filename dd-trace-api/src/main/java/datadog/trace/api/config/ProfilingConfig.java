@@ -33,6 +33,7 @@ public final class ProfilingConfig {
       "profiling.jfr-template-override-file";
   public static final String PROFILING_UPLOAD_TIMEOUT = "profiling.upload.timeout";
   public static final int PROFILING_UPLOAD_TIMEOUT_DEFAULT = 30;
+
   /**
    * @deprecated Use {@link #PROFILING_DEBUG_UPLOAD_COMPRESSION} instead. This will be removed in a
    *     future release.
@@ -54,8 +55,7 @@ public final class ProfilingConfig {
   public static final String PROFILING_BACKPRESSURE_SAMPLING_ENABLED =
       "profiling.backpressure.sampling.enabled";
   public static final boolean PROFILING_BACKPRESSURE_SAMPLING_ENABLED_DEFAULT = false;
-  public static final String PROFILING_BACKPRESSURE_SAMPLE_LIMIT =
-      "profiling.backpressure.sample.limit";
+
   public static final int PROFILING_BACKPRESSURE_SAMPLE_LIMIT_DEFAULT = 10_000;
 
   public static final String PROFILING_DIRECT_ALLOCATION_SAMPLE_LIMIT =
@@ -201,22 +201,27 @@ public final class ProfilingConfig {
 
   public static final String PROFILING_DEBUG_DUMP_PATH = "profiling.debug.dump_path";
   public static final String PROFILING_DEBUG_JFR_DISABLED = "profiling.debug.jfr.disabled";
+
   // spotless:off
   /**
-   * Configuration for profile upload compression.<br><br> Supported values are:
+   * Configuration for profile upload compression.<br>
+   * <br>
+   * Supported values are:
+   *
    * <ul>
-   * <li><b>on</b>: equivalent to <b>zstd</b></li>
-   * <li><b>off</b>: disables compression</li>
-   * <li><b>lz4</b>: uses LZ4 compression (fast with moderate compression ratio)</li>
-   * <li><b>gzip</b>: uses GZIP compression (higher compression ratio but slower)</li>
-   * <li><b>zstd</b>: uses ZSTD compression (high compression ratio with reasonable performance)</li>
+   *   <li><b>on</b>: equivalent to <b>zstd</b>
+   *   <li><b>off</b>: disables compression
+   *   <li><b>lz4</b>: uses LZ4 compression (fast with moderate compression ratio)
+   *   <li><b>gzip</b>: uses GZIP compression (higher compression ratio but slower)
+   *   <li><b>zstd</b>: uses ZSTD compression (high compression ratio with reasonable performance)
    * </ul>
    */
   // spotless:on
   public static final String PROFILING_DEBUG_UPLOAD_COMPRESSION =
       "profiling.debug.upload.compression";
 
-  public static final String PROFILING_DEBUG_UPLOAD_COMPRESSION_DEFAULT = "zstd";
+  // public static final String PROFILING_DEBUG_UPLOAD_COMPRESSION_DEFAULT = "zstd";
+  public static final String PROFILING_DEBUG_UPLOAD_COMPRESSION_DEFAULT = "lz4";
 
   public static final String PROFILING_CONTEXT_ATTRIBUTES = "profiling.context.attributes";
 
@@ -262,6 +267,14 @@ public final class ProfilingConfig {
 
   public static final String PROFILING_DETAILED_DEBUG_LOGGING = "profiling.detailed.debug.logging";
   public static final boolean PROFILING_DETAILED_DEBUG_LOGGING_DEFAULT = false;
+
+  public static final String PROFILING_SCRUB_ENABLED = "profiling.scrub.enabled";
+  public static final boolean PROFILING_SCRUB_ENABLED_DEFAULT = false;
+
+  public static final String PROFILING_SCRUB_FAIL_OPEN = "profiling.scrub.fail-open";
+  public static final boolean PROFILING_SCRUB_FAIL_OPEN_DEFAULT = false;
+
+  public static final String PROFILING_SCRUB_EXCLUDE_EVENTS = "profiling.scrub.exclude-events";
 
   private ProfilingConfig() {}
 }

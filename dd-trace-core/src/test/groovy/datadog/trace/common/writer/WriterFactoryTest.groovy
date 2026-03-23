@@ -172,7 +172,7 @@ class WriterFactoryTest extends DDSpecification {
     } else if (hasEvpProxy) {
       endpoints = [DDAgentFeaturesDiscovery.V2_EVP_PROXY_ENDPOINT]
     } else {
-      endpoints = [DDAgentFeaturesDiscovery.V4_ENDPOINT]
+      endpoints = [DDAgentFeaturesDiscovery.V04_ENDPOINT]
     }
 
     def response = [
@@ -181,20 +181,20 @@ class WriterFactoryTest extends DDSpecification {
     ]
 
     def builder = new Response.Builder()
-      .code(200)
-      .message("OK")
-      .protocol(Protocol.HTTP_1_1)
-      .request(new Request.Builder().url(agentUrl.resolve("/info")).build())
-      .body(ResponseBody.create(MediaType.parse("application/json"), new JsonBuilder(response).toString()))
+    .code(200)
+    .message("OK")
+    .protocol(Protocol.HTTP_1_1)
+    .request(new Request.Builder().url(agentUrl.resolve("/info")).build())
+    .body(ResponseBody.create(MediaType.parse("application/json"), new JsonBuilder(response).toString()))
     return builder.build()
   }
 
   Response buildHttpResponseNotOk(HttpUrl agentUrl) {
     def builder = new Response.Builder()
-      .code(500)
-      .message("ERROR")
-      .protocol(Protocol.HTTP_1_1)
-      .request(new Request.Builder().url(agentUrl.resolve("/info")).build())
+    .code(500)
+    .message("ERROR")
+    .protocol(Protocol.HTTP_1_1)
+    .request(new Request.Builder().url(agentUrl.resolve("/info")).build())
     return builder.build()
   }
 }

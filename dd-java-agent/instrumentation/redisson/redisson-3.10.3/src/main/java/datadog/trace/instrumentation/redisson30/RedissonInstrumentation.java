@@ -14,10 +14,11 @@ import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.api.AgentTracer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletionStage;
 import net.bytebuddy.asm.Advice;
-import org.redisson.api.RFuture;
+import org.redisson.api.RTransaction;
 import org.redisson.client.RedisConnection;
 import org.redisson.client.protocol.CommandData;
 import org.redisson.client.protocol.CommandsData;
@@ -75,6 +76,8 @@ public final class RedissonInstrumentation extends InstrumenterModule.Tracing
       RedissonClientDecorator.DECORATE.afterStart(span);
       RedissonClientDecorator.DECORATE.onPeerConnection(span, thiz.getRedisClient().getAddr());
       RedissonClientDecorator.DECORATE.onStatement(span, command.getCommand().getName());
+      RedissonClientDecorator.DECORATE.onArgs(span, command.getParams());
+
       promise.whenComplete(new SpanFinishListener(AgentTracer.captureSpan(span)));
       return activateSpan(span);
     }
@@ -86,9 +89,9 @@ public final class RedissonInstrumentation extends InstrumenterModule.Tracing
       }
     }
 
-    public static void muzzleCheck(final RFuture<?> future) {
+    public static void muzzleCheck(final RTransaction b) {
       // added on 3.10.3
-      future.onComplete(null);
+      b.getBuckets();
     }
   }
 

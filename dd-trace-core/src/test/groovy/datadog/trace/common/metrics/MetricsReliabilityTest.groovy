@@ -2,7 +2,7 @@ package datadog.trace.common.metrics
 
 import datadog.communication.ddagent.SharedCommunicationObjects
 import datadog.trace.api.Config
-import datadog.trace.api.StatsDClient
+import datadog.metrics.api.statsd.StatsDClient
 import datadog.trace.core.monitor.HealthMetrics
 import datadog.trace.core.monitor.TracerHealthMetrics
 import datadog.trace.core.test.DDCoreSpecification
@@ -35,7 +35,7 @@ class MetricsReliabilityTest extends DDCoreSpecification {
     httpServer {
       handlers {
         get("/info") {
-          final def res = '{"endpoints":[' + (state.agentMetricsAvailable ? '"/v0.6/stats", ' : '') + '"/v0.4/traces"], "client_drop_p0s" : true}'
+          final def res = '{"version":"7.65.0","endpoints":[' + (state.agentMetricsAvailable ? '"/v0.6/stats", ' : '') + '"/v0.4/traces"], "client_drop_p0s" : true}'
           state.hash = Strings.sha256(res)
           response.send(res)
           state.latch.countDown()

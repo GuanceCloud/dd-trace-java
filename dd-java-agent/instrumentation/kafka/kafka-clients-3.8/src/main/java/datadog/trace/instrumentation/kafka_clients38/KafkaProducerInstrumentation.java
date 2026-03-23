@@ -11,6 +11,7 @@ import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
 import com.google.auto.service.AutoService;
 import datadog.trace.agent.tooling.Instrumenter;
 import datadog.trace.agent.tooling.InstrumenterModule;
+import datadog.trace.api.Config;
 import java.util.Map;
 import net.bytebuddy.matcher.ElementMatcher;
 
@@ -28,6 +29,11 @@ public final class KafkaProducerInstrumentation extends InstrumenterModule.Traci
   }
 
   @Override
+  public boolean isEnabled() {
+    return super.isEnabled() && Config.get().isExperimentalKafkaEnabled();
+  }
+
+  @Override
   public String instrumentedType() {
     return "org.apache.kafka.clients.producer.KafkaProducer";
   }
@@ -38,9 +44,12 @@ public final class KafkaProducerInstrumentation extends InstrumenterModule.Traci
       packageName + ".KafkaDecorator",
       packageName + ".TextMapInjectAdapterInterface",
       packageName + ".TextMapInjectAdapter",
+      packageName + ".TextMapExtractAdapter",
       packageName + ".NoopTextMapInjectAdapter",
       packageName + ".KafkaProducerCallback",
       "datadog.trace.instrumentation.kafka_common.StreamingContext",
+      "datadog.trace.instrumentation.kafka_common.ClusterIdHolder",
+      "datadog.trace.instrumentation.kafka_common.Utils",
       packageName + ".AvroSchemaExtractor",
     };
   }

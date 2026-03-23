@@ -3,6 +3,7 @@ package datadog.trace.core;
 import static datadog.trace.api.DDTags.TRACE_START_TIME;
 import static datadog.trace.api.sampling.SamplingMechanism.DEFAULT;
 import static datadog.trace.bootstrap.instrumentation.api.InstrumentationTags.RECORD_END_TO_END_DURATION_MS;
+import static datadog.trace.bootstrap.instrumentation.api.ServiceNameSources.MANUAL;
 import static datadog.trace.bootstrap.instrumentation.api.Tags.HTTP_STATUS;
 import static java.util.concurrent.TimeUnit.MICROSECONDS;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
@@ -32,6 +33,7 @@ import datadog.trace.bootstrap.instrumentation.api.SpanWrapper;
 import datadog.trace.bootstrap.instrumentation.api.Tags;
 import datadog.trace.core.util.StackTraces;
 import edu.umd.cs.findbugs.annotations.NonNull;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -91,6 +93,9 @@ public class DDSpan implements AgentSpan, CoreSpan<DDSpan>, AttachableWrapper {
    */
   private volatile long durationNano;
 
+  @SuppressFBWarnings(
+      value = "AT_STALE_THREAD_WRITE_OF_PRIMITIVE",
+      justification = "This field is never accessed concurrently")
   private boolean forceKeep;
 
   private volatile EndpointTracker endpointTracker;
@@ -388,7 +393,7 @@ public class DDSpan implements AgentSpan, CoreSpan<DDSpan>, AttachableWrapper {
   public final DDSpan setTag(final String tag, final String value) {
     if (value == null || value.isEmpty()) {
       // Remove the tag
-      context.setTag(tag, null);
+      context.removeTag(tag);
     } else {
       context.setTag(tag, value);
     }
@@ -398,6 +403,12 @@ public class DDSpan implements AgentSpan, CoreSpan<DDSpan>, AttachableWrapper {
   @Override
   public final DDSpan setTag(final String tag, final boolean value) {
     context.setTag(tag, value);
+    return this;
+  }
+
+  @Override
+  public final DDSpan setTag(TagMap.EntryReader entry) {
+    context.setTag(entry);
     return this;
   }
 
@@ -424,6 +435,12 @@ public class DDSpan implements AgentSpan, CoreSpan<DDSpan>, AttachableWrapper {
 
   @Override
   public DDSpan setTag(final String tag, final long value) {
+    context.setTag(tag, value);
+    return this;
+  }
+
+  @Override
+  public DDSpan setTag(final String tag, final float value) {
     context.setTag(tag, value);
     return this;
   }
@@ -461,6 +478,12 @@ public class DDSpan implements AgentSpan, CoreSpan<DDSpan>, AttachableWrapper {
   @Override
   public DDSpan setMetric(final CharSequence metric, final double value) {
     context.setMetric(metric, value);
+    return this;
+  }
+
+  @Override
+  public DDSpan setMetric(TagMap.EntryReader entry) {
+    context.setMetric(entry);
     return this;
   }
 
@@ -506,6 +529,19 @@ public class DDSpan implements AgentSpan, CoreSpan<DDSpan>, AttachableWrapper {
   }
 
   @Override
+  @SuppressWarnings("unchecked")
+  public <U> U unsafeGetTag(CharSequence name, U defaultValue) {
+    Object tag = unsafeGetTag(name);
+    return null == tag ? defaultValue : (U) tag;
+  }
+
+  @Override
+  @SuppressWarnings("unchecked")
+  public <U> U unsafeGetTag(CharSequence name) {
+    return (U) context.unsafeGetTag(String.valueOf(name));
+  }
+
+  @Override
   @Nonnull
   public final DDSpanContext context() {
     return context;
@@ -546,8 +582,18 @@ public class DDSpan implements AgentSpan, CoreSpan<DDSpan>, AttachableWrapper {
 
   @Override
   public final DDSpan setServiceName(final String serviceName) {
-    context.setServiceName(serviceName);
+    setServiceName(serviceName, MANUAL);
     return this;
+  }
+
+  @Override
+  public void setServiceName(@Nonnull String serviceName, @Nonnull CharSequence source) {
+    context.setServiceName(serviceName, source);
+  }
+
+  @Override
+  public CharSequence getServiceNameSource() {
+    return context.getServiceNameSource();
   }
 
   @Override

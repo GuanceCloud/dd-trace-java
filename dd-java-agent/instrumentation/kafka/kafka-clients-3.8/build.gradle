@@ -1,18 +1,18 @@
-ext {
-  minJavaVersionForTests = JavaVersion.VERSION_17
-}
-
 muzzle {
   pass {
     group = "org.apache.kafka"
     module = "kafka-clients"
-    versions = "[3.8.0,)"
+    versions = "[3.8.0,5),[7.8.0,)"
     assertInverse = true
     javaVersion = "17"
   }
 }
 
 apply from: "$rootDir/gradle/java.gradle"
+
+tracerJava {
+  addSourceSetFor(JavaVersion.VERSION_17)
+}
 
 addTestSuiteForDir('latestDepTest', 'test')
 addTestSuiteExtendingForDir('latestDepForkedTest', 'latestDepTest', 'test')
@@ -33,7 +33,7 @@ tasks.withType(GroovyCompile).configureEach {
 
 dependencies {
   implementation project(':dd-java-agent:instrumentation:kafka:kafka-common')
-  implementation project(':dd-java-agent:instrumentation:span-origin')
+  implementation project(':dd-java-agent:instrumentation:datadog:dynamic-instrumentation:span-origin')
 
   main_java17CompileOnly group: 'org.apache.kafka', name: 'kafka-clients', version: '3.8.0'
   main_java17Implementation project(':dd-java-agent:instrumentation:kafka:kafka-common')

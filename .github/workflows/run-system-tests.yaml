@@ -1,6 +1,7 @@
 name: Run system tests
 
 on:
+  merge_group:
   pull_request:
   workflow_dispatch:
   schedule:
@@ -23,13 +24,13 @@ jobs:
       group: APM Larger Runners
     steps:
       - name: Checkout repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # 5.0.0
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           submodules: 'recursive'
           fetch-depth: 0
 
       - name: Cache Gradle dependencies
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: |
             ~/.gradle/caches
@@ -52,7 +53,7 @@ jobs:
             --build-cache --parallel --stacktrace --no-daemon --max-workers=4
 
       - name: Upload artifact
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: binaries
           path: workspace/dd-java-agent/build/libs/
@@ -61,8 +62,9 @@ jobs:
     needs:
     - build
     # If you change the following comment, update the pattern in the update_system_test_reference.sh script to match.
-    uses: DataDog/system-tests/.github/workflows/system-tests.yml@main # system tests are pinned for releases only
-    secrets: inherit
+    uses: DataDog/system-tests/.github/workflows/system-tests.yml@61f7ee29e7432cba821a4d303c95929160bd23fd # system tests are pinned for releases only
+    secrets:
+      TEST_OPTIMIZATION_API_KEY: ${{ secrets.DATADOG_API_KEY_PROD }}
     permissions:
       contents: read
       id-token: write
@@ -70,12 +72,13 @@ jobs:
     with:
       library: java
        # If you change the following comment, update the pattern in the update_system_test_reference.sh script to match.
-      ref: main # system tests are pinned for releases only
+      ref: 61f7ee29e7432cba821a4d303c95929160bd23fd # system tests are pinned for releases only
       binaries_artifact: binaries
       desired_execution_time: 900  # 15 minutes
       scenarios_groups: tracer-release
-      excluded_scenarios: CROSSED_TRACING_LIBRARIES,INTEGRATIONS_AWS,APM_TRACING_E2E_OTEL,APM_TRACING_E2E_SINGLE_SPAN,PROFILING  # require AWS and datadog credentials 
+      excluded_scenarios: APM_TRACING_E2E_OTEL,APM_TRACING_E2E_SINGLE_SPAN,PROFILING  # exclude flaky scenarios
       skip_empty_scenarios: true
+      push_to_test_optimization: true
 
   # Ensure the main job is run to completion
   check:
@@ -84,4 +87,15 @@ jobs:
     if: ${{ always() }}
     needs: [build, main]
     steps:
-    - run: exit 0
+      - name: Fail if build failed
+        if: ${{ needs.build.result != 'success' }}
+        run: |
+          echo "❌ Build job did not succeed: ${{ needs.build.result }}"
+          exit 1
+      - name: Fail if main failed or is skipped
+        if: ${{ needs.main.result != 'success' }}
+        run: |
+          echo "❌ Main job did not succeed: ${{ needs.main.result }}"
+          exit 1    
+      - name: Success
+        run: echo "✅ All required jobs succeeded."

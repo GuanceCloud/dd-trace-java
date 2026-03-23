@@ -17,6 +17,7 @@ import com.google.auto.service.AutoService;
 import datadog.appsec.api.blocking.BlockingException;
 import datadog.trace.agent.tooling.Instrumenter;
 import datadog.trace.agent.tooling.InstrumenterModule;
+import datadog.trace.api.propagation.W3CTraceParent;
 import datadog.trace.bootstrap.CallDepthThreadLocalMap;
 import datadog.trace.bootstrap.InstrumentationContext;
 import datadog.trace.bootstrap.instrumentation.api.AgentScope;
@@ -58,7 +59,9 @@ public final class StatementInstrumentation extends InstrumenterModule.Tracing
 
   @Override
   public String[] helperClassNames() {
-    return new String[] {packageName + ".JDBCDecorator", packageName + ".SQLCommenter"};
+    return new String[] {
+      packageName + ".JDBCDecorator", packageName + ".SQLCommenter",
+    };
   }
 
   @Override
@@ -94,7 +97,7 @@ public final class StatementInstrumentation extends InstrumenterModule.Tracing
             // The span ID is pre-determined so that we can reference it when setting the context
             final long spanID = DECORATE.setContextInfo(connection, dbInfo);
             // we then force that pre-determined span ID for the span covering the actual query
-            span = AgentTracer.get().buildSpan(DATABASE_QUERY).withSpanId(spanID).start();
+            span = AgentTracer.get().singleSpanBuilder(DATABASE_QUERY).withSpanId(spanID).start();
           } else if (isOracle) {
             span = startSpan(DATABASE_QUERY);
             DECORATE.setAction(span, connection);
@@ -115,7 +118,7 @@ public final class StatementInstrumentation extends InstrumenterModule.Tracing
             Integer priority = span.forceSamplingDecision();
             if (priority != null) {
               if (!isSqlServer) {
-                traceParent = DECORATE.traceParent(span, priority);
+                traceParent = W3CTraceParent.from(span);
               }
               // set the dbm trace injected tag on the span
               span.setTag(DBM_TRACE_INJECTED, true);
@@ -153,6 +156,7 @@ public final class StatementInstrumentation extends InstrumenterModule.Tracing
                   appendComment);
         }
         DECORATE.onStatement(span, copy);
+        DECORATE.withBaseHash(span);
         return activateSpan(span);
       } catch (SQLException e) {
         // if we can't get the connection for any reason

@@ -9,6 +9,7 @@ import datadog.trace.api.DDTags
 import datadog.trace.api.civisibility.CiVisibilityWellKnownTags
 import datadog.trace.api.intake.TrackType
 import datadog.trace.bootstrap.instrumentation.api.InternalSpanTypes
+import datadog.trace.bootstrap.instrumentation.api.ServiceNameSources
 import datadog.trace.bootstrap.instrumentation.api.Tags
 import datadog.trace.common.writer.Payload
 import datadog.trace.core.DDSpan
@@ -164,7 +165,7 @@ class DDEvpProxyApiTest extends DDCoreSpecification {
           "parent_id": 0L,
           "start"    : 1000L,
           "duration" : 10L,
-          "meta"     : [:],
+          "meta"     : [(DDTags.DD_SVC_SRC): ServiceNameSources.MANUAL.toString()],
           "metrics"  : [:]
         ])
       ])]
@@ -305,11 +306,11 @@ class DDEvpProxyApiTest extends DDCoreSpecification {
 
   def createEvpProxyApi(String agentUrl, String evpProxyEndpoint, TrackType trackType, boolean compressionEnabled) {
     return DDEvpProxyApi.builder()
-      .agentUrl(HttpUrl.get(agentUrl))
-      .evpProxyEndpoint(evpProxyEndpoint)
-      .trackType(trackType)
-      .compressionEnabled(compressionEnabled)
-      .build()
+    .agentUrl(HttpUrl.get(agentUrl))
+    .evpProxyEndpoint(evpProxyEndpoint)
+    .trackType(trackType)
+    .compressionEnabled(compressionEnabled)
+    .build()
   }
 
   def discoverMapper(TrackType trackType, boolean compressionEnabled) {
@@ -331,7 +332,7 @@ class DDEvpProxyApiTest extends DDCoreSpecification {
     }
     packer.flush()
     return mapper.newPayload()
-      .withBody(traceCapture.traceCount,
-      traces.isEmpty() ? ByteBuffer.allocate(0) : traceCapture.buffer)
+    .withBody(traceCapture.traceCount,
+    traces.isEmpty() ? ByteBuffer.allocate(0) : traceCapture.buffer)
   }
 }

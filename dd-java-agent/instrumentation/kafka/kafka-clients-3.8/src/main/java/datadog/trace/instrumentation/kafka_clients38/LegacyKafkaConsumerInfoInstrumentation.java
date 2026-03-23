@@ -14,6 +14,7 @@ import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
 import com.google.auto.service.AutoService;
 import datadog.trace.agent.tooling.Instrumenter;
 import datadog.trace.agent.tooling.InstrumenterModule;
+import datadog.trace.api.Config;
 import java.util.HashMap;
 import java.util.Map;
 import net.bytebuddy.description.type.TypeDescription;
@@ -25,7 +26,9 @@ import net.bytebuddy.matcher.ElementMatcher;
  */
 @AutoService(InstrumenterModule.class)
 public final class LegacyKafkaConsumerInfoInstrumentation extends InstrumenterModule.Tracing
-    implements Instrumenter.ForTypeHierarchy, Instrumenter.HasMethodAdvice {
+    implements Instrumenter.ForTypeHierarchy,
+        Instrumenter.HasMethodAdvice,
+        Instrumenter.WithTypeStructure {
 
   public LegacyKafkaConsumerInfoInstrumentation() {
     super("kafka", "kafka-3.8");
@@ -34,6 +37,11 @@ public final class LegacyKafkaConsumerInfoInstrumentation extends InstrumenterMo
   @Override
   public ElementMatcher.Junction<ClassLoader> classLoaderMatcher() {
     return hasClassNamed("org.apache.kafka.clients.MetadataRecoveryStrategy"); // since 3.8
+  }
+
+  @Override
+  public boolean isEnabled() {
+    return super.isEnabled() && Config.get().isExperimentalKafkaEnabled();
   }
 
   @Override
@@ -60,14 +68,21 @@ public final class LegacyKafkaConsumerInfoInstrumentation extends InstrumenterMo
   // new - we are instrumenting the ConsumerDelegate class instead of the KafkaConsumer class
   @Override
   public ElementMatcher<TypeDescription> hierarchyMatcher() {
-    return implementsInterface(named(hierarchyMarkerType()))
-        .and(declaresField(named("coordinator")));
+    return implementsInterface(named(hierarchyMarkerType()));
+  }
+
+  @Override
+  public ElementMatcher<TypeDescription> structureMatcher() {
+    return declaresField(named("coordinator"));
   }
 
   @Override
   public String[] helperClassNames() {
     return new String[] {
-      packageName + ".KafkaDecorator", packageName + ".KafkaConsumerInfo",
+      packageName + ".KafkaDecorator",
+      packageName + ".KafkaConsumerInfo",
+      packageName + ".KafkaConsumerInstrumentationHelper",
+      "datadog.trace.instrumentation.kafka_common.ClusterIdHolder",
     };
   }
 

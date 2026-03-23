@@ -2,6 +2,7 @@ package com.datadog.debugger.agent;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.doAnswer;
@@ -28,7 +29,6 @@ import datadog.trace.api.GlobalTracer;
 import datadog.trace.api.Tracer;
 import datadog.trace.api.config.TraceInstrumentationConfig;
 import datadog.trace.bootstrap.debugger.CapturedContext;
-import datadog.trace.bootstrap.debugger.CorrelationAccess;
 import datadog.trace.bootstrap.debugger.DebuggerContext;
 import datadog.trace.bootstrap.debugger.ProbeId;
 import datadog.trace.bootstrap.debugger.ProbeRateLimiter;
@@ -36,7 +36,6 @@ import freemarker.template.Template;
 import java.io.File;
 import java.io.InputStreamReader;
 import java.lang.instrument.Instrumentation;
-import java.lang.reflect.Field;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -90,10 +89,6 @@ public class DebuggerTransformerTest {
   static void setupAll() throws Exception {
     // disable tracer integration
     System.setProperty("dd." + TraceInstrumentationConfig.TRACE_ENABLED, "false");
-
-    Field fld = CorrelationAccess.class.getDeclaredField("REUSE_INSTANCE");
-    fld.setAccessible(true);
-    fld.set(null, false);
 
     // setup the tracer
     noopTracer = GlobalTracer.get();
@@ -164,10 +159,10 @@ public class DebuggerTransformerTest {
           ArrayList.class,
           null,
           getClassFileBytes(ArrayList.class));
-      Assertions.assertTrue(instrumentedClassFile.exists());
-      Assertions.assertTrue(origClassFile.exists());
-      Assertions.assertTrue(instrumentedClassFile.delete());
-      Assertions.assertTrue(origClassFile.delete());
+      assertTrue(instrumentedClassFile.exists());
+      assertTrue(origClassFile.exists());
+      assertTrue(instrumentedClassFile.delete());
+      assertTrue(origClassFile.delete());
     } finally {
       DebuggerTransformer.DUMP_PATH = initialTmpDir;
     }
@@ -270,7 +265,7 @@ public class DebuggerTransformerTest {
             getClassFileBytes(String.class));
     assertNull(newClassBuffer);
     Assertions.assertNotNull(lastResult.get());
-    Assertions.assertTrue(lastResult.get().isBlocked());
+    assertTrue(lastResult.get().isBlocked());
     Assertions.assertFalse(lastResult.get().isInstalled());
     assertEquals("java.lang.String", lastResult.get().getTypeName());
   }
@@ -300,7 +295,7 @@ public class DebuggerTransformerTest {
     Assertions.assertNotNull(newClassBuffer);
     Assertions.assertNotNull(lastResult.get());
     Assertions.assertFalse(lastResult.get().isBlocked());
-    Assertions.assertTrue(lastResult.get().isInstalled());
+    assertTrue(lastResult.get().isInstalled());
     assertEquals("java.util.ArrayList", lastResult.get().getTypeName());
   }
 
@@ -344,9 +339,30 @@ public class DebuggerTransformerTest {
     assertEquals("logprobe1", probeIdCaptor.getAllValues().get(0).getId());
     assertEquals("logprobe2", probeIdCaptor.getAllValues().get(1).getId());
     assertEquals(PROBE_ID.getId(), probeIdCaptor.getAllValues().get(2).getId());
-    assertEquals("Instrumentation fails for " + CLASS_NAME, strCaptor.getAllValues().get(0));
-    assertEquals("Instrumentation fails for " + CLASS_NAME, strCaptor.getAllValues().get(1));
-    assertEquals("Instrumentation fails for " + CLASS_NAME, strCaptor.getAllValues().get(2));
+    assertTrue(
+        strCaptor
+            .getAllValues()
+            .get(0)
+            .startsWith(
+                "Instrumentation failed for "
+                    + CLASS_NAME
+                    + ": java.lang.ArrayIndexOutOfBoundsException:"));
+    assertTrue(
+        strCaptor
+            .getAllValues()
+            .get(1)
+            .startsWith(
+                "Instrumentation failed for "
+                    + CLASS_NAME
+                    + ": java.lang.ArrayIndexOutOfBoundsException:"));
+    assertTrue(
+        strCaptor
+            .getAllValues()
+            .get(2)
+            .startsWith(
+                "Instrumentation failed for "
+                    + CLASS_NAME
+                    + ": java.lang.ArrayIndexOutOfBoundsException:"));
   }
 
   @Test

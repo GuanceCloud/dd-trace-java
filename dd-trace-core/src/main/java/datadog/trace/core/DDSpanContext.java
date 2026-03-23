@@ -4,6 +4,7 @@ import static datadog.trace.api.DDTags.PARENT_ID;
 import static datadog.trace.api.DDTags.SPAN_LINKS;
 import static datadog.trace.api.cache.RadixTreeCache.HTTP_STATUSES;
 import static datadog.trace.bootstrap.instrumentation.api.ErrorPriorities.UNSET;
+import static datadog.trace.bootstrap.instrumentation.api.ServiceNameSources.MANUAL;
 
 import datadog.trace.api.Config;
 import datadog.trace.api.DDSpanId;
@@ -40,11 +41,13 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.function.Function;
+import javax.annotation.Nonnull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -76,6 +79,8 @@ public class DDSpanContext
   /** The collection of all span related to this one */
   private final TraceCollector traceCollector;
 
+  private final TagInterceptor tagInterceptor;
+
   /** Baggage is associated with the whole trace and shared with other spans */
   private volatile Map<String, String> baggageItems;
 
@@ -93,6 +98,7 @@ public class DDSpanContext
 
   private volatile short httpStatusCode;
   private CharSequence integrationName;
+  private CharSequence serviceNameSource;
 
   /**
    * Tags are associated to the current span, they will not propagate to the children span.
@@ -112,10 +118,13 @@ public class DDSpanContext
   private volatile CharSequence resourceName;
 
   private volatile byte resourceNamePriority = ResourceNamePriorities.DEFAULT;
+
   /** Each span have an operation name describing the current span */
   private volatile CharSequence operationName;
+
   /** The type of the span. If null, the Datadog Agent will report as a custom */
   private volatile CharSequence spanType;
+
   /** True indicates that the span reports an error */
   private volatile boolean errorFlag;
 
@@ -151,7 +160,6 @@ public class DDSpanContext
   private final boolean injectBaggageAsTags;
   private volatile int encodedOperationName;
   private volatile int encodedResourceName;
-  private volatile CharSequence lastParentId;
 
   /**
    * Metastruct keys are associated to the current span, they will not propagate to the children
@@ -185,6 +193,7 @@ public class DDSpanContext
         spanId,
         parentId,
         parentServiceName,
+        null,
         serviceName,
         operationName,
         resourceName,
@@ -232,6 +241,7 @@ public class DDSpanContext
         spanId,
         parentId,
         parentServiceName,
+        null,
         serviceName,
         operationName,
         resourceName,
@@ -258,53 +268,7 @@ public class DDSpanContext
       final long spanId,
       final long parentId,
       final CharSequence parentServiceName,
-      final String serviceName,
-      final CharSequence operationName,
-      final CharSequence resourceName,
-      final int samplingPriority,
-      final CharSequence origin,
-      final Map<String, String> baggageItems,
-      final boolean errorFlag,
-      final CharSequence spanType,
-      final int tagsSize,
-      final TraceCollector traceCollector,
-      final Object requestContextDataAppSec,
-      final Object requestContextDataIast,
-      final PathwayContext pathwayContext,
-      final boolean disableSamplingMechanismValidation,
-      final PropagationTags propagationTags,
-      final ProfilingContextIntegration profilingContextIntegration) {
-    this(
-        traceId,
-        spanId,
-        parentId,
-        parentServiceName,
-        serviceName,
-        operationName,
-        resourceName,
-        samplingPriority,
-        origin,
-        baggageItems,
-        null,
-        errorFlag,
-        spanType,
-        tagsSize,
-        traceCollector,
-        requestContextDataAppSec,
-        requestContextDataIast,
-        null,
-        pathwayContext,
-        disableSamplingMechanismValidation,
-        propagationTags,
-        profilingContextIntegration,
-        true);
-  }
-
-  public DDSpanContext(
-      final DDTraceId traceId,
-      final long spanId,
-      final long parentId,
-      final CharSequence parentServiceName,
+      final CharSequence serviceNameSource,
       final String serviceName,
       final CharSequence operationName,
       final CharSequence resourceName,
@@ -327,6 +291,7 @@ public class DDSpanContext
 
     assert traceCollector != null;
     this.traceCollector = traceCollector;
+    this.tagInterceptor = this.traceCollector.getTracer().getTagInterceptor();
 
     assert traceId != null;
     this.traceId = traceId;
@@ -360,7 +325,8 @@ public class DDSpanContext
     // to get away with doing this just once per span
     this.encodedOperationName = profilingContextIntegration.encodeOperationName(operationName);
 
-    setServiceName(serviceName);
+    internalSetServiceName(serviceName);
+    this.serviceNameSource = serviceNameSource;
     this.operationName = operationName;
     setResourceName(resourceName, ResourceNamePriorities.DEFAULT);
     this.errorFlag = errorFlag;
@@ -420,9 +386,26 @@ public class DDSpanContext
     return serviceName;
   }
 
-  public void setServiceName(final String serviceName) {
+  private void internalSetServiceName(String serviceName) {
     this.serviceName = traceCollector.mapServiceName(serviceName);
     this.topLevel = isTopLevel(parentServiceName, this.serviceName);
+  }
+
+  public void setServiceName(final String serviceName) {
+    setServiceName(serviceName, MANUAL);
+  }
+
+  public void setServiceName(String serviceName, @Nonnull CharSequence source) {
+    internalSetServiceName(serviceName);
+    setServiceNameSource(Objects.requireNonNull(source));
+  }
+
+  public CharSequence getServiceNameSource() {
+    return serviceNameSource;
+  }
+
+  public void setServiceNameSource(final CharSequence serviceNameSource) {
+    this.serviceNameSource = serviceNameSource;
   }
 
   // TODO this logic is inconsistent with hasResourceName
@@ -524,10 +507,9 @@ public class DDSpanContext
   private void forceKeepThisSpan(byte samplingMechanism) {
     // if the user really wants to keep this trace chunk, we will let them,
     // even if the old sampling priority and mechanism have already propagated
-    if (SAMPLING_PRIORITY_UPDATER.getAndSet(this, PrioritySampling.USER_KEEP)
-        == PrioritySampling.UNSET) {
-      propagationTags.updateTraceSamplingPriority(PrioritySampling.USER_KEEP, samplingMechanism);
-    }
+    SAMPLING_PRIORITY_UPDATER.set(this, PrioritySampling.USER_KEEP);
+    // record force keep decision for future distributed trace propagation
+    propagationTags.forceKeep(samplingMechanism);
   }
 
   public void addPropagatedTraceSource(final int value) {
@@ -538,7 +520,9 @@ public class DDSpanContext
     propagationTags.updateDebugPropagation(value);
   }
 
-  /** @return if sampling priority was set by this method invocation */
+  /**
+   * @return if sampling priority was set by this method invocation
+   */
   public boolean setSamplingPriority(final int newPriority, final int newMechanism) {
     DDSpanContext spanContext = getRootSpanContextOrThis();
     // set trace level sampling priority
@@ -744,6 +728,46 @@ public class DDSpanContext
     }
   }
 
+  public void setMetric(final CharSequence key, final int value) {
+    synchronized (unsafeTags) {
+      unsafeTags.set(key.toString(), value);
+    }
+  }
+
+  public void setMetric(final CharSequence key, final long value) {
+    synchronized (unsafeTags) {
+      unsafeTags.set(key.toString(), value);
+    }
+  }
+
+  public void setMetric(final CharSequence key, final float value) {
+    synchronized (unsafeTags) {
+      unsafeTags.set(key.toString(), value);
+    }
+  }
+
+  public void setMetric(final CharSequence key, final double value) {
+    synchronized (unsafeTags) {
+      unsafeTags.set(key.toString(), value);
+    }
+  }
+
+  public void setMetric(final TagMap.EntryReader entry) {
+    if (entry == null) {
+      return;
+    }
+
+    synchronized (unsafeTags) {
+      unsafeTags.set(entry);
+    }
+  }
+
+  public void removeTag(String tag) {
+    synchronized (unsafeTags) {
+      unsafeTags.remove(tag);
+    }
+  }
+
   /**
    * Sets a tag to the span. Tags are not propagated to the children.
    *
@@ -761,9 +785,138 @@ public class DDSpanContext
       synchronized (unsafeTags) {
         unsafeTags.remove(tag);
       }
-    } else if (!traceCollector.getTracer().getTagInterceptor().interceptTag(this, tag, value)) {
+    } else if (!tagInterceptor.interceptTag(this, tag, value)) {
       synchronized (unsafeTags) {
-        unsafeSetTag(tag, value);
+        unsafeTags.set(tag, value);
+      }
+    }
+  }
+
+  public void setTag(final String tag, final String value) {
+    if (null == tag) {
+      return;
+    }
+    if (null == value) {
+      synchronized (unsafeTags) {
+        unsafeTags.remove(tag);
+      }
+    } else if (!tagInterceptor.interceptTag(this, tag, value)) {
+      synchronized (unsafeTags) {
+        unsafeTags.set(tag, value);
+      }
+    }
+  }
+
+  public void setTag(TagMap.EntryReader entry) {
+    if (entry == null) {
+      return;
+    }
+
+    // pre-check to avoid boxing
+    boolean intercepted =
+        precheckIntercept(entry.tag())
+            && tagInterceptor.interceptTag(this, entry.tag(), entry.objectValue());
+    if (!intercepted) {
+      synchronized (unsafeTags) {
+        unsafeTags.set(entry);
+      }
+    }
+  }
+
+  /*
+   * Uses to determine if there's an opportunity to avoid primitve boxing.
+   * If the underlying map doesn't support efficient primitives, then boxing is used.
+   * If the tag may be intercepted, then boxing is also used.
+   */
+  private boolean precheckIntercept(String tag) {
+    // Usually only a single instanceof TagMap will be loaded,
+    // so isOptimized is turned into a direct call and then inlines to a constant
+    // Since isOptimized just returns a constant - doesn't require synchronization
+    return !unsafeTags.isOptimized() || tagInterceptor.needsIntercept(tag);
+  }
+
+  /*
+   * Used when precheckIntercept determines that boxing is unavoidable
+   *
+   * Either because the tagInterceptor needs to be fully checked (which requires boxing)
+   * In that case, a box has already been created so it makes sense to pass the box
+   * onto TagMap, since optimized TagMap will cache the box
+   *
+   * -- OR --
+   *
+   * The TagMap isn't optimized and will need to box the primitive regardless of
+   * tag interception
+   */
+  private void setBox(String tag, Object box) {
+    if (!tagInterceptor.interceptTag(this, tag, box)) {
+      synchronized (unsafeTags) {
+        unsafeTags.set(tag, box);
+      }
+    }
+  }
+
+  public void setTag(final String tag, final boolean value) {
+    if (null == tag) {
+      return;
+    }
+    if (precheckIntercept(tag)) {
+      this.setBox(tag, value);
+    } else {
+      synchronized (unsafeTags) {
+        unsafeTags.set(tag, value);
+      }
+    }
+  }
+
+  public void setTag(final String tag, final int value) {
+    if (null == tag) {
+      return;
+    }
+    if (precheckIntercept(tag)) {
+      this.setBox(tag, value);
+    } else {
+      synchronized (unsafeTags) {
+        unsafeTags.set(tag, value);
+      }
+    }
+  }
+
+  public void setTag(final String tag, final long value) {
+    if (null == tag) {
+      return;
+    }
+    // check needsIntercept first to avoid unnecessary boxing
+    boolean intercepted =
+        tagInterceptor.needsIntercept(tag) && tagInterceptor.interceptTag(this, tag, value);
+    if (!intercepted) {
+      synchronized (unsafeTags) {
+        unsafeTags.set(tag, value);
+      }
+    }
+  }
+
+  public void setTag(final String tag, final float value) {
+    if (null == tag) {
+      return;
+    }
+    if (precheckIntercept(tag)) {
+      this.setBox(tag, value);
+    } else {
+      synchronized (unsafeTags) {
+        unsafeTags.set(tag, value);
+      }
+    }
+  }
+
+  public void setTag(final String tag, final double value) {
+    if (null == tag) {
+      return;
+    }
+    if (precheckIntercept(tag)) {
+      this.setBox(tag, value);
+    } else {
+      synchronized (unsafeTags) {
+        unsafeTags.set(tag, value);
       }
     }
   }
@@ -784,12 +937,11 @@ public class DDSpanContext
         // to avoid using a capturing lambda
         map.forEach(
             this,
-            traceCollector.getTracer().getTagInterceptor(),
-            (ctx, tagInterceptor, tagEntry) -> {
+            (ctx, tagEntry) -> {
               String tag = tagEntry.tag();
               Object value = tagEntry.objectValue();
 
-              if (!tagInterceptor.interceptTag(ctx, tag, value)) {
+              if (!ctx.tagInterceptor.interceptTag(ctx, tag, value)) {
                 ctx.unsafeTags.set(tagEntry);
               }
             });
@@ -804,7 +956,6 @@ public class DDSpanContext
       return;
     }
 
-    TagInterceptor tagInterceptor = traceCollector.getTracer().getTagInterceptor();
     synchronized (unsafeTags) {
       for (final TagMap.EntryChange entryChange : ledger) {
         if (entryChange.isRemoval()) {
@@ -829,7 +980,6 @@ public class DDSpanContext
     } else if (map instanceof TagMap) {
       setAllTags((TagMap) map);
     } else if (!map.isEmpty()) {
-      TagInterceptor tagInterceptor = traceCollector.getTracer().getTagInterceptor();
       synchronized (unsafeTags) {
         for (final Map.Entry<String, ?> tag : map.entrySet()) {
           if (!tagInterceptor.interceptTag(this, tag.getKey(), tag.getValue())) {
@@ -841,7 +991,19 @@ public class DDSpanContext
   }
 
   void unsafeSetTag(final String tag, final Object value) {
-    unsafeTags.put(tag, value);
+    unsafeTags.set(tag, value);
+  }
+
+  void unsafeSetTag(final String tag, final CharSequence value) {
+    unsafeTags.set(tag, value);
+  }
+
+  void unsafeSetTag(final String tag, final byte value) {
+    unsafeTags.set(tag, value);
+  }
+
+  void unsafeSetTag(final String tag, final double value) {
+    unsafeTags.set(tag, value);
   }
 
   Object getTag(final String key) {
@@ -897,12 +1059,16 @@ public class DDSpanContext
     }
   }
 
-  /** @see CoreSpan#getMetaStruct() */
+  /**
+   * @see CoreSpan#getMetaStruct()
+   */
   public Map<String, Object> getMetaStruct() {
     return Collections.unmodifiableMap(metaStruct);
   }
 
-  /** @see CoreSpan#setMetaStruct(String, Object) */
+  /**
+   * @see CoreSpan#setMetaStruct(String, Object)
+   */
   public <T> void setMetaStruct(final String field, final T value) {
     if (null == field) {
       return;

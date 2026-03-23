@@ -1,13 +1,13 @@
 package datadog.trace.bootstrap.instrumentation.decorator;
 
-import static datadog.trace.api.cache.RadixTreeCache.PORTS;
-import static datadog.trace.api.cache.RadixTreeCache.UNSET_PORT;
 import static datadog.trace.bootstrap.instrumentation.java.net.HostNameResolver.hostName;
 
+import datadog.context.Context;
 import datadog.context.ContextScope;
 import datadog.trace.api.Config;
 import datadog.trace.api.DDTags;
 import datadog.trace.api.Functions;
+import datadog.trace.api.TagMap;
 import datadog.trace.api.cache.QualifiedClassNameCache;
 import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
@@ -22,6 +22,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 
 public abstract class BaseDecorator {
+  protected static final int UNSET_PORT = 0;
 
   private static final QualifiedClassNameCache CLASS_NAMES =
       new QualifiedClassNameCache(
@@ -40,17 +41,31 @@ public abstract class BaseDecorator {
           Functions.PrefixJoin.of("."));
 
   protected final boolean traceAnalyticsEnabled;
-  protected final Double traceAnalyticsSampleRate;
+  protected final double traceAnalyticsSampleRate;
+
+  private final TagMap.Entry traceAnalyticsEntry;
+
+  // Deliberately not volatile, reading null and repeating the calculation is safe
+  private TagMap.Entry cachedComponentEntry = null;
+  protected final CharSequence  version;
 
   protected BaseDecorator() {
     final Config config = Config.get();
     final String[] instrumentationNames = instrumentationNames();
+
     this.traceAnalyticsEnabled =
         instrumentationNames.length > 0
             && config.isTraceAnalyticsIntegrationEnabled(
                 traceAnalyticsDefault(), instrumentationNames);
+    version = config.getVersion();
+
     this.traceAnalyticsSampleRate =
         (double) config.getInstrumentationAnalyticsSampleRate(instrumentationNames);
+
+    this.traceAnalyticsEntry =
+        this.traceAnalyticsEnabled
+            ? TagMap.Entry.create(DDTags.ANALYTICS_SAMPLE_RATE, traceAnalyticsSampleRate)
+            : null;
   }
 
   protected abstract String[] instrumentationNames();
@@ -58,6 +73,20 @@ public abstract class BaseDecorator {
   protected abstract CharSequence spanType();
 
   protected abstract CharSequence component();
+
+  /** Caches the component TagMap.Entry, so it isn't recreated for every trace */
+  protected final TagMap.Entry componentEntry() {
+    // DQH = Tried calling component() in the constructor, but that had issues with static
+    // field ordering.  That was caught be an integration test, but I didn't want to risk
+    // breaking other integrations where the test is not as thorough.
+
+    // This approach while more complicated doesn't have any field initialization ordering issues.
+    TagMap.Entry componentEntry = cachedComponentEntry;
+    if (componentEntry == null) {
+      cachedComponentEntry = componentEntry = TagMap.Entry.create(Tags.COMPONENT, component());
+    }
+    return componentEntry;
+  }
 
   protected boolean traceAnalyticsDefault() {
     return false;
@@ -67,17 +96,24 @@ public abstract class BaseDecorator {
     if (spanType() != null) {
       span.setSpanType(spanType());
     }
+
+    span.setTag(componentEntry());
+
+    // DQH - Could retrieve the value from componentEntry and cast to avoid the virtual call,
+    // unclear which option is better here
     final CharSequence component = component();
     span.setTag(Tags.COMPONENT, component);
     span.context().setIntegrationName(component);
-    if (traceAnalyticsEnabled) {
-      span.setMetric(DDTags.ANALYTICS_SAMPLE_RATE, traceAnalyticsSampleRate);
+    if (version != ""){
+      span.setTag(Tags.DD_VERSION,version);
     }
+    // null handled by setMetric
+    span.setMetric(traceAnalyticsEntry);
     return span;
   }
 
-  public AgentScope beforeFinish(final AgentScope scope) {
-    beforeFinish(scope.span());
+  public ContextScope beforeFinish(final ContextScope scope) {
+    beforeFinish(scope.context());
     return scope;
   }
 
@@ -85,8 +121,14 @@ public abstract class BaseDecorator {
     return span;
   }
 
+  public Context beforeFinish(final Context context) {
+    return context;
+  }
+
   public AgentScope onError(final AgentScope scope, final Throwable throwable) {
-    onError(scope.span(), throwable);
+    if (scope != null) {
+      onError(scope.span(), throwable);
+    }
     return scope;
   }
 
@@ -95,7 +137,7 @@ public abstract class BaseDecorator {
   }
 
   public AgentSpan onError(final AgentSpan span, final Throwable throwable, byte errorPriority) {
-    if (throwable != null) {
+    if (throwable != null && span != null) {
       span.addThrowable(
           throwable instanceof ExecutionException ? throwable.getCause() : throwable,
           errorPriority);
@@ -104,7 +146,9 @@ public abstract class BaseDecorator {
   }
 
   public ContextScope onError(final ContextScope scope, final Throwable throwable) {
-    onError(AgentSpan.fromContext(scope.context()), throwable);
+    if (scope != null) {
+      onError(AgentSpan.fromContext(scope.context()), throwable);
+    }
     return scope;
   }
 
@@ -144,9 +188,8 @@ public abstract class BaseDecorator {
 
   public AgentSpan setPeerPort(AgentSpan span, int port) {
     if (port > UNSET_PORT) {
-      span.setTag(Tags.PEER_PORT, PORTS.get(port));
+      span.setTag(Tags.PEER_PORT, port);
     }
-
     return span;
   }
 

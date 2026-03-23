@@ -13,6 +13,8 @@ import datadog.context.Context;
 import datadog.context.propagation.Propagators;
 import datadog.trace.api.Config;
 import datadog.trace.api.DDTags;
+import datadog.trace.api.datastreams.DataStreamsTransactionExtractor;
+import datadog.trace.api.datastreams.DataStreamsTransactionTracker;
 import datadog.trace.api.function.TriConsumer;
 import datadog.trace.api.function.TriFunction;
 import datadog.trace.api.gateway.BlockResponseFunction;
@@ -39,6 +41,7 @@ import datadog.trace.bootstrap.instrumentation.api.UTF8BytesString;
 import datadog.trace.bootstrap.instrumentation.decorator.http.ClientIpAddressResolver;
 import java.net.InetAddress;
 import java.util.BitSet;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -54,15 +57,27 @@ public abstract class HttpServerDecorator<REQUEST, CONNECTION, RESPONSE, REQUEST
     extends ServerDecorator {
 
   private static final Logger log = LoggerFactory.getLogger(HttpServerDecorator.class);
-  private static final int UNSET_PORT = 0;
 
-  public static final String DD_SPAN_ATTRIBUTE = "datadog.span";
+  public static final String DD_CONTEXT_ATTRIBUTE = "datadog.context";
   public static final String DD_DISPATCH_SPAN_ATTRIBUTE = "datadog.span.dispatch";
   public static final String DD_RUM_INJECTED = "datadog.rum.injected";
   public static final String DD_FIN_DISP_LIST_SPAN_ATTRIBUTE =
       "datadog.span.finish_dispatch_listener";
   public static final String DD_RESPONSE_ATTRIBUTE = "datadog.response";
   public static final String DD_IGNORE_COMMIT_ATTRIBUTE = "datadog.commit.ignore";
+
+  public static final LinkedHashMap<String, String> SERVER_PATHWAY_EDGE_TAGS;
+
+  static {
+    SERVER_PATHWAY_EDGE_TAGS = new LinkedHashMap<>(2);
+    // TODO: Refactor TagsProcessor to move it into a package that we can link the constants for.
+    SERVER_PATHWAY_EDGE_TAGS.put("direction", "in");
+    SERVER_PATHWAY_EDGE_TAGS.put("type", "http");
+  }
+
+  private static final BitSet CLIENT_ERROR_STATUSES = Config.get().getHttpClientErrorStatuses();
+
+  private static final Boolean HTTP_ERROR_ENBALED = Config.get().isHttpErrorEnabled();
 
   private static final UTF8BytesString DEFAULT_RESOURCE_NAME = UTF8BytesString.create("/");
   protected static final UTF8BytesString NOT_FOUND_RESOURCE_NAME = UTF8BytesString.create("404");
@@ -79,6 +94,20 @@ public abstract class HttpServerDecorator<REQUEST, CONNECTION, RESPONSE, REQUEST
   private final boolean traceClientIpResolverEnabled =
       Config.get().isTraceClientIpResolverEnabled();
 
+  private final String primaryInstrumentationName;
+
+  protected HttpServerDecorator() {
+    String[] instrumentationNames = instrumentationNames();
+    this.primaryInstrumentationName =
+        instrumentationNames != null && instrumentationNames.length > 0
+            ? instrumentationNames[0]
+            : DEFAULT_INSTRUMENTATION_NAME;
+  }
+
+  protected final String primaryInstrumentationName() {
+    return primaryInstrumentationName;
+  }
+
   protected abstract AgentPropagation.ContextVisitor<REQUEST_CARRIER> getter();
 
   protected abstract AgentPropagation.ContextVisitor<RESPONSE> responseGetter();
@@ -94,6 +123,14 @@ public abstract class HttpServerDecorator<REQUEST, CONNECTION, RESPONSE, REQUEST
   protected abstract int peerPort(CONNECTION connection);
 
   protected abstract int status(RESPONSE response);
+
+  protected String getRequestHeader(REQUEST request, String key) {
+    // This method was not marked as abstract in order to avoid changing all server instrumentation
+    // at once.
+    // Instead, only ones required (by DSM specifically) have it implemented.
+    // This can change in the future.
+    return null;
+  }
 
   protected String requestedSessionId(REQUEST request) {
     return null;
@@ -143,11 +180,7 @@ public abstract class HttpServerDecorator<REQUEST, CONNECTION, RESPONSE, REQUEST
    * @return A new context bundling the span, child of the given parent context.
    */
   public Context startSpan(REQUEST_CARRIER carrier, Context parentContext) {
-    String[] instrumentationNames = instrumentationNames();
-    String instrumentationName =
-        instrumentationNames != null && instrumentationNames.length > 0
-            ? instrumentationNames[0]
-            : DEFAULT_INSTRUMENTATION_NAME;
+    String instrumentationName = primaryInstrumentationName();
     AgentSpanContext extracted = getExtractedSpanContext(parentContext);
     // Call IG callbacks
     extracted = callIGCallbackStart(extracted);
@@ -173,6 +206,16 @@ public abstract class HttpServerDecorator<REQUEST, CONNECTION, RESPONSE, REQUEST
     }
     return span.start(extracted);
   }
+
+  private final DataStreamsTransactionTracker.TransactionSourceReader
+      DSM_TRANSACTION_SOURCE_READER =
+          (source, headerName) -> {
+            try {
+              return getRequestHeader((REQUEST) source, headerName);
+            } catch (Throwable ignored) {
+              return null;
+            }
+          };
 
   public AgentSpan onRequest(
       final AgentSpan span,
@@ -326,6 +369,13 @@ public abstract class HttpServerDecorator<REQUEST, CONNECTION, RESPONSE, REQUEST
       span.setRequestBlockingAction((RequestBlockingAction) flow.getAction());
     }
 
+    AgentTracer.get()
+        .getDataStreamsMonitoring()
+        .trackTransaction(
+            span,
+            DataStreamsTransactionExtractor.Type.HTTP_IN_HEADERS,
+            request,
+            DSM_TRANSACTION_SOURCE_READER);
     return span;
   }
 
@@ -350,6 +400,9 @@ public abstract class HttpServerDecorator<REQUEST, CONNECTION, RESPONSE, REQUEST
   public AgentSpan onResponseStatus(final AgentSpan span, final int status) {
     if (status > UNSET_STATUS) {
       span.setHttpStatusCode(status);
+      if (HTTP_ERROR_ENBALED && CLIENT_ERROR_STATUSES.get(status)) {
+        span.setError(true);
+      }else
       // explicitly set here because some other decorators might already set an error without
       // looking at the status code
       // XXX: the logic is questionable: span.error becomes equivalent to status 5xx,
@@ -537,12 +590,16 @@ public abstract class HttpServerDecorator<REQUEST, CONNECTION, RESPONSE, REQUEST
   }
 
   @Override
-  public AgentSpan beforeFinish(AgentSpan span) {
-    // TODO Migrate beforeFinish to Context API
-    onRequestEndForInstrumentationGateway(span);
+  public Context beforeFinish(Context context) {
+    AgentSpan span = AgentSpan.fromContext(context);
+    if (span != null) {
+      onRequestEndForInstrumentationGateway(span);
+    }
+
     // Close Serverless Gateway Inferred Span if any
-    // finishInferredProxySpan(context);
-    return super.beforeFinish(span);
+    finishInferredProxySpan(context);
+
+    return super.beforeFinish(context);
   }
 
   protected void finishInferredProxySpan(Context context) {

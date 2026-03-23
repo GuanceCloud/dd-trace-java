@@ -24,6 +24,8 @@ public final class TraceInstrumentationConfig {
   public static final String TRACE_EXECUTORS_ALL = "trace.executors.all";
   public static final String TRACE_EXECUTORS = "trace.executors";
   public static final String TRACE_METHODS = "trace.methods";
+  public static final String TRACE_METHODS_FILE = "trace.method.file";
+  public static final String TRACE_METHOD_PACKAGES = "trace.method.packages";
   /*
   format for measure.methods is the same as for trace.methods:
   https://docs.datadoghq.com/tracing/trace_collection/custom_instrumentation/java/
@@ -38,9 +40,6 @@ public final class TraceInstrumentationConfig {
   public static final String EXPERIMENTAL_DEFER_INTEGRATIONS_UNTIL =
       "experimental.defer.integrations.until";
 
-  @SuppressWarnings("unused")
-  public static final String TRACE_TESTS_ENABLED = "trace.tests.enabled";
-
   public static final String TRACE_THREAD_POOL_EXECUTORS_EXCLUDE =
       "trace.thread-pool-executors.exclude";
 
@@ -50,6 +49,7 @@ public final class TraceInstrumentationConfig {
   public static final String HTTP_SERVER_DECODED_RESOURCE_PRESERVE_SPACES =
       "http.server.decoded.resource.preserve-spaces";
   public static final String HTTP_SERVER_ROUTE_BASED_NAMING = "http.server.route-based-naming";
+
   // Use TRACE_HTTP_CLIENT_TAG_QUERY_STRING instead
   @Deprecated
   public static final String HTTP_CLIENT_TAG_QUERY_STRING = "http.client.tag.query-string";
@@ -63,6 +63,10 @@ public final class TraceInstrumentationConfig {
       "trace.db.client.split-by-instance.type.suffix";
   public static final String DB_CLIENT_HOST_SPLIT_BY_HOST = "trace.db.client.split-by-host";
 
+  public static final String DB_METADATA_FETCHING_ON_QUERY = "trace.db.metadata.fetching.on.query";
+  public static final String DB_METADATA_FETCHING_ON_CONNECT =
+      "trace.db.metadata.fetching.on.connect";
+
   public static final String JDBC_PREPARED_STATEMENT_CLASS_NAME =
       "trace.jdbc.prepared.statement.class.name";
 
@@ -72,6 +76,10 @@ public final class TraceInstrumentationConfig {
   public static final String DB_DBM_ALWAYS_APPEND_SQL_COMMENT = "dbm.always_append_sql_comment";
 
   public static final String JDBC_CONNECTION_CLASS_NAME = "trace.jdbc.connection.class.name";
+  public static final String JDBC_SQL_OBFUSCATION = "jdbc.sql.obfuscation";
+  public static final String ROCKETMQ_CONSUME_IGNORE = "rocketmq.consume.ignore";
+  public static final String MONGO_OBFUSCATION = "mongo.obfuscation";
+  public static final String REDIS_COMMAND_ARGS = "redis.command.args";
 
   public static final String JDBC_POOL_WAITING_ENABLED =
       "trace.experimental.jdbc.pool.waiting.enabled";
@@ -97,6 +105,9 @@ public final class TraceInstrumentationConfig {
   public static final String LOGS_INJECTION_ENABLED = "logs.injection.enabled";
   public static final String LOGS_INJECTION = "logs.injection";
 
+  public static final String LOGS_PATTERN = "logs.pattern";
+  public static final String LOGS_PATTERN_REPLACE = "logs.pattern.replace";
+  public static final String LOGS_MDC_TAGS_INJECTION_ENABLED = "logs.mdc.tags.injection";
   public static final String TRACE_128_BIT_TRACEID_LOGGING_ENABLED =
       "trace.128.bit.traceid.logging.enabled";
 
@@ -188,11 +199,18 @@ public final class TraceInstrumentationConfig {
   public static final String JAX_RS_EXCEPTION_AS_ERROR_ENABLED =
       "trace.jax-rs.exception-as-error.enabled";
   public static final String JAX_RS_ADDITIONAL_ANNOTATIONS = "trace.jax-rs.additional.annotations";
+
   /** If set, the instrumentation will set its resource name on the local root too. */
   public static final String AXIS_PROMOTE_RESOURCE_NAME = "trace.axis.promote.resource-name";
 
   public static final String SQS_BODY_PROPAGATION_ENABLED = "trace.sqs.body.propagation.enabled";
+
+  public static final String TRACE_RESOURCE_RENAMING_ENABLED = "trace.resource.renaming.enabled";
+
+  public static final String TRACE_RESOURCE_RENAMING_ALWAYS_SIMPLIFIED_ENDPOINT =
+      "trace.resource.renaming.always.simplified.endpoint";
   public static final String ADD_SPAN_POINTERS = "add.span.pointers";
+  public static final String EXPERIMENTAL_KAFKA_ENABLED = "trace.experimental.kafka.enabled";
 
   private TraceInstrumentationConfig() {}
 }

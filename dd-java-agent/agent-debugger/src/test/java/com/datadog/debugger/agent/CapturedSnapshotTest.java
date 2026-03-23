@@ -16,9 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -46,12 +44,12 @@ import com.datadog.debugger.sink.Snapshot;
 import com.datadog.debugger.util.MoshiSnapshotTestHelper;
 import com.datadog.debugger.util.TestSnapshotListener;
 import com.datadog.debugger.util.TestTraceInterceptor;
+import datadog.environment.JavaVirtualMachine;
 import datadog.trace.agent.tooling.TracerInstaller;
 import datadog.trace.api.Config;
 import datadog.trace.api.interceptor.MutableSpan;
 import datadog.trace.bootstrap.debugger.CapturedContext;
 import datadog.trace.bootstrap.debugger.CapturedContextProbe;
-import datadog.trace.bootstrap.debugger.CorrelationAccess;
 import datadog.trace.bootstrap.debugger.DebuggerContext;
 import datadog.trace.bootstrap.debugger.EvaluationError;
 import datadog.trace.bootstrap.debugger.Limits;
@@ -67,8 +65,7 @@ import groovy.lang.GroovyClassLoader;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
+import java.lang.instrument.Instrumentation;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
@@ -603,6 +600,7 @@ public class CapturedSnapshotTest extends CapturingTestBase {
   }
 
   @Test
+  @EnabledForJreRange(min = JRE.JAVA_21)
   public void sourceFileProbeScala() throws IOException, URISyntaxException {
     final String CLASS_NAME = "CapturedSnapshot101";
     final String FILE_NAME = CLASS_NAME + SCALA_EXT;
@@ -642,6 +640,8 @@ public class CapturedSnapshotTest extends CapturingTestBase {
   }
 
   @Test
+  @EnabledForJreRange(
+      max = JRE.JAVA_25) // TODO: Fix for Java 26. Delete once Java 26 is officially released.
   @DisabledIf(
       value = "datadog.environment.JavaVirtualMachine#isJ9",
       disabledReason = "Issue with J9 when compiling Kotlin code")
@@ -674,6 +674,8 @@ public class CapturedSnapshotTest extends CapturingTestBase {
   }
 
   @Test
+  @EnabledForJreRange(
+      max = JRE.JAVA_25) // TODO: Fix for Java 26. Delete once Java 26 is officially released.
   @DisabledIf(
       value = "datadog.environment.JavaVirtualMachine#isJ9",
       disabledReason = "Issue with J9 when compiling Kotlin code")
@@ -701,6 +703,8 @@ public class CapturedSnapshotTest extends CapturingTestBase {
   }
 
   @Test
+  @EnabledForJreRange(
+      max = JRE.JAVA_25) // TODO: Fix for Java 26. Delete once Java 26 is officially released.
   @DisabledIf(
       value = "datadog.environment.JavaVirtualMachine#isJ9",
       disabledReason = "Issue with J9 when compiling Kotlin code")
@@ -734,6 +738,8 @@ public class CapturedSnapshotTest extends CapturingTestBase {
   }
 
   @Test
+  @EnabledForJreRange(
+      max = JRE.JAVA_25) // TODO: Fix for Java 26. Delete once Java 26 is officially released.
   @DisabledIf(
       value = "datadog.environment.JavaVirtualMachine#isJ9",
       disabledReason = "Issue with J9 when compiling Kotlin code")
@@ -1520,6 +1526,120 @@ public class CapturedSnapshotTest extends CapturingTestBase {
   }
 
   @Test
+  public void mergedProbesWithCaptureExpressionsMixed() throws IOException, URISyntaxException {
+    final String CLASS_NAME = "CapturedSnapshot08";
+    LogProbe probe1 =
+        createProbeBuilder(PROBE_ID1, CLASS_NAME, "doit", null)
+            .evaluateAt(MethodLocation.EXIT)
+            .captureSnapshot(false)
+            .captureExpressions(
+                Arrays.asList(
+                    new LogProbe.CaptureExpression(
+                        "typed_fld_fld_msg",
+                        new ValueScript(
+                            DSL.getMember(
+                                DSL.getMember(DSL.getMember(DSL.ref("typed"), "fld"), "fld"),
+                                "msg"),
+                            "typed.fld.fld.msg"),
+                        null),
+                    new LogProbe.CaptureExpression(
+                        "nullTyped_fld",
+                        new ValueScript(
+                            DSL.getMember(DSL.ref("nullTyped"), "fld"), "nullTyped.fld"),
+                        null)))
+            .build();
+    LogProbe probe2 = createMethodProbeAtExit(PROBE_ID2, CLASS_NAME, "doit", null);
+    TestSnapshotListener listener = installProbes(probe1, probe2);
+    Class<?> testClass = compileAndLoadClass(CLASS_NAME);
+    int result = Reflect.onClass(testClass).call("main", "1").get();
+    assertEquals(3, result);
+    List<Snapshot> snapshots = assertSnapshots(listener, 2, PROBE_ID1, PROBE_ID2);
+    // snapshot with Capture Expressions
+    Snapshot snapshot0 = snapshots.get(0);
+    assertEquals(2, snapshot0.getCaptures().getReturn().getCaptureExpressions().size());
+    assertCaptureExpressions(
+        snapshot0.getCaptures().getReturn(),
+        "typed_fld_fld_msg",
+        String.class.getTypeName(),
+        "hello");
+    assertCaptureExpressions(
+        snapshot0.getCaptures().getReturn(), "nullTyped_fld", Object.class.getTypeName(), null);
+    assertNull(snapshot0.getCaptures().getReturn().getArguments());
+    assertNull(snapshot0.getCaptures().getReturn().getLocals());
+    // Snapshot without Capture Expressions
+    Snapshot snapshot1 = snapshots.get(1);
+    assertNull(snapshot1.getCaptures().getReturn().getCaptureExpressions());
+    assertCaptureArgs(snapshot1.getCaptures().getReturn(), "arg", String.class.getTypeName(), "1");
+    assertCaptureLocals(
+        snapshot1.getCaptures().getReturn(), "var1", Integer.TYPE.getTypeName(), "3");
+    assertCaptureLocals(
+        snapshot1.getCaptures().getReturn(), "@return", Integer.TYPE.getTypeName(), "3");
+  }
+
+  @Test
+  public void mergedProbesWithDifferentCaptureExpressions() throws IOException, URISyntaxException {
+    final String CLASS_NAME = "CapturedSnapshot08";
+    LogProbe probe1 =
+        createProbeBuilder(PROBE_ID1, CLASS_NAME, "doit", null)
+            .evaluateAt(MethodLocation.EXIT)
+            .captureSnapshot(false)
+            .captureExpressions(
+                Arrays.asList(
+                    new LogProbe.CaptureExpression(
+                        "typed_fld_fld_msg",
+                        new ValueScript(
+                            DSL.getMember(
+                                DSL.getMember(DSL.getMember(DSL.ref("typed"), "fld"), "fld"),
+                                "msg"),
+                            "typed.fld.fld.msg"),
+                        null),
+                    new LogProbe.CaptureExpression(
+                        "nullTyped_fld",
+                        new ValueScript(
+                            DSL.getMember(DSL.ref("nullTyped"), "fld"), "nullTyped.fld"),
+                        null)))
+            .build();
+    LogProbe probe2 =
+        createProbeBuilder(PROBE_ID2, CLASS_NAME, "doit", null)
+            .evaluateAt(MethodLocation.EXIT)
+            .captureSnapshot(false)
+            .captureExpressions(
+                Arrays.asList(
+                    new LogProbe.CaptureExpression(
+                        "var1", new ValueScript(DSL.ref("var1"), "var1"), null),
+                    new LogProbe.CaptureExpression(
+                        "this_fld",
+                        new ValueScript(DSL.getMember(DSL.ref("this"), "fld"), "this.fld"),
+                        null)))
+            .build();
+    TestSnapshotListener listener = installProbes(probe1, probe2);
+    Class<?> testClass = compileAndLoadClass(CLASS_NAME);
+    int result = Reflect.onClass(testClass).call("main", "1").get();
+    assertEquals(3, result);
+    List<Snapshot> snapshots = assertSnapshots(listener, 2, PROBE_ID1, PROBE_ID2);
+    // Snapshot 0
+    Snapshot snapshot0 = snapshots.get(0);
+    assertEquals(2, snapshot0.getCaptures().getReturn().getCaptureExpressions().size());
+    assertCaptureExpressions(
+        snapshot0.getCaptures().getReturn(),
+        "typed_fld_fld_msg",
+        String.class.getTypeName(),
+        "hello");
+    assertCaptureExpressions(
+        snapshot0.getCaptures().getReturn(), "nullTyped_fld", Object.class.getTypeName(), null);
+    assertNull(snapshot0.getCaptures().getReturn().getArguments());
+    assertNull(snapshot0.getCaptures().getReturn().getLocals());
+    // Snapshot 1
+    Snapshot snapshot1 = snapshots.get(1);
+    assertCaptureExpressions(
+        snapshot1.getCaptures().getReturn(), "var1", Integer.TYPE.getTypeName(), "3");
+    assertCaptureExpressions(
+        snapshot1.getCaptures().getReturn(), "this_fld", Integer.TYPE.getTypeName(), "11");
+    assertNull(snapshot1.getCaptures().getReturn().getArguments());
+    assertNull(snapshot1.getCaptures().getReturn().getLocals());
+  }
+
+  @Test
   public void fields() throws IOException, URISyntaxException {
     final String CLASS_NAME = "CapturedSnapshot06";
     TestSnapshotListener listener =
@@ -1621,9 +1741,6 @@ public class CapturedSnapshotTest extends CapturingTestBase {
   @Test
   public void staticLambda() throws IOException, URISyntaxException {
     final String CLASS_NAME = "CapturedSnapshot07";
-    CorrelationAccess spyCorrelationAccess = spy(CorrelationAccess.instance());
-    setCorrelationSingleton(spyCorrelationAccess);
-    doReturn(true).when(spyCorrelationAccess).isAvailable();
     int line = getLineForLineProbe(CLASS_NAME, LINE_PROBE_ID1);
     TestSnapshotListener listener =
         installProbes(createLineProbe(LINE_PROBE_ID1, CLASS_NAME, line));
@@ -1639,9 +1756,6 @@ public class CapturedSnapshotTest extends CapturingTestBase {
   @Test
   public void capturingLambda() throws IOException, URISyntaxException {
     final String CLASS_NAME = "CapturedSnapshot07";
-    CorrelationAccess spyCorrelationAccess = spy(CorrelationAccess.instance());
-    setCorrelationSingleton(spyCorrelationAccess);
-    doReturn(true).when(spyCorrelationAccess).isAvailable();
     int line = getLineForLineProbe(CLASS_NAME, LINE_PROBE_ID2);
     TestSnapshotListener listener =
         installProbes(createLineProbe(LINE_PROBE_ID2, CLASS_NAME, line));
@@ -1658,9 +1772,6 @@ public class CapturedSnapshotTest extends CapturingTestBase {
   @Test
   public void multiLambdas() throws IOException, URISyntaxException {
     final String CLASS_NAME = "CapturedSnapshot07";
-    CorrelationAccess spyCorrelationAccess = spy(CorrelationAccess.instance());
-    setCorrelationSingleton(spyCorrelationAccess);
-    doReturn(true).when(spyCorrelationAccess).isAvailable();
     int line = getLineForLineProbe(CLASS_NAME, LINE_PROBE_ID3);
     TestSnapshotListener listener =
         installProbes(createLineProbe(LINE_PROBE_ID3, CLASS_NAME, line));
@@ -2705,6 +2816,7 @@ public class CapturedSnapshotTest extends CapturingTestBase {
     LogProbe probe =
         createProbeBuilder(PROBE_ID, CLASS_NAME, "doit", null)
             .evaluateAt(MethodLocation.EXIT)
+            .captureSnapshot(false)
             .captureExpressions(
                 Arrays.asList(
                     new LogProbe.CaptureExpression(
@@ -2737,11 +2849,74 @@ public class CapturedSnapshotTest extends CapturingTestBase {
   }
 
   @Test
+  public void captureExpressionsPrimitives() throws IOException, URISyntaxException {
+    final String CLASS_NAME = "CapturedSnapshot08";
+    LogProbe probe =
+        createProbeBuilder(PROBE_ID, CLASS_NAME, "doit", null)
+            .evaluateAt(MethodLocation.EXIT)
+            .captureSnapshot(false)
+            .captureExpressions(
+                Arrays.asList(
+                    new LogProbe.CaptureExpression(
+                        "this_fld",
+                        new ValueScript(DSL.getMember(DSL.ref("this"), "fld"), "this.fld"),
+                        null),
+                    new LogProbe.CaptureExpression(
+                        "var1", new ValueScript(DSL.ref("var1"), "var1"), null)))
+            .build();
+    TestSnapshotListener listener = installProbes(probe);
+    Class<?> testClass = compileAndLoadClass(CLASS_NAME);
+    int result = Reflect.onClass(testClass).call("main", "1").get();
+    assertEquals(3, result);
+    Snapshot snapshot = assertOneSnapshot(listener);
+    assertCaptureExpressions(
+        snapshot.getCaptures().getReturn(), "this_fld", Integer.TYPE.getTypeName(), "11");
+    assertCaptureExpressions(
+        snapshot.getCaptures().getReturn(), "var1", Integer.TYPE.getTypeName(), "3");
+  }
+
+  @Test
+  public void captureExpressionsLineProbe() throws IOException, URISyntaxException {
+    final String CLASS_NAME = "CapturedSnapshot08";
+    int line = getLineForLineProbe(CLASS_NAME, LINE_PROBE_ID3);
+    LogProbe probe =
+        createProbeBuilder(PROBE_ID, CLASS_NAME, line)
+            .captureSnapshot(false)
+            .captureExpressions(
+                Arrays.asList(
+                    new LogProbe.CaptureExpression(
+                        "typed_fld_fld_msg",
+                        new ValueScript(
+                            DSL.getMember(
+                                DSL.getMember(DSL.getMember(DSL.ref("typed"), "fld"), "fld"),
+                                "msg"),
+                            "typed.fld.fld.msg"),
+                        null),
+                    new LogProbe.CaptureExpression(
+                        "nullTyped_fld",
+                        new ValueScript(
+                            DSL.getMember(DSL.ref("nullTyped"), "fld"), "nullTyped.fld"),
+                        null)))
+            .build();
+    TestSnapshotListener listener = installProbes(probe);
+    Class<?> testClass = compileAndLoadClass(CLASS_NAME);
+    int result = Reflect.onClass(testClass).call("main", "1").get();
+    assertEquals(3, result);
+    Snapshot snapshot = assertOneSnapshot(listener);
+    CapturedContext capturedContext = snapshot.getCaptures().getLines().get(line);
+    assertEquals(2, capturedContext.getCaptureExpressions().size());
+    assertCaptureExpressions(
+        capturedContext, "typed_fld_fld_msg", String.class.getTypeName(), "hello");
+    assertCaptureExpressions(capturedContext, "nullTyped_fld", Object.class.getTypeName(), null);
+  }
+
+  @Test
   public void captureExpressionsWithCaptureLimits() throws IOException, URISyntaxException {
     final String CLASS_NAME = "CapturedSnapshot08";
     LogProbe probe =
         createProbeBuilder(PROBE_ID, CLASS_NAME, "doit", null)
             .evaluateAt(MethodLocation.EXIT)
+            .captureSnapshot(false)
             .captureExpressions(
                 Arrays.asList(
                     new LogProbe.CaptureExpression(
@@ -2776,6 +2951,74 @@ public class CapturedSnapshotTest extends CapturingTestBase {
     assertEquals("depth", fldValue.getNotCapturedReason());
   }
 
+  @Test
+  public void methodParametersAttribute() throws Exception {
+    final String CLASS_NAME = "CapturedSnapshot01";
+    Config config = mock(Config.class);
+    when(config.isDebuggerCodeOriginEnabled()).thenReturn(false);
+    when(config.isDebuggerExceptionEnabled()).thenReturn(false);
+    when(config.isDynamicInstrumentationEnabled()).thenReturn(false);
+    Instrumentation inst = mock(Instrumentation.class);
+    if (JavaVirtualMachine.isJavaVersion(17)) {
+      // on JDK 17 introduced Spring6 class
+      Class<?> springClass =
+          Class.forName(
+              "org.springframework.web.bind.annotation.ControllerMappingReflectiveProcessor");
+      when(inst.getAllLoadedClasses()).thenReturn(new Class[] {springClass});
+    } else {
+      when(inst.getAllLoadedClasses()).thenReturn(new Class[0]);
+    }
+    DebuggerAgent.run(config, inst, null);
+    TestSnapshotListener listener =
+        installMethodProbeAtExit(CLASS_NAME, "main", "int (java.lang.String)");
+    Map<String, byte[]> buffers =
+        compile(CLASS_NAME, SourceCompiler.DebugInfo.ALL, "8", Arrays.asList("-parameters"));
+    Class<?> testClass = loadClass(CLASS_NAME, buffers);
+    int result = Reflect.onClass(testClass).call("main", "1").get();
+    assertEquals(3, result);
+    if (JavaVirtualMachine.isJavaVersion(17)) {
+      // on JDK 17 with Spring6 class, transformation cannot happen
+      assertEquals(0, listener.snapshots.size());
+      ArgumentCaptor<ProbeId> probeIdCaptor = ArgumentCaptor.forClass(ProbeId.class);
+      ArgumentCaptor<String> strCaptor = ArgumentCaptor.forClass(String.class);
+      verify(probeStatusSink, times(1)).addError(probeIdCaptor.capture(), strCaptor.capture());
+      assertEquals(PROBE_ID.getId(), probeIdCaptor.getAllValues().get(0).getId());
+      assertEquals(
+          "Instrumentation failed for CapturedSnapshot01: java.lang.RuntimeException: Method Parameters attribute detected, instrumentation not supported",
+          strCaptor.getAllValues().get(0));
+    } else {
+      Snapshot snapshot = assertOneSnapshot(listener);
+      assertCaptureArgs(snapshot.getCaptures().getReturn(), "arg", String.class.getTypeName(), "1");
+    }
+  }
+
+  @Test
+  @EnabledForJreRange(min = JRE.JAVA_17)
+  public void methodParametersAttributeRecord() throws IOException, URISyntaxException {
+    final String CLASS_NAME = "com.datadog.debugger.CapturedSnapshot29";
+    final String RECORD_NAME = "com.datadog.debugger.MyRecord1";
+    TestSnapshotListener listener = installMethodProbeAtExit(RECORD_NAME, "<init>", null);
+    Map<String, byte[]> buffers =
+        compile(CLASS_NAME, SourceCompiler.DebugInfo.ALL, "17", Arrays.asList("-parameters"));
+    Class<?> testClass = loadClass(CLASS_NAME, buffers);
+    int result = Reflect.onClass(testClass).call("main", "1").get();
+    assertEquals(42, result);
+    if (JavaVirtualMachine.isJavaVersionAtLeast(19)) {
+      Snapshot snapshot = assertOneSnapshot(listener);
+      assertCaptureArgs(
+          snapshot.getCaptures().getReturn(), "firstName", String.class.getTypeName(), "john");
+    } else {
+      assertEquals(0, listener.snapshots.size());
+      ArgumentCaptor<ProbeId> probeIdCaptor = ArgumentCaptor.forClass(ProbeId.class);
+      ArgumentCaptor<String> strCaptor = ArgumentCaptor.forClass(String.class);
+      verify(probeStatusSink, times(1)).addError(probeIdCaptor.capture(), strCaptor.capture());
+      assertEquals(PROBE_ID.getId(), probeIdCaptor.getAllValues().get(0).getId());
+      assertEquals(
+          "Instrumentation failed for com.datadog.debugger.MyRecord1: java.lang.RuntimeException: Method Parameters attribute detected, instrumentation not supported",
+          strCaptor.getAllValues().get(0));
+    }
+  }
+
   private TestSnapshotListener setupInstrumentTheWorldTransformer(
       String excludeFileName, String includeFileName) {
     Config config = mock(Config.class);
@@ -2798,20 +3041,6 @@ public class CapturedSnapshotTest extends CapturingTestBase {
                 config, new ProbeStatusSink(config, config.getFinalDebuggerSnapshotUrl(), false)));
     DebuggerContext.initClassFilter(new DenyListHelper(null));
     return listener;
-  }
-
-  private void setCorrelationSingleton(Object instance) {
-    Class<?> singletonClass = CorrelationAccess.class.getDeclaredClasses()[0];
-    try {
-      Field instanceField = singletonClass.getDeclaredField("INSTANCE");
-      instanceField.setAccessible(true);
-      Field modifiersField = Field.class.getDeclaredField("modifiers");
-      modifiersField.setAccessible(true);
-      modifiersField.setInt(instanceField, instanceField.getModifiers() & ~Modifier.FINAL);
-      instanceField.set(null, instance);
-    } catch (NoSuchFieldException | IllegalAccessException e) {
-      e.printStackTrace();
-    }
   }
 
   private Snapshot assertOneSnapshot(TestSnapshotListener listener) {

@@ -1,4 +1,3 @@
-import de.thetaphi.forbiddenapis.gradle.CheckForbiddenApis
 import groovy.lang.Closure
 import org.gradle.kotlin.dsl.extra
 
@@ -7,19 +6,18 @@ plugins {
   idea
 }
 
-val minJavaVersionForTests by extra(JavaVersion.VERSION_17)
-
 apply(from = "$rootDir/gradle/java.gradle")
+
+extensions.getByName("tracerJava").withGroovyBuilder {
+  invokeMethod("addSourceSetFor", arrayOf(JavaVersion.VERSION_17, mapOf("compileOnly" to true)))
+}
 
 dependencies {
   implementation(libs.slf4j)
   implementation(project(":internal-api"))
+  implementation(project(":utils:filesystem-utils"))
   implementation(libs.jnr.unixsocket)
   testImplementation(files(sourceSets["main_java17"].output))
-}
-
-tasks.named<CheckForbiddenApis>("forbiddenApisMain_java17") {
-  failOnMissingClasses = false
 }
 
 fun AbstractCompile.configureCompiler(javaVersionInteger: Int, compatibilityVersion: JavaVersion? = null, unsetReleaseFlagReason: String? = null) {

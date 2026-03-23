@@ -5,10 +5,10 @@ import static datadog.trace.util.AgentThreadFactory.newAgentThread;
 import static org.datadog.jmxfetch.AppConfig.ACTION_COLLECT;
 
 import datadog.environment.SystemProperties;
+import datadog.metrics.api.statsd.StatsDClient;
+import datadog.metrics.api.statsd.StatsDClientManager;
 import datadog.trace.api.Config;
 import datadog.trace.api.GlobalTracer;
-import datadog.trace.api.StatsDClient;
-import datadog.trace.api.StatsDClientManager;
 import datadog.trace.api.flare.TracerFlare;
 import datadog.trace.api.telemetry.LogCollector;
 import de.thetaphi.forbiddenapis.SuppressForbidden;
@@ -52,7 +52,7 @@ public class JMXFetch {
       // Reduce noisiness of jmxfetch logging.
       SystemProperties.set("org.slf4j.simpleLogger.log.org.datadog.jmxfetch", "warn");
     }
-
+    System.setProperty("dd.jmxfetch.jmx_metric_fetch.enabled", "true");
     final String jmxFetchConfigDir = config.getJmxFetchConfigDir();
     final List<String> jmxFetchConfigs = config.getJmxFetchConfigs();
     final List<String> internalMetricsConfigs = getInternalMetricFiles();

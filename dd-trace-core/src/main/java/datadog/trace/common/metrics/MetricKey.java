@@ -3,13 +3,16 @@ package datadog.trace.common.metrics;
 import static datadog.trace.bootstrap.instrumentation.api.UTF8BytesString.EMPTY;
 
 import datadog.trace.bootstrap.instrumentation.api.UTF8BytesString;
+import datadog.trace.util.HashingUtils;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 /** The aggregation key for tracked metrics. */
 public final class MetricKey {
   private final UTF8BytesString resource;
   private final UTF8BytesString service;
+  private final UTF8BytesString serviceSource;
   private final UTF8BytesString operationName;
   private final UTF8BytesString type;
   private final int httpStatusCode;
@@ -18,19 +21,25 @@ public final class MetricKey {
   private final boolean isTraceRoot;
   private final UTF8BytesString spanKind;
   private final List<UTF8BytesString> peerTags;
+  private final UTF8BytesString httpMethod;
+  private final UTF8BytesString httpEndpoint;
 
   public MetricKey(
       CharSequence resource,
       CharSequence service,
       CharSequence operationName,
+      CharSequence serviceSource,
       CharSequence type,
       int httpStatusCode,
       boolean synthetics,
       boolean isTraceRoot,
       CharSequence spanKind,
-      List<UTF8BytesString> peerTags) {
+      List<UTF8BytesString> peerTags,
+      CharSequence httpMethod,
+      CharSequence httpEndpoint) {
     this.resource = null == resource ? EMPTY : UTF8BytesString.create(resource);
     this.service = null == service ? EMPTY : UTF8BytesString.create(service);
+    this.serviceSource = null == serviceSource ? null : UTF8BytesString.create(serviceSource);
     this.operationName = null == operationName ? EMPTY : UTF8BytesString.create(operationName);
     this.type = null == type ? EMPTY : UTF8BytesString.create(type);
     this.httpStatusCode = httpStatusCode;
@@ -38,24 +47,23 @@ public final class MetricKey {
     this.isTraceRoot = isTraceRoot;
     this.spanKind = null == spanKind ? EMPTY : UTF8BytesString.create(spanKind);
     this.peerTags = peerTags == null ? Collections.emptyList() : peerTags;
+    this.httpMethod = httpMethod == null ? null : UTF8BytesString.create(httpMethod);
+    this.httpEndpoint = httpEndpoint == null ? null : UTF8BytesString.create(httpEndpoint);
 
-    // Unrolled polynomial hashcode to avoid varargs allocation
-    // and eliminate data dependency between iterations as in Arrays.hashCode.
-    // Coefficient constants are powers of 31, with integer overflow (hence negative numbers).
-    // See
-    // https://richardstartin.github.io/posts/collecting-rocks-and-benchmarks
-    // https://richardstartin.github.io/posts/still-true-in-java-9-handwritten-hash-codes-are-faster
-
-    this.hash =
-        -196513505 * Boolean.hashCode(this.isTraceRoot)
-            + -1807454463 * this.spanKind.hashCode()
-            + 887_503_681 * this.peerTags.hashCode() // possibly unroll here has well.
-            + 28_629_151 * this.resource.hashCode()
-            + 923_521 * this.service.hashCode()
-            + 29791 * this.operationName.hashCode()
-            + 961 * this.type.hashCode()
-            + 31 * httpStatusCode
-            + (this.synthetics ? 1 : 0);
+    int tmpHash = 0;
+    tmpHash = HashingUtils.addToHash(tmpHash, this.isTraceRoot);
+    tmpHash = HashingUtils.addToHash(tmpHash, this.spanKind);
+    tmpHash = HashingUtils.addToHash(tmpHash, this.peerTags);
+    tmpHash = HashingUtils.addToHash(tmpHash, this.resource);
+    tmpHash = HashingUtils.addToHash(tmpHash, this.service);
+    tmpHash = HashingUtils.addToHash(tmpHash, this.operationName);
+    tmpHash = HashingUtils.addToHash(tmpHash, this.type);
+    tmpHash = HashingUtils.addToHash(tmpHash, this.httpStatusCode);
+    tmpHash = HashingUtils.addToHash(tmpHash, this.synthetics);
+    tmpHash = HashingUtils.addToHash(tmpHash, this.serviceSource);
+    tmpHash = HashingUtils.addToHash(tmpHash, this.httpEndpoint);
+    tmpHash = HashingUtils.addToHash(tmpHash, this.httpMethod);
+    this.hash = tmpHash;
   }
 
   public UTF8BytesString getResource() {
@@ -64,6 +72,10 @@ public final class MetricKey {
 
   public UTF8BytesString getService() {
     return service;
+  }
+
+  public UTF8BytesString getServiceSource() {
+    return serviceSource;
   }
 
   public UTF8BytesString getOperationName() {
@@ -94,6 +106,14 @@ public final class MetricKey {
     return peerTags;
   }
 
+  public UTF8BytesString getHttpMethod() {
+    return httpMethod;
+  }
+
+  public UTF8BytesString getHttpEndpoint() {
+    return httpEndpoint;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -110,7 +130,10 @@ public final class MetricKey {
           && type.equals(metricKey.type)
           && isTraceRoot == metricKey.isTraceRoot
           && spanKind.equals(metricKey.spanKind)
-          && peerTags.equals(metricKey.peerTags);
+          && peerTags.equals(metricKey.peerTags)
+          && Objects.equals(serviceSource, metricKey.serviceSource)
+          && Objects.equals(httpMethod, metricKey.httpMethod)
+          && Objects.equals(httpEndpoint, metricKey.httpEndpoint);
     }
     return false;
   }
