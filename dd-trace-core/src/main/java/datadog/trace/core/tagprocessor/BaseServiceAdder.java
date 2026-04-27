@@ -2,10 +2,9 @@ package datadog.trace.core.tagprocessor;
 
 import datadog.trace.api.DDTags;
 import datadog.trace.api.TagMap;
-import datadog.trace.bootstrap.instrumentation.api.AgentSpanLink;
+import datadog.trace.bootstrap.instrumentation.api.AppendableSpanLinks;
 import datadog.trace.bootstrap.instrumentation.api.UTF8BytesString;
 import datadog.trace.core.DDSpanContext;
-import java.util.List;
 import javax.annotation.Nullable;
 
 public final class BaseServiceAdder extends TagsPostProcessor {
@@ -17,7 +16,7 @@ public final class BaseServiceAdder extends TagsPostProcessor {
 
   @Override
   public void processTags(
-      TagMap unsafeTags, DDSpanContext spanContext, List<AgentSpanLink> spanLinks) {
+      TagMap unsafeTags, DDSpanContext spanContext, AppendableSpanLinks spanLinks) {
     if (ddService != null
         && spanContext != null
         && !ddService.toString().equalsIgnoreCase(spanContext.getServiceName())) {
