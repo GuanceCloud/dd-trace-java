@@ -20,7 +20,7 @@ jobs:
         with:
           submodules: 'recursive'
       - name: Cache Gradle dependencies
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: |
             ~/.gradle/caches
@@ -30,7 +30,7 @@ jobs:
             ${{ runner.os }}-gradle-
         
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@89a39a4e59826350b863aa6b6252a07ad50cf83e # v4.32.4
+        uses: github/codeql-action/init@95e58e9a2cdfd71adc6e0353d5c52f41a045d225 # v4.35.2
         with:
           languages: 'java'
           build-mode: 'manual'
@@ -39,17 +39,11 @@ jobs:
         env:
           ORG_GRADLE_PROJECT_akkaRepositoryToken: ${{ secrets.AKKA_REPO_TOKEN }}
         run: |
-          GRADLE_OPTS="-Dorg.gradle.jvmargs='-Xmx3G -Xms2G'" \
-          JAVA_HOME=$JAVA_HOME_8_X64 \
-          JAVA_8_HOME=$JAVA_HOME_8_X64 \
-          JAVA_11_HOME=$JAVA_HOME_11_X64 \
-          JAVA_17_HOME=$JAVA_HOME_17_X64 \
-          JAVA_21_HOME=$JAVA_HOME_21_X64 \
-          ./gradlew clean :dd-java-agent:shadowJar \
-            --build-cache --parallel --stacktrace --no-daemon --max-workers=4
+          GRADLE_OPTS="-Dorg.gradle.jvmargs='-Xms2G -Xmx3G'" \
+          ./gradlew clean :dd-java-agent:shadowJar --build-cache --parallel --stacktrace --no-daemon --max-workers=4
 
       - name: Perform CodeQL Analysis and upload results to GitHub Security tab
-        uses: github/codeql-action/analyze@89a39a4e59826350b863aa6b6252a07ad50cf83e # v4.32.4
+        uses: github/codeql-action/analyze@95e58e9a2cdfd71adc6e0353d5c52f41a045d225 # v4.35.2
 
   trivy:
     name: Analyze changes with Trivy
@@ -66,7 +60,7 @@ jobs:
           submodules: 'recursive'
       
       - name: Cache Gradle dependencies
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: |
             ~/.gradle/caches
@@ -85,14 +79,8 @@ jobs:
         env:
           ORG_GRADLE_PROJECT_akkaRepositoryToken: ${{ secrets.AKKA_REPO_TOKEN }}
         run: |
-          GRADLE_OPTS="-Dorg.gradle.jvmargs='-Xmx3G -Xms2G'" \
-          JAVA_HOME=$JAVA_HOME_8_X64 \
-          JAVA_8_HOME=$JAVA_HOME_8_X64 \
-          JAVA_11_HOME=$JAVA_HOME_11_X64 \
-          JAVA_17_HOME=$JAVA_HOME_17_X64 \
-          JAVA_21_HOME=$JAVA_HOME_21_X64 \
-          ./gradlew clean publishToMavenLocal \
-            --build-cache --parallel --stacktrace --no-daemon --max-workers=4
+          GRADLE_OPTS="-Dorg.gradle.jvmargs='-Xms2G -Xmx3G'" \
+          ./gradlew clean publishToMavenLocal --build-cache --parallel --stacktrace --no-daemon --max-workers=4
 
       - name: Copy published artifacts
         run: |
@@ -101,7 +89,7 @@ jobs:
           ls -laR "./workspace/.trivy"
 
       - name: Run Trivy security scanner
-        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # v0.34.1
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
         with:
           scan-type: rootfs
           scan-ref: './workspace/.trivy/'
@@ -114,7 +102,7 @@ jobs:
           TRIVY_JAVA_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-java-db,public.ecr.aws/aquasecurity/trivy-java-db
 
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@89a39a4e59826350b863aa6b6252a07ad50cf83e # v4.32.4
+        uses: github/codeql-action/upload-sarif@95e58e9a2cdfd71adc6e0353d5c52f41a045d225 # v4.35.2
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'

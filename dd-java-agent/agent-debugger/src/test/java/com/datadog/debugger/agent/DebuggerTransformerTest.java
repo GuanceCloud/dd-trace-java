@@ -52,6 +52,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIf;
 import org.mockito.ArgumentCaptor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.VarInsnNode;
@@ -300,10 +301,13 @@ public class DebuggerTransformerTest {
   }
 
   @Test
+  @DisabledIf(
+      value = "datadog.environment.JavaVirtualMachine#isJ9",
+      disabledReason = "Issue with J9: Flaky")
   public void classGenerationFailed() {
     Config config = createConfig();
-    final String CLASS_NAME = DebuggerAgent.class.getTypeName();
-    final String METHOD_NAME = "run";
+    final String CLASS_NAME = ArrayList.class.getTypeName();
+    final String METHOD_NAME = "add";
     MockProbe mockProbe = MockProbe.builder(PROBE_ID).where(CLASS_NAME, METHOD_NAME).build();
     LogProbe logProbe1 =
         LogProbe.builder().probeId("logprobe1", 0).where(CLASS_NAME, METHOD_NAME).build();
@@ -328,10 +332,10 @@ public class DebuggerTransformerTest {
     byte[] newClassBuffer =
         debuggerTransformer.transform(
             ClassLoader.getSystemClassLoader(),
-            "com/datadog/debugger/agent/DebuggerAgent",
+            "java/util/ArrayList",
             null,
             null,
-            getClassFileBytes(DebuggerAgent.class));
+            getClassFileBytes(ArrayList.class));
     assertNull(newClassBuffer);
     ArgumentCaptor<String> strCaptor = ArgumentCaptor.forClass(String.class);
     ArgumentCaptor<ProbeId> probeIdCaptor = ArgumentCaptor.forClass(ProbeId.class);

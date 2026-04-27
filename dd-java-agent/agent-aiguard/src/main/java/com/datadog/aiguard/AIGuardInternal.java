@@ -69,9 +69,12 @@ public class AIGuardInternal implements Evaluator {
   static final String ACTION_TAG = "ai_guard.action";
   static final String REASON_TAG = "ai_guard.reason";
   static final String BLOCKED_TAG = "ai_guard.blocked";
+  static final String EVENT_TAG = "ai_guard.event";
   static final String META_STRUCT_TAG = "ai_guard";
   static final String META_STRUCT_MESSAGES = "messages";
   static final String META_STRUCT_CATEGORIES = "attack_categories";
+  static final String META_STRUCT_SDS = "sds";
+  static final String META_STRUCT_TAG_PROBS = "tag_probs";
 
   public static void install() {
     final Config config = Config.get();
@@ -204,6 +207,9 @@ public class AIGuardInternal implements Evaluator {
   }
 
   private boolean isBlockingEnabled(final Options options, final Object isBlockingEnabled) {
+    if (isBlockingEnabled == null) {
+      return false;
+    }
     return options.block() && "true".equalsIgnoreCase(isBlockingEnabled.toString());
   }
 
@@ -222,6 +228,7 @@ public class AIGuardInternal implements Evaluator {
     final AgentSpan localRootSpan = span.getLocalRootSpan();
     if (localRootSpan != null) {
       localRootSpan.setTag(Tags.AI_GUARD_KEEP, true);
+      localRootSpan.setTag(EVENT_TAG, true);
     }
     try (final AgentScope scope = tracer.activateSpan(span)) {
       final Message last = messages.get(messages.size() - 1);
@@ -252,6 +259,10 @@ public class AIGuardInternal implements Evaluator {
         final String reason = (String) result.get("reason");
         @SuppressWarnings("unchecked")
         final List<String> tags = (List<String>) result.get("tags");
+        @SuppressWarnings("unchecked")
+        final List<?> sdsFindings = (List<?>) result.get("sds_findings");
+        @SuppressWarnings("unchecked")
+        final Map<String, Number> tagProbs = (Map<String, Number>) result.get("tag_probs");
         span.setTag(ACTION_TAG, action);
         if (reason != null) {
           span.setTag(REASON_TAG, reason);
@@ -259,14 +270,20 @@ public class AIGuardInternal implements Evaluator {
         if (tags != null && !tags.isEmpty()) {
           metaStruct.put(META_STRUCT_CATEGORIES, tags);
         }
+        if (tagProbs != null && !tagProbs.isEmpty()) {
+          metaStruct.put(META_STRUCT_TAG_PROBS, tagProbs);
+        }
+        if (sdsFindings != null && !sdsFindings.isEmpty()) {
+          metaStruct.put(META_STRUCT_SDS, sdsFindings);
+        }
         final boolean shouldBlock =
             isBlockingEnabled(options, result.get("is_blocking_enabled")) && action != Action.ALLOW;
         WafMetricCollector.get().aiGuardRequest(action, shouldBlock);
         if (shouldBlock) {
           span.setTag(BLOCKED_TAG, true);
-          throw new AIGuardAbortError(action, reason, tags);
+          throw new AIGuardAbortError(action, reason, tags, tagProbs, sdsFindings);
         }
-        return new Evaluation(action, reason, tags);
+        return new Evaluation(action, reason, tags, tagProbs, sdsFindings);
       }
     } catch (AIGuardAbortError e) {
       span.addThrowable(e);

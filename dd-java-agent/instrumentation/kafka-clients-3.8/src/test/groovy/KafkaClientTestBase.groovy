@@ -1,6 +1,7 @@
 import datadog.trace.agent.test.asserts.TraceAssert
 import datadog.trace.agent.test.naming.VersionedNamingTestBase
 import datadog.trace.api.Config
+import datadog.trace.api.config.TraceInstrumentationConfig
 import datadog.trace.api.DDTags
 import datadog.trace.api.datastreams.DataStreamsTags
 import datadog.trace.bootstrap.instrumentation.api.InstrumentationTags
@@ -925,9 +926,9 @@ abstract class KafkaClientTestBase extends VersionedNamingTestBase {
         "$Tags.SPAN_KIND" Tags.SPAN_KIND_PRODUCER
         "$InstrumentationTags.KAFKA_BOOTSTRAP_SERVERS" config.get(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG)
         "$InstrumentationTags.MESSAGING_DESTINATION_NAME" "$SHARED_TOPIC"
-        if (partitioned) {
-          "$InstrumentationTags.PARTITION" { it >= 0 }
-        }
+        "$InstrumentationTags.PARTITION" { it >= 0 }
+        "$InstrumentationTags.OFFSET" { it >= 0 }
+        "$InstrumentationTags.KAFKA_CLUSTER_ID" { String }
         if (tombstone) {
           "$InstrumentationTags.TOMBSTONE" true
         }
@@ -1004,6 +1005,7 @@ abstract class KafkaClientTestBase extends VersionedNamingTestBase {
         "$InstrumentationTags.OFFSET" { offset.containsWithinBounds(it as int) }
         "$InstrumentationTags.CONSUMER_GROUP" "sender"
         "$InstrumentationTags.KAFKA_BOOTSTRAP_SERVERS" config.get(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG)
+        "$InstrumentationTags.KAFKA_CLUSTER_ID" { String }
         "$InstrumentationTags.RECORD_QUEUE_TIME_MS" { it >= 0 }
         "$InstrumentationTags.RECORD_END_TO_END_DURATION_MS" { it >= 0 }
         "$InstrumentationTags.MESSAGING_DESTINATION_NAME" "$SHARED_TOPIC"
@@ -1218,5 +1220,13 @@ class KafkaClientDataStreamsDisabledForkedTest extends KafkaClientTestBase {
   @Override
   boolean isDataStreamsEnabled() {
     return false
+  }
+}
+
+class KafkaClientContextSwapForkedTest extends KafkaClientV0ForkedTest {
+  @Override
+  void configurePreAgent() {
+    super.configurePreAgent()
+    injectSysConfig(TraceInstrumentationConfig.LEGACY_CONTEXT_MANAGER_ENABLED, "false")
   }
 }
