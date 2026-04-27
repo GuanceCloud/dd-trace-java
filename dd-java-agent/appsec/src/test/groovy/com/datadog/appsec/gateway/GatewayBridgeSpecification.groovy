@@ -121,6 +121,7 @@ class GatewayBridgeSpecification extends DDSpecification {
   BiFunction<RequestContext, HttpClientResponse, Flow<Void>> httpClientResponseCB
   BiFunction<RequestContext, Long, Flow<Void>> httpClientSamplingCB
   BiFunction<RequestContext, String, Flow<Void>> fileLoadedCB
+  BiFunction<RequestContext, List<String>, Flow<Void>> requestFilesFilenamesCB
   BiFunction<RequestContext, String, Flow<Void>> requestSessionCB
   BiFunction<RequestContext, String[], Flow<Void>> execCmdCB
   BiFunction<RequestContext, String, Flow<Void>> shellCmdCB
@@ -188,13 +189,12 @@ class GatewayBridgeSpecification extends DDSpecification {
     1 * mockAppSecCtx.transferCollectedEvents() >> [event]
     1 * mockAppSecCtx.peerAddress >> '2001::1'
     1 * mockAppSecCtx.close()
-    1 * traceSegment.setTagTop("_dd.appsec.enabled", 1)
-    1 * traceSegment.setTagTop("_dd.runtime_family", "jvm")
-    1 * traceSegment.setTagTop('appsec.event', true)
+    1 * spanInfo.setMetric("_dd.appsec.enabled", 1)
+    1 * spanInfo.setTag("_dd.runtime_family", "jvm")
+    1 * spanInfo.setTag('appsec.event', true)
+    1 * spanInfo.setTag('network.client.ip', '2001::1')
+    1 * spanInfo.setTag('actor.ip', '1.1.1.1')
     1 * traceSegment.setDataTop('appsec', new AppSecEventWrapper([event]))
-    1 * traceSegment.setTagTop('http.request.headers.accept', 'header_value')
-    1 * traceSegment.setTagTop('http.response.headers.content-type', 'text/html; charset=UTF-8')
-    1 * traceSegment.setTagTop('network.client.ip', '2001::1')
     1 * mockAppSecCtx.isWafBlocked()
     1 * mockAppSecCtx.hasWafErrors()
     1 * mockAppSecCtx.getWafTimeouts()
@@ -224,7 +224,7 @@ class GatewayBridgeSpecification extends DDSpecification {
     then:
     1 * mockAppSecCtx.transferCollectedEvents() >> [Stub(AppSecEvent)]
     1 * spanInfo.getTags() >> TagMap.fromMap(['http.client_ip': '8.8.8.8'])
-    1 * traceSegment.setTagTop('actor.ip', '8.8.8.8')
+    1 * spanInfo.setTag('actor.ip', '8.8.8.8')
   }
 
   void 'bridge can collect headers'() {
@@ -462,7 +462,7 @@ class GatewayBridgeSpecification extends DDSpecification {
 
   void callInitAndCaptureCBs() {
     // force all callbacks to be registered
-    _ * eventDispatcher.allSubscribedDataAddresses() >> [KnownAddresses.REQUEST_PATH_PARAMS, KnownAddresses.REQUEST_BODY_OBJECT]
+    _ * eventDispatcher.allSubscribedDataAddresses() >> [KnownAddresses.REQUEST_PATH_PARAMS, KnownAddresses.REQUEST_BODY_OBJECT, KnownAddresses.REQUEST_FILES_FILENAMES]
 
     1 * ig.registerCallback(EVENTS.requestStarted(), _) >> {
       requestStartedCB = it[1]; null
@@ -553,6 +553,9 @@ class GatewayBridgeSpecification extends DDSpecification {
     }
     1 * ig.registerCallback(EVENTS.httpRoute(), _) >> {
       httpRouteCB = it[1]; null
+    }
+    1 * ig.registerCallback(EVENTS.requestFilesFilenames(), _) >> {
+      requestFilesFilenamesCB = it[1]; null
     }
     0 * ig.registerCallback(_, _)
 
@@ -1077,6 +1080,38 @@ class GatewayBridgeSpecification extends DDSpecification {
     flow.action == Flow.Action.Noop.INSTANCE
     gatewayContext.isTransient == true
     gatewayContext.isRasp == true
+  }
+
+  void 'process request files filenames'() {
+    setup:
+    final filenames = ['malicious.php', 'document.pdf']
+    eventDispatcher.getDataSubscribers({
+      KnownAddresses.REQUEST_FILES_FILENAMES in it
+    }) >> nonEmptyDsInfo
+    DataBundle bundle
+    GatewayContext gatewayContext
+
+    when:
+    Flow<?> flow = requestFilesFilenamesCB.apply(ctx, filenames)
+
+    then:
+    1 * eventDispatcher.publishDataEvent(nonEmptyDsInfo, ctx.data, _ as DataBundle, _ as GatewayContext) >> {
+      a, b, db, gw -> bundle = db; gatewayContext = gw; NoopFlow.INSTANCE
+    }
+    bundle.get(KnownAddresses.REQUEST_FILES_FILENAMES) == filenames
+    flow.result == null
+    flow.action == Flow.Action.Noop.INSTANCE
+    gatewayContext.isTransient == false
+    gatewayContext.isRasp == false
+  }
+
+  void 'process request files filenames with empty list returns noop'() {
+    when:
+    Flow<?> flow = requestFilesFilenamesCB.apply(ctx, [])
+
+    then:
+    flow == NoopFlow.INSTANCE
+    0 * eventDispatcher.publishDataEvent(*_)
   }
 
   void 'process exec cmd'() {

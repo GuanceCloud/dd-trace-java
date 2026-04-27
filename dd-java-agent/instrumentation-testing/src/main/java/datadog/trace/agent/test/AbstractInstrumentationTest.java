@@ -20,14 +20,18 @@ import datadog.trace.core.CoreTracer;
 import datadog.trace.core.DDSpan;
 import datadog.trace.core.PendingTrace;
 import datadog.trace.core.TraceCollector;
+import de.thetaphi.forbiddenapis.SuppressForbidden;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
+import java.util.List;
 import java.util.ServiceLoader;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import net.bytebuddy.agent.ByteBuddyAgent;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.opentest4j.AssertionFailedError;
@@ -50,6 +54,19 @@ public abstract class AbstractInstrumentationTest {
 
   protected ClassFileTransformer activeTransformer;
   protected ClassFileTransformerListener transformerLister;
+
+  @SuppressForbidden // Class.forName() used to dynamically configure context if present
+  @BeforeAll
+  static void allowContextTesting() {
+    // Allow re-registration of context managers so each test can use a fresh tracer.
+    // This mirrors DDSpecification.allowContextTesting() for the Spock test framework.
+    try {
+      Class.forName("datadog.context.ContextManager").getMethod("allowTesting").invoke(null);
+      Class.forName("datadog.context.ContextBinder").getMethod("allowTesting").invoke(null);
+    } catch (Throwable ignore) {
+      // don't block testing if context types aren't available
+    }
+  }
 
   @BeforeEach
   public void init() {
@@ -138,6 +155,26 @@ public abstract class AbstractInstrumentationTest {
     TraceAssertions.assertTraces(this.writer, options, matchers);
   }
 
+  /**
+   * Blocks the current thread until the traces written match the given predicate or the timeout
+   * occurs.
+   *
+   * @param predicate the condition that must be satisfied by the list of traces
+   */
+  protected void blockUntilTracesMatch(Predicate<List<List<DDSpan>>> predicate) {
+    long deadline = System.currentTimeMillis() + TIMEOUT_MILLIS;
+    while (!predicate.test(this.writer)) {
+      if (System.currentTimeMillis() > deadline) {
+        throw new RuntimeException(new TimeoutException("Timed out waiting for traces/spans."));
+      }
+      try {
+        Thread.sleep(10);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+    }
+  }
+
   protected void blockUntilChildSpansFinished(final int numberOfSpans) {
     blockUntilChildSpansFinished(this.tracer.activeSpan(), numberOfSpans);
   }
@@ -147,7 +184,7 @@ public abstract class AbstractInstrumentationTest {
       TraceCollector traceCollector = ((DDSpan) span).context().getTraceCollector();
       if (!(traceCollector instanceof PendingTrace)) {
         throw new IllegalStateException(
-            "Expected $PendingTrace.name trace collector, got $traceCollector.class.name");
+            "Expected PendingTrace trace collector, got " + traceCollector.getClass().getName());
       }
 
       PendingTrace pendingTrace = (PendingTrace) traceCollector;

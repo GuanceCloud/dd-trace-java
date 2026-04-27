@@ -50,7 +50,10 @@ public class SqsInterceptor extends RequestHandler2 {
       // a kind of ImmutableMap
       Map<String, MessageAttributeValue> messageAttributes =
           new HashMap<>(smRequest.getMessageAttributes());
-      injectTraceContext(messageAttributes, request, queueUrl);
+      if (!messageAttributes.containsKey(DATADOG_KEY)) {
+        Context context = newContext(request, queueUrl);
+        defaultPropagator().inject(context, messageAttributes, SETTER);
+      }
       // note: modifying message attributes has to be done before marshalling, otherwise the changes
       // are not reflected in the actual request (and the MD5 check on send will fail).
       smRequest.setMessageAttributes(messageAttributes);
@@ -63,10 +66,13 @@ public class SqsInterceptor extends RequestHandler2 {
         return request;
       }
 
+      Context context = newContext(request, queueUrl);
       for (SendMessageBatchRequestEntry entry : smbRequest.getEntries()) {
         Map<String, MessageAttributeValue> messageAttributes =
             new HashMap<>(entry.getMessageAttributes());
-        injectTraceContext(messageAttributes, request, queueUrl);
+        if (!messageAttributes.containsKey(DATADOG_KEY)) {
+          defaultPropagator().inject(context, messageAttributes, SETTER);
+        }
         entry.setMessageAttributes(messageAttributes);
       }
     } else if (request instanceof ReceiveMessageRequest) {
@@ -80,29 +86,6 @@ public class SqsInterceptor extends RequestHandler2 {
       }
     }
     return request;
-  }
-
-  private void injectTraceContext(
-      Map<String, MessageAttributeValue> messageAttributes,
-      AmazonWebServiceRequest request,
-      String queueUrl) {
-    if (messageAttributes.size() >= 10 || messageAttributes.containsKey(DATADOG_KEY)) {
-      return;
-    }
-
-    StringBuilder jsonBuilder = new StringBuilder();
-    jsonBuilder.append('{');
-    defaultPropagator().inject(newContext(request, queueUrl), jsonBuilder, SETTER);
-    if (jsonBuilder.length() == 1) {
-      return;
-    }
-    jsonBuilder.setLength(jsonBuilder.length() - 1);
-    jsonBuilder.append('}');
-    messageAttributes.put(
-        DATADOG_KEY,
-        new MessageAttributeValue()
-            .withDataType("String")
-            .withStringValue(jsonBuilder.toString()));
   }
 
   private Context newContext(AmazonWebServiceRequest request, String queueUrl) {
