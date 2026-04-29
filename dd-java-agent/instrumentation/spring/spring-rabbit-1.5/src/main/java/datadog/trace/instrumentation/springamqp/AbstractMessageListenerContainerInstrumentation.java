@@ -19,10 +19,13 @@ import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.java.concurrent.ExcludeFilter;
 import datadog.trace.bootstrap.instrumentation.java.concurrent.State;
+import java.net.InetSocketAddress;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
 import net.bytebuddy.asm.Advice;
 import org.springframework.amqp.core.Message;
+import org.springframework.amqp.core.MessageProperties;
 
 @AutoService(InstrumenterModule.class)
 public class AbstractMessageListenerContainerInstrumentation extends InstrumenterModule.Tracing
@@ -44,7 +47,11 @@ public class AbstractMessageListenerContainerInstrumentation extends Instrumente
 
   @Override
   public Map<String, String> contextStore() {
-    return singletonMap("org.springframework.amqp.core.Message", State.class.getName());
+    Map<String, String> contextStore = new HashMap<>();
+    contextStore.put("org.springframework.amqp.core.Message", State.class.getName());
+    contextStore.put(
+        "org.springframework.amqp.core.MessageProperties", InetSocketAddress.class.getName());
+    return contextStore;
   }
 
   @Override
@@ -75,6 +82,15 @@ public class AbstractMessageListenerContainerInstrumentation extends Instrumente
               AgentSpan span = startSpan(AMQP_CONSUME);
               span.setMeasured(true);
               DECORATE.afterStart(span);
+              MessageProperties properties = message.getMessageProperties();
+              if (properties != null) {
+                InetSocketAddress connection =
+                    InstrumentationContext.get(MessageProperties.class, InetSocketAddress.class)
+                        .get(properties);
+                if (connection != null) {
+                  DECORATE.onPeerConnection(span, connection);
+                }
+              }
               DECORATE.onConsume(span, message.getMessageProperties().getConsumerQueue());
               return activateSpan(span);
             }
