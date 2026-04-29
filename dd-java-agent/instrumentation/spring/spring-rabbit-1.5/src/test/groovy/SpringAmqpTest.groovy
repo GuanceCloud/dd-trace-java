@@ -1,3 +1,4 @@
+import datadog.trace.bootstrap.instrumentation.api.Tags
 import datadog.trace.agent.test.InstrumentationSpecification
 import datadog.trace.agent.test.utils.PortUtils
 import org.testcontainers.containers.RabbitMQContainer
@@ -71,11 +72,15 @@ class SpringAmqpTest extends InstrumentationSpecification {
           childOf(span(0))
           operationName "amqp.consume"
           resourceName "amqp.consume test-queue"
+          tags(false) {
+            "$Tags.PEER_HOSTNAME" MessagingRabbitMQApplication.hostName
+            "$Tags.PEER_PORT" MessagingRabbitMQApplication.port
+          }
         }
         span(2) {
           childOf(span(1))
           operationName "receive"
-          resourceName "Receiver.receiveMessage"
+          resourceName "r.Receiver.receiveMessage"
         }
       }
       trace(1) {
