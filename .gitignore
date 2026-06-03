@@ -8,7 +8,7 @@ target
 #########
 !**/gradle/wrapper/*
 /.gradle
-*/.gradle
+**/.gradle
 **/build/
 examples/**/build/
 
@@ -93,3 +93,4 @@ mise*.local.toml
 
 # Exclude kotlin build files
 .kotlin
+.codex

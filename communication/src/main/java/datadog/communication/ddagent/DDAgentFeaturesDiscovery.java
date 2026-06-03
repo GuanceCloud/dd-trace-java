@@ -78,6 +78,7 @@ public class DDAgentFeaturesDiscovery implements DroppingPolicy {
   private final String[] metricsEndpoints = {V06_METRICS_ENDPOINT};
   private final String[] configEndpoints = {V07_CONFIG_ENDPOINT};
   private final boolean metricsEnabled;
+  private final boolean ignoreAgentVersionForStats;
   private final String[] dataStreamsEndpoints = {V01_DATASTREAMS_ENDPOINT};
   // ordered from most recent to least recent, as the logic will stick with the first one that is
   // available
@@ -110,10 +111,12 @@ public class DDAgentFeaturesDiscovery implements DroppingPolicy {
       Monitoring monitoring,
       HttpUrl agentUrl,
       ProtocolVersion protocolVersion,
-      boolean metricsEnabled) {
+      boolean metricsEnabled,
+      boolean ignoreAgentVersionForStats) {
     this.client = client;
     this.agentBaseUrl = agentUrl;
     this.metricsEnabled = metricsEnabled;
+    this.ignoreAgentVersionForStats = ignoreAgentVersionForStats;
     this.protocolVersion = protocolVersion != null ? protocolVersion : V0_4;
     this.discoveryTimer = monitoring.newTimer("trace.agent.discovery.time");
     this.discoveryState = new State();
@@ -181,13 +184,16 @@ public class DDAgentFeaturesDiscovery implements DroppingPolicy {
 
     if (log.isDebugEnabled()) {
       log.debug(
-          "discovered traceEndpoint={}, metricsEndpoint={}, supportsDropping={}, supportsLongRunning={}, dataStreamsEndpoint={}, configEndpoint={}, evpProxyEndpoint={}, telemetryProxyEndpoint={}",
+          "discovered traceEndpoint={}, metricsEndpoint={}, supportsDropping={}, supportsLongRunning={}, dataStreamsEndpoint={}, configEndpoint={}, logEndpoint={}, snapshotEndpoint={}, diagnosticsEndpoint={}, evpProxyEndpoint={}, telemetryProxyEndpoint={}",
           newState.traceEndpoint,
           newState.metricsEndpoint,
           newState.supportsDropping,
           newState.supportsLongRunning,
           newState.dataStreamsEndpoint,
           newState.configEndpoint,
+          newState.debuggerLogEndpoint,
+          newState.debuggerSnapshotEndpoint,
+          newState.debuggerDiagnosticsEndpoint,
           newState.evpProxyEndpoint,
           newState.telemetryProxyEndpoint);
     }
@@ -300,7 +306,9 @@ public class DDAgentFeaturesDiscovery implements DroppingPolicy {
                     || Boolean.TRUE.equals(canDrop));
 
         newState.supportsClientSideStats =
-            newState.supportsDropping && !AgentVersion.isVersionBelow(newState.version, 7, 65, 0);
+            newState.supportsDropping
+                && (ignoreAgentVersionForStats
+                    || !AgentVersion.isVersionBelow(newState.version, 7, 65, 0));
 
         Object peer_tags = map.get("peer_tags");
         newState.peerTags =

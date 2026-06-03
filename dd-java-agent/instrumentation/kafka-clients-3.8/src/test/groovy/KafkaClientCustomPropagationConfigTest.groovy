@@ -242,7 +242,7 @@ class KafkaClientCustomPropagationConfigTest extends AgentTestRunner {
     when:
     Headers header = new RecordHeaders()
 
-    AgentSpan span = startSpan(KAFKA_PRODUCE)
+    AgentSpan span = startSpan("kafka", KAFKA_PRODUCE)
     activateSpan(span).withCloseable {
       for (String topic : SHARED_TOPIC) {
         ProducerRecord record = new ProducerRecord<>(

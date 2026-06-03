@@ -67,7 +67,7 @@ public final class RedissonInstrumentation extends InstrumenterModule.Tracing
       if (command.getPromise() == null) {
         return null;
       }
-      final AgentSpan span = startSpan(RedissonClientDecorator.OPERATION_NAME);
+      final AgentSpan span = startSpan("redis-command", RedissonClientDecorator.OPERATION_NAME);
       DECORATE.afterStart(span);
       DECORATE.onPeerConnection(span, thiz.getRedisClient().getAddr());
 
@@ -94,7 +94,7 @@ public final class RedissonInstrumentation extends InstrumenterModule.Tracing
         return null;
       }
 
-      final AgentSpan span = startSpan(RedissonClientDecorator.OPERATION_NAME);
+      final AgentSpan span = startSpan("redis-command", RedissonClientDecorator.OPERATION_NAME);
       DECORATE.afterStart(span);
       DECORATE.onPeerConnection(span, thiz.getRedisClient().getAddr());
 
