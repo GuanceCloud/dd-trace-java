@@ -215,6 +215,19 @@ abstract class SqsClientTest extends VersionedNamingTestBase {
     client.shutdown()
   }
 
+  @IgnoreIf({ !instance.isLatestDepTest })
+  def "AWSTraceHeader is requested as a message system attribute on latest aws sdk v1"() {
+    setup:
+    def request = new ReceiveMessageRequest("http://localhost:${address.port}/000000000000/somequeue")
+
+    when:
+    request.withMessageSystemAttributeNames("SenderId")
+
+    then:
+    request.getMessageSystemAttributeNames().contains("SenderId")
+    request.getMessageSystemAttributeNames().contains("AWSTraceHeader")
+  }
+
   @IgnoreIf({ !instance.isDataStreamsEnabled() })
   def "propagation even when message attributes are readonly"() {
     setup:

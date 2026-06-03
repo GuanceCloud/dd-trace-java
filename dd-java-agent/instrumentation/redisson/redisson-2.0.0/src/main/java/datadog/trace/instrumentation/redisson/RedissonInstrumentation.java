@@ -68,7 +68,9 @@ public final class RedissonInstrumentation extends InstrumenterModule.Tracing
       }
       final AgentSpan span = startSpan("redis-command", RedissonClientDecorator.OPERATION_NAME);
       DECORATE.afterStart(span);
-      DECORATE.onPeerConnection(span, thiz.getRedisClient().getAddr());
+      DECORATE.onConnection(span, thiz.getRedisClient().getAddr());
+
+      DECORATE.onArgs(span, command.getParams());
       DECORATE.onStatement(span, command.getCommand().getName());
       command.getPromise().addListener(new SpanFinishListener(AgentTracer.captureSpan(span)));
       return activateSpan(span);
@@ -93,7 +95,7 @@ public final class RedissonInstrumentation extends InstrumenterModule.Tracing
 
       final AgentSpan span = startSpan("redis-command", RedissonClientDecorator.OPERATION_NAME);
       DECORATE.afterStart(span);
-      DECORATE.onPeerConnection(span, thiz.getRedisClient().getAddr());
+      DECORATE.onConnection(span, thiz.getRedisClient().getAddr());
 
       List<String> commandResourceNames = new ArrayList<>();
       for (CommandData<?, ?> commandData : command.getCommands()) {

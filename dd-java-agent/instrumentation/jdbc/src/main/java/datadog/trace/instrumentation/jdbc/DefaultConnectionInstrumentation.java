@@ -48,8 +48,14 @@ public class DefaultConnectionInstrumentation extends AbstractConnectionInstrume
     // Sybase
     "com.sybase.jdbc2.jdbc.SybConnection",
     "com.sybase.jdbc4.jdbc.SybConnection",
+    // Druid connection wrapper
+    "com.alibaba.druid.pool.DruidPooledConnection",
     // for testing purposes
-    "test.TestConnection"
+    "test.TestConnection",
+    // 达梦db
+    "dm.jdbc.driver.DmdbConnection",
+    // kingbase
+    "com.kingbase8.jdbc.KbConnection"
   };
 
   @Override

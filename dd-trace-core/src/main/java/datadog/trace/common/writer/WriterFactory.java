@@ -144,6 +144,7 @@ public class WriterFactory {
       DDIntakeWriter.DDIntakeWriterBuilder builder =
           DDIntakeWriter.builder()
               .addTrack(trackType, remoteApi)
+              .traceBufferSize(config.getTraceBufferSize())
               .prioritization(prioritization)
               .healthMetrics(healthMetrics)
               .monitoring(commObjects.monitoring)
@@ -197,6 +198,7 @@ public class WriterFactory {
           DDAgentWriter.builder()
               .agentApi(ddAgentApi)
               .featureDiscovery(featuresDiscovery)
+              .traceBufferSize(config.getTraceBufferSize())
               .prioritization(prioritization)
               .healthMetrics(healthMetrics)
               .monitoring(commObjects.monitoring)

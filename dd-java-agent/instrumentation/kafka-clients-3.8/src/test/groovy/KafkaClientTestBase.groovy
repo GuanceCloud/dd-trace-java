@@ -13,17 +13,14 @@ import datadog.trace.instrumentation.kafka_common.ClusterIdHolder
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.KafkaConsumer
-import org.apache.kafka.clients.producer.KafkaProducer
-import org.apache.kafka.clients.producer.Producer
-import org.apache.kafka.clients.producer.ProducerConfig
-import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.clients.producer.RecordMetadata
+import org.apache.kafka.clients.producer.*
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.header.internals.RecordHeader
 import org.apache.kafka.common.header.internals.RecordHeaders
 import org.apache.kafka.common.serialization.StringSerializer
 
 import java.nio.charset.StandardCharsets
+import org.junit.Rule
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory
 import org.springframework.kafka.core.DefaultKafkaProducerFactory
 import org.springframework.kafka.core.KafkaTemplate
@@ -31,7 +28,7 @@ import org.springframework.kafka.listener.ContainerProperties
 import org.springframework.kafka.listener.KafkaMessageListenerContainer
 import org.springframework.kafka.listener.MessageListener
 import org.springframework.kafka.test.EmbeddedKafkaBroker
-import org.springframework.kafka.test.EmbeddedKafkaKraftBroker
+import org.springframework.kafka.test.rule.EmbeddedKafkaRule
 import org.springframework.kafka.test.utils.ContainerTestUtils
 import org.springframework.kafka.test.utils.KafkaTestUtils
 
@@ -48,19 +45,21 @@ import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.isAsyncPro
 
 abstract class KafkaClientTestBase extends VersionedNamingTestBase {
   static final SHARED_TOPIC = "shared.topic"
+  static final String MESSAGE = "Testing without headers for certain topics"
 
-  EmbeddedKafkaBroker embeddedKafka
-
-  def setup() {
-    embeddedKafka = new EmbeddedKafkaKraftBroker(1, 2, SHARED_TOPIC)
-    embeddedKafka.afterPropertiesSet()
-
-    TEST_WRITER.setFilter(dropKafkaPoll)
+  static final dataTable() {
+    [
+      ["topic1,topic2,topic3,topic4", false, false, false, false],
+      ["topic1,topic2", false, false, true, true],
+      ["topic1", false, true, true, true],
+      ["", true, true, true, true],
+      ["randomTopic", true, true, true, true]
+    ]
   }
 
-  def cleanup() {
-    embeddedKafka.destroy()
-  }
+  @Rule
+  EmbeddedKafkaRule kafkaRule = new EmbeddedKafkaRule(1, true, SHARED_TOPIC)
+  EmbeddedKafkaBroker embeddedKafka = kafkaRule.embeddedKafka
 
   @Override
   boolean useStrictTraceWrites() {
@@ -73,6 +72,7 @@ abstract class KafkaClientTestBase extends VersionedNamingTestBase {
     super.configurePreAgent()
     codeOriginSetup()
     injectSysConfig("dd.kafka.e2e.duration.enabled", "true")
+    injectSysConfig("dd.trace.experimental.kafka.enabled","true")
   }
 
   public static final LinkedHashMap<String, String> PRODUCER_PATHWAY_EDGE_TAGS
@@ -121,6 +121,10 @@ abstract class KafkaClientTestBase extends VersionedNamingTestBase {
     PRODUCER_PATHWAY_EDGE_TAGS.put("direction", "out")
     PRODUCER_PATHWAY_EDGE_TAGS.put("topic", SHARED_TOPIC)
     PRODUCER_PATHWAY_EDGE_TAGS.put("type", "kafka")
+  }
+
+  def setup() {
+    TEST_WRITER.setFilter(dropKafkaPoll)
   }
 
   @Override
@@ -201,7 +205,7 @@ abstract class KafkaClientTestBase extends VersionedNamingTestBase {
     when:
     String greeting = "Hello Spring Kafka Sender!"
     runUnderTrace("parent") {
-      producer.send(new ProducerRecord(SHARED_TOPIC, greeting)) { meta, ex ->
+      producer.send(new ProducerRecord(SHARED_TOPIC,greeting)) { meta, ex ->
         assert isAsyncPropagationEnabled()
         if (ex == null) {
           runUnderTrace("producer callback") {}
@@ -216,6 +220,7 @@ abstract class KafkaClientTestBase extends VersionedNamingTestBase {
       // wait for produce offset 0, commit offset 0 on partition 0 and 1, and commit offset 1 on 1 partition
       //TODO
       TEST_DATA_STREAMS_WRITER.waitForBacklogs(2)
+
     }
 
     then:
@@ -272,20 +277,20 @@ abstract class KafkaClientTestBase extends VersionedNamingTestBase {
           )
       }
 
-      def sorted = new ArrayList<DataStreamsTags>(TEST_DATA_STREAMS_WRITER.backlogs).sort { it.type }
+      def sorted = new ArrayList<DataStreamsTags>(TEST_DATA_STREAMS_WRITER.backlogs).sort{ it.type }
       verifyAll(sorted) {
         size() == 2
         get(0).hasAllTags(
           "consumer_group:sender",
           "kafka_cluster_id:$clusterId",
-          "partition:" + received.partition(),
+          "partition:"+received.partition(),
           "topic:$SHARED_TOPIC",
           "type:kafka_commit"
           )
         get(1).hasAllTags(
           "kafka_cluster_id:$clusterId",
-          "partition:" + received.partition(),
-          "topic:" + SHARED_TOPIC,
+          "partition:"+received.partition(),
+          "topic:"+SHARED_TOPIC,
           "type:kafka_produce"
           )
       }
@@ -329,7 +334,7 @@ abstract class KafkaClientTestBase extends VersionedNamingTestBase {
     }
 
     // set up the Kafka consumer properties
-    def consumerProperties = KafkaTestUtils.consumerProps(embeddedKafka.getBrokersAsString(), "sender", "false")
+    def consumerProperties = KafkaTestUtils.consumerProps( embeddedKafka.getBrokersAsString(),"sender", "false")
 
     // create a Kafka consumer factory
     def consumerFactory = new DefaultKafkaConsumerFactory<String, String>(consumerProperties)
@@ -428,20 +433,20 @@ abstract class KafkaClientTestBase extends VersionedNamingTestBase {
           "type:kafka"
           )
       }
-      def items = new ArrayList<DataStreamsTags>(TEST_DATA_STREAMS_WRITER.backlogs).sort { it.type }
+      def items = new ArrayList<DataStreamsTags>(TEST_DATA_STREAMS_WRITER.backlogs).sort {it.type}
       verifyAll(items) {
         size() == 2
         get(0).hasAllTags(
           "consumer_group:sender",
           "kafka_cluster_id:$clusterId".toString(),
-          "partition:" + received.partition(),
-          "topic:" + SHARED_TOPIC,
+          "partition:"+received.partition(),
+          "topic:"+SHARED_TOPIC,
           "type:kafka_commit"
           )
         get(1).hasAllTags(
           "kafka_cluster_id:$clusterId".toString(),
-          "partition:" + received.partition(),
-          "topic:" + SHARED_TOPIC,
+          "partition:"+received.partition(),
+          "topic:"+SHARED_TOPIC,
           "type:kafka_produce"
           )
       }
@@ -460,7 +465,7 @@ abstract class KafkaClientTestBase extends VersionedNamingTestBase {
     def kafkaTemplate = new KafkaTemplate<String, String>(producerFactory)
 
     // set up the Kafka consumer properties
-    def consumerProperties = KafkaTestUtils.consumerProps(embeddedKafka.getBrokersAsString(), "sender", "false")
+    def consumerProperties = KafkaTestUtils.consumerProps( embeddedKafka.getBrokersAsString(),"sender", "false")
 
     // create a Kafka consumer factory
     def consumerFactory = new DefaultKafkaConsumerFactory<String, String>(consumerProperties)
@@ -517,13 +522,14 @@ abstract class KafkaClientTestBase extends VersionedNamingTestBase {
     cleanup:
     producerFactory.stop()
     container?.stop()
+
   }
 
   def "test records(TopicPartition) kafka consume"() {
     setup:
     // set up the Kafka consumer properties
     def kafkaPartition = 0
-    def consumerProperties = KafkaTestUtils.consumerProps(embeddedKafka.getBrokersAsString(), "sender", "false")
+    def consumerProperties = KafkaTestUtils.consumerProps( embeddedKafka.getBrokersAsString(),"sender", "false")
     consumerProperties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     def consumer = new KafkaConsumer<String, String>(consumerProperties)
 
@@ -548,7 +554,7 @@ abstract class KafkaClientTestBase extends VersionedNamingTestBase {
     }
 
     then:
-    !recs.hasNext()
+    recs.hasNext() == false
     first.value() == greeting
     first.key() == null
 
@@ -571,13 +577,15 @@ abstract class KafkaClientTestBase extends VersionedNamingTestBase {
     cleanup:
     consumer.close()
     producer.close()
+
+
   }
 
   def "test records(TopicPartition).subList kafka consume"() {
     setup:
 
     def senderProps = KafkaTestUtils.producerProps(embeddedKafka.getBrokersAsString())
-    def consumerProperties = KafkaTestUtils.consumerProps(embeddedKafka.getBrokersAsString(), "sender", "false")
+    def consumerProperties = KafkaTestUtils.consumerProps( embeddedKafka.getBrokersAsString(),"sender", "false")
 
     // set up the Kafka consumer properties
     def kafkaPartition = 0
@@ -605,7 +613,7 @@ abstract class KafkaClientTestBase extends VersionedNamingTestBase {
     }
 
     then:
-    !recs.hasNext()
+    recs.hasNext() == false
     first.value() == greeting
     first.key() == null
 
@@ -628,13 +636,14 @@ abstract class KafkaClientTestBase extends VersionedNamingTestBase {
     cleanup:
     consumer.close()
     producer.close()
+
   }
 
   def "test records(TopicPartition).forEach kafka consume"() {
     setup:
 
     def senderProps = KafkaTestUtils.producerProps(embeddedKafka.getBrokersAsString())
-    def consumerProperties = KafkaTestUtils.consumerProps(embeddedKafka.getBrokersAsString(), "sender", "false")
+    def consumerProperties = KafkaTestUtils.consumerProps( embeddedKafka.getBrokersAsString(),"sender", "false")
 
     // set up the Kafka consumer properties
     def kafkaPartition = 0
@@ -685,13 +694,14 @@ abstract class KafkaClientTestBase extends VersionedNamingTestBase {
     cleanup:
     consumer.close()
     producer.close()
+
   }
 
   def "test iteration backwards over ConsumerRecords"() {
     setup:
 
     def senderProps = KafkaTestUtils.producerProps(embeddedKafka.getBrokersAsString())
-    def consumerProperties = KafkaTestUtils.consumerProps(embeddedKafka.getBrokersAsString(), "sender", "false")
+    def consumerProperties = KafkaTestUtils.consumerProps( embeddedKafka.getBrokersAsString(),"sender", "false")
 
     def kafkaPartition = 0
     consumerProperties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
@@ -795,16 +805,18 @@ abstract class KafkaClientTestBase extends VersionedNamingTestBase {
     cleanup:
     consumer.close()
     producer.close()
+
   }
 
   def "test kafka client header propagation manual config"() {
     setup:
 
     def senderProps = KafkaTestUtils.producerProps(embeddedKafka.getBrokersAsString())
-    def consumerProperties = KafkaTestUtils.consumerProps(embeddedKafka.getBrokersAsString(), "sender", "false")
+    def consumerProperties = KafkaTestUtils.consumerProps( embeddedKafka.getBrokersAsString(),"sender", "false")
 
     def producerFactory = new DefaultKafkaProducerFactory<String, String>(senderProps)
     def kafkaTemplate = new KafkaTemplate<String, String>(producerFactory)
+
 
     // create a Kafka consumer factory
     def consumerFactory = new DefaultKafkaConsumerFactory<String, String>(consumerProperties)
@@ -890,7 +902,7 @@ abstract class KafkaClientTestBase extends VersionedNamingTestBase {
 
   def producerSpan(
     TraceAssert trace,
-    Map<String, ?> config,
+    Map<String,?> config,
     DDSpan parentSpan = null,
     boolean partitioned = true,
     boolean tombstone = false,
@@ -920,7 +932,7 @@ abstract class KafkaClientTestBase extends VersionedNamingTestBase {
         if (tombstone) {
           "$InstrumentationTags.TOMBSTONE" true
         }
-        if ({ isDataStreamsEnabled() }) {
+        if ({isDataStreamsEnabled()}) {
           "$DDTags.PATHWAY_HASH" { String }
           if (schema != null) {
             "$DDTags.SCHEMA_DEFINITION" schema
@@ -946,7 +958,7 @@ abstract class KafkaClientTestBase extends VersionedNamingTestBase {
     DDSpan parentSpan = null
   ) {
     trace.span {
-      serviceName splitByDestination() ? "$SHARED_TOPIC" : serviceForTimeInQueue()
+      serviceName splitByDestination() ? "$SHARED_TOPIC" :  serviceForTimeInQueue()
       operationName "kafka.deliver"
       resourceName "$SHARED_TOPIC"
       spanType "queue"
@@ -967,7 +979,7 @@ abstract class KafkaClientTestBase extends VersionedNamingTestBase {
 
   def consumerSpan(
     TraceAssert trace,
-    Map<String, Object> config,
+    Map<String,Object> config,
     DDSpan parentSpan = null,
     Range offset = 0..0,
     boolean tombstone = false,
@@ -1000,7 +1012,7 @@ abstract class KafkaClientTestBase extends VersionedNamingTestBase {
         if (tombstone) {
           "$InstrumentationTags.TOMBSTONE" true
         }
-        if ({ isDataStreamsEnabled() }) {
+        if ({isDataStreamsEnabled()}) {
           "$DDTags.PATHWAY_HASH" { String }
         }
         if (isV0) {
@@ -1031,13 +1043,12 @@ abstract class KafkaClientTestBase extends VersionedNamingTestBase {
       }
     }
   }
-
   def waitForKafkaMetadataUpdate(KafkaTemplate kafkaTemplate) {
     kafkaTemplate.flush()
     Producer<String, String> wrappedProducer = kafkaTemplate.getTheProducer()
-    assert (wrappedProducer instanceof DefaultKafkaProducerFactory.CloseSafeProducer)
+    assert(wrappedProducer instanceof DefaultKafkaProducerFactory.CloseSafeProducer)
     Producer<String, String> producer = wrappedProducer.delegate
-    assert (producer instanceof KafkaProducer)
+    assert(producer instanceof KafkaProducer)
     String clusterId = producer.metadata.fetch().clusterResource().clusterId()
     while (clusterId == null || clusterId.isEmpty()) {
       Thread.sleep(1500)
@@ -1045,6 +1056,7 @@ abstract class KafkaClientTestBase extends VersionedNamingTestBase {
     }
     return clusterId
   }
+
 }
 
 abstract class KafkaClientForkedTest extends KafkaClientTestBase {
@@ -1154,10 +1166,12 @@ abstract class KafkaClientLegacyTracingForkedTest extends KafkaClientTestBase {
   }
 }
 
-class KafkaClientLegacyTracingV0ForkedTest extends KafkaClientLegacyTracingForkedTest {
+class KafkaClientLegacyTracingV0ForkedTest extends KafkaClientLegacyTracingForkedTest{
+
+
 }
 
-class KafkaClientLegacyTracingV1ForkedTest extends KafkaClientLegacyTracingForkedTest {
+class KafkaClientLegacyTracingV1ForkedTest extends KafkaClientLegacyTracingForkedTest{
 
   @Override
   int version() {

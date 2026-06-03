@@ -5,6 +5,7 @@ import static datadog.trace.api.datastreams.DataStreamsTags.Direction.OUTBOUND;
 import static datadog.trace.api.datastreams.DataStreamsTags.create;
 import static datadog.trace.api.datastreams.PathwayContext.DATADOG_KEY;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.startSpan;
+import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.traceConfig;
 import static datadog.trace.bootstrap.instrumentation.api.URIUtils.urlFileName;
 import static datadog.trace.instrumentation.aws.v1.sqs.MessageAttributeInjector.SETTER;
 
@@ -41,6 +42,9 @@ public class SqsInterceptor extends RequestHandler2 {
 
       String queueUrl = smRequest.getQueueUrl();
       if (queueUrl == null) return request;
+      if (!Config.get().isSqsInjectDatadogAttributeEnabled()) {
+        return request;
+      }
 
       // making a copy of the MessageAttributes before modifying them because they can be stored in
       // a kind of ImmutableMap
@@ -58,6 +62,9 @@ public class SqsInterceptor extends RequestHandler2 {
 
       String queueUrl = smbRequest.getQueueUrl();
       if (queueUrl == null) return request;
+      if (!Config.get().isSqsInjectDatadogAttributeEnabled()) {
+        return request;
+      }
 
       Context context = newContext(request, queueUrl);
       for (SendMessageBatchRequestEntry entry : smbRequest.getEntries()) {
@@ -83,8 +90,12 @@ public class SqsInterceptor extends RequestHandler2 {
 
   private Context newContext(AmazonWebServiceRequest request, String queueUrl) {
     AgentSpan span = newSpan(request);
-    DataStreamsContext dsmContext = DataStreamsContext.fromTags(getTags(queueUrl));
-    return span.with(dsmContext);
+    Context context = span;
+    if (traceConfig().isDataStreamsEnabled()) {
+      DataStreamsContext dsmContext = DataStreamsContext.fromTags(getTags(queueUrl));
+      context = context.with(dsmContext);
+    }
+    return context;
   }
 
   private AgentSpan newSpan(AmazonWebServiceRequest request) {

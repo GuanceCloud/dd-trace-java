@@ -9057,6 +9057,14 @@
         "aliases": []
       }
     ],
+    "DD_TRACE_BUFFER_SIZE": [
+      {
+        "version": "A",
+        "type": "int",
+        "default": "1024",
+        "aliases": []
+      }
+    ],
     "DD_TRACE_RATPACK_ANALYTICS_ENABLED": [
       {
         "version": "A",

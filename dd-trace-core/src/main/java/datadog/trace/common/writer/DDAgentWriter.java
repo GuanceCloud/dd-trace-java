@@ -4,6 +4,7 @@ import static datadog.communication.http.OkHttpUtils.buildHttpClient;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_AGENT_HOST;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_AGENT_TIMEOUT;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_AGENT_PORT;
+import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_BUFFER_SIZE;
 import static datadog.trace.common.writer.ddagent.Prioritization.FAST_LANE;
 
 import datadog.communication.ddagent.DDAgentFeaturesDiscovery;
@@ -25,7 +26,7 @@ public class DDAgentWriter extends RemoteWriter {
     return new DDAgentWriterBuilder();
   }
 
-  private static final int BUFFER_SIZE = 1024;
+  static final int BUFFER_SIZE = DEFAULT_TRACE_BUFFER_SIZE;
 
   public static class DDAgentWriterBuilder {
 
@@ -34,7 +35,7 @@ public class DDAgentWriter extends RemoteWriter {
     String unixDomainSocket = null;
     String namedPipe = null;
     long timeoutMillis = TimeUnit.SECONDS.toMillis(DEFAULT_AGENT_TIMEOUT);
-    int traceBufferSize = BUFFER_SIZE;
+    int traceBufferSize = Config.get().getTraceBufferSize();
     HealthMetrics healthMetrics = HealthMetrics.NO_OP;
     int flushIntervalMilliseconds = 1000;
     Monitoring monitoring = Monitoring.DISABLED;
