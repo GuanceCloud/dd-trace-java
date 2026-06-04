@@ -10,10 +10,14 @@ import datadog.trace.api.ConfigOrigin;
 import datadog.trace.bootstrap.config.provider.civisibility.CiEnvironmentVariables;
 import datadog.trace.util.ConfigStrings;
 import de.thetaphi.forbiddenapis.SuppressForbidden;
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collections;
@@ -367,6 +371,28 @@ public final class ConfigProvider {
     return mergeResolver.getMergedValue();
   }
 
+  public Map<String, String> getMergedMapWithFile(String key, String fileKey, String... aliases) {
+    return getMergedMapWithFile(key, fileKey, ':', aliases);
+  }
+
+  public Map<String, String> getMergedMapWithFile(
+      String key, String fileKey, char keyValueDelimiter, String... aliases) {
+    Map<String, String> fileMap =
+        ConfigConverter.parseMap(readConfigurationFile(getString(fileKey)), key, keyValueDelimiter);
+    Map<String, String> inlineMap = getMergedMap(key, keyValueDelimiter, aliases);
+
+    if (fileMap.isEmpty()) {
+      return inlineMap;
+    }
+    if (inlineMap.isEmpty()) {
+      return fileMap;
+    }
+
+    Map<String, String> mergedMap = new HashMap<>(fileMap);
+    mergedMap.putAll(inlineMap);
+    return mergedMap;
+  }
+
   public Map<String, String> getMergedTagsMap(String key, String... aliases) {
     ConfigMergeResolver mergeResolver = new ConfigMergeResolver(new HashMap<>());
     int seqId = NON_DEFAULT_SEQ_ID;
@@ -636,6 +662,35 @@ public final class ConfigProvider {
     properties.setProperty(PropertiesConfigSource.CONFIG_FILE_STATUS, configurationFilePath);
 
     return properties;
+  }
+
+  @SuppressForbidden
+  private static String readConfigurationFile(String filePath) {
+    if (filePath == null || filePath.trim().isEmpty()) {
+      return null;
+    }
+
+    StringBuilder content = new StringBuilder();
+    try (BufferedReader reader =
+        new BufferedReader(
+            new InputStreamReader(new FileInputStream(filePath), StandardCharsets.UTF_8))) {
+      String line;
+      while ((line = reader.readLine()) != null) {
+        line = line.trim();
+        if (line.isEmpty()) {
+          continue;
+        }
+        if (content.length() > 0) {
+          content.append(' ');
+        }
+        content.append(line);
+      }
+    } catch (final FileNotFoundException fnf) {
+      log.error("Configuration file '{}' not found.", filePath);
+    } catch (final IOException ioe) {
+      log.error("Configuration file '{}' cannot be accessed.", filePath);
+    }
+    return content.toString();
   }
 
   private static String getConfigIdFromSource(Source source) {

@@ -3777,6 +3777,14 @@
         "aliases": []
       }
     ],
+    "DD_SERVICE_MAPPING_FILE": [
+      {
+        "version": "A",
+        "type": "string",
+        "default": null,
+        "aliases": []
+      }
+    ],
     "DD_SERVICE_NAME": [
       {
         "version": "A",
