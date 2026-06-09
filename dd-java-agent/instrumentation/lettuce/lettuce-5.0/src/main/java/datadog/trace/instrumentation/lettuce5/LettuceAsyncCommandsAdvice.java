@@ -10,7 +10,6 @@ import datadog.trace.bootstrap.InstrumentationContext;
 import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import io.lettuce.core.AbstractRedisAsyncCommands;
-import io.lettuce.core.RedisURI;
 import io.lettuce.core.api.StatefulConnection;
 import io.lettuce.core.protocol.AsyncCommand;
 import io.lettuce.core.protocol.RedisCommand;
@@ -39,9 +38,9 @@ public class LettuceAsyncCommandsAdvice {
       @Advice.Thrown final Throwable throwable,
       @Advice.Return AsyncCommand<?, ?, ?> asyncCommand) {
     final AgentSpan span = scope.span();
-    ContextStore<StatefulConnection, RedisURI> store =
-        InstrumentationContext.get(StatefulConnection.class, RedisURI.class);
-    RedisURI info = store.get(thiz.getConnection());
+    ContextStore<StatefulConnection, LettuceConnectionInfo> store =
+        InstrumentationContext.get(StatefulConnection.class, LettuceConnectionInfo.class);
+    LettuceConnectionInfo info = store.get(thiz.getConnection());
     if (info != null) {
       DECORATE.onConnection(span, info);
     }

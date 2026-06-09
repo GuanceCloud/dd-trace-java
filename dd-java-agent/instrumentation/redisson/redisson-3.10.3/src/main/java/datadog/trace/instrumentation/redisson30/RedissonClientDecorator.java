@@ -65,10 +65,15 @@ public class RedissonClientDecorator
   }
 
   public AgentSpan onConnection(final AgentSpan span, final InetSocketAddress remoteConnection) {
+    return onConnection(span, remoteConnection, null);
+  }
+
+  public AgentSpan onConnection(
+      final AgentSpan span, final InetSocketAddress remoteConnection, final String configuredHost) {
     if (remoteConnection != null) {
       super.onPeerConnection(span, remoteConnection);
 
-      final String hostName = remoteConnection.getHostString();
+      final String hostName = peerHostname(remoteConnection, configuredHost);
       if (hostName != null && Config.get().isPeerHostNameEnabled()) {
         span.setTag(Tags.PEER_HOSTNAME, hostName);
         if (Config.get().isDbClientSplitByHost()) {
@@ -77,6 +82,16 @@ public class RedissonClientDecorator
       }
     }
     return span;
+  }
+
+  private static String peerHostname(
+      final InetSocketAddress remoteConnection, final String configuredHost) {
+    if (Config.get().isPeerHostnameFromConfigEnabled()
+        && configuredHost != null
+        && !configuredHost.isEmpty()) {
+      return configuredHost;
+    }
+    return remoteConnection.getHostString();
   }
 
   public AgentSpan onArgs(final AgentSpan span, Object[] args) {

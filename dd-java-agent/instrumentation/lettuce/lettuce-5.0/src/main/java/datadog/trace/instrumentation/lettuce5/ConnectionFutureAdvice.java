@@ -42,7 +42,9 @@ public class ConnectionFutureAdvice {
     connectionFuture =
         connectionFuture.whenComplete(
             new ConnectionContextBiConsumer(
-                    redisUri, InstrumentationContext.get(StatefulConnection.class, RedisURI.class))
+                    redisUri,
+                    InstrumentationContext.get(
+                        StatefulConnection.class, LettuceConnectionInfo.class))
                 .andThen(new LettuceAsyncBiConsumer<>(span)));
     scope.close();
     // span finished by LettuceAsyncBiConsumer

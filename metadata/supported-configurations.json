@@ -5353,6 +5353,14 @@
         "aliases": []
       }
     ],
+    "DD_TRACE_PEER_HOSTNAME_FROM_CONFIG_ENABLED": [
+      {
+        "version": "A",
+        "type": "boolean",
+        "default": "false",
+        "aliases": []
+      }
+    ],
     "DD_TRACE_DB_CLIENT_SPLIT_BY_INSTANCE": [
       {
         "version": "A",

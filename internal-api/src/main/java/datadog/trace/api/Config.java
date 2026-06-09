@@ -139,6 +139,7 @@ import static datadog.trace.api.ConfigDefaults.DEFAULT_PRIORITY_SAMPLING_FORCE;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_PROPAGATION_EXTRACT_LOG_HEADER_NAMES_ENABLED;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_PROPAGATION_STYLE;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_REDIS_COMMAND_ARGS;
+import static datadog.trace.api.ConfigDefaults.DEFAULT_PEER_HOSTNAME_FROM_CONFIG_ENABLED;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_REMOTE_CONFIG_ENABLED;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_REMOTE_CONFIG_INTEGRITY_CHECK_ENABLED;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_REMOTE_CONFIG_MAX_EXTRA_SERVICES;
@@ -627,6 +628,7 @@ import static datadog.trace.api.config.TraceInstrumentationConfig.RABBIT_INCLUDE
 import static datadog.trace.api.config.TraceInstrumentationConfig.RABBIT_PROPAGATION_DISABLED_EXCHANGES;
 import static datadog.trace.api.config.TraceInstrumentationConfig.RABBIT_PROPAGATION_DISABLED_QUEUES;
 import static datadog.trace.api.config.TraceInstrumentationConfig.REDIS_COMMAND_ARGS;
+import static datadog.trace.api.config.TraceInstrumentationConfig.PEER_HOSTNAME_FROM_CONFIG_ENABLED;
 import static datadog.trace.api.config.TraceInstrumentationConfig.ROCKETMQ_CONSUME_IGNORE;
 import static datadog.trace.api.config.TraceInstrumentationConfig.RESILIENCE4J_MEASURED_ENABLED;
 import static datadog.trace.api.config.TraceInstrumentationConfig.RESILIENCE4J_TAG_METRICS_ENABLED;
@@ -1390,6 +1392,7 @@ public class Config {
   private final boolean mongoObfuscation;
 
   private final boolean redisCommandArgs;
+  private final boolean peerHostnameFromConfigEnabled;
 
   private String env;
   private String version;
@@ -3000,6 +3003,10 @@ public class Config {
 
     mongoObfuscation = configProvider.getBoolean(MONGO_OBFUSCATION, DEFAULT_MONGO_OBFUSCATION);
     redisCommandArgs = configProvider.getBoolean(REDIS_COMMAND_ARGS, DEFAULT_REDIS_COMMAND_ARGS);
+    peerHostnameFromConfigEnabled =
+        configProvider.getBoolean(
+            PEER_HOSTNAME_FROM_CONFIG_ENABLED,
+            DEFAULT_PEER_HOSTNAME_FROM_CONFIG_ENABLED);
 
     kafkaClientPropagationEnabled = isPropagationEnabled(true, "kafka", "kafka.client");
     kafkaClientPropagationDisabledTopics =
@@ -6323,6 +6330,10 @@ public class Config {
     return redisCommandArgs;
   }
 
+  public boolean isPeerHostnameFromConfigEnabled() {
+    return peerHostnameFromConfigEnabled;
+  }
+
   public String getTracerResponseBodyBlackListUrls() {
     return tracerResponseBodyBlackListUrls;
   }
@@ -6828,6 +6839,8 @@ public class Config {
         + rocketMQConsumeIgnore
         + ", mongoObfuscation="
         + mongoObfuscation
+        + ", peerHostnameFromConfigEnabled="
+        + peerHostnameFromConfigEnabled
         + ", dubboProviderPropagateEnabled="
         + dubboProviderPropagateEnabled
         + ", cloudRequestPayloadTagging="
