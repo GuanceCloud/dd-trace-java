@@ -29,7 +29,8 @@ public class RedisInstrumentation extends InstrumenterModule.Tracing
     Map<String, String> contextStores = new HashMap<>();
     contextStores.put("io.vertx.redis.client.Command", UTF8BytesString.class.getName());
     contextStores.put("io.vertx.redis.client.Request", Boolean.class.getName());
-    contextStores.put("io.vertx.redis.client.RedisConnection", "io.vertx.core.net.SocketAddress");
+    contextStores.put(
+        "io.vertx.redis.client.RedisConnection", packageName + ".VertxRedisConnectionInfo");
     return contextStores;
   }
 
@@ -39,6 +40,8 @@ public class RedisInstrumentation extends InstrumenterModule.Tracing
       packageName + ".ResponseHandlerWrapper",
       packageName + ".ResponseHandler",
       packageName + ".VertxRedisClientDecorator",
+      packageName + ".RedisOptionsHostParser",
+      packageName + ".VertxRedisConnectionInfo",
     };
   }
 

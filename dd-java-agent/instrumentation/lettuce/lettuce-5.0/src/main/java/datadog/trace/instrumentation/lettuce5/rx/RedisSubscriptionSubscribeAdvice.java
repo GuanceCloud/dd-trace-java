@@ -9,7 +9,7 @@ import datadog.trace.bootstrap.InstrumentationContext;
 import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.instrumentation.lettuce5.LettuceClientDecorator;
-import io.lettuce.core.RedisURI;
+import datadog.trace.instrumentation.lettuce5.LettuceConnectionInfo;
 import io.lettuce.core.api.StatefulConnection;
 import io.lettuce.core.protocol.RedisCommand;
 import net.bytebuddy.asm.Advice;
@@ -49,7 +49,7 @@ public class RedisSubscriptionSubscribeAdvice {
     if (state != null && state.connection != null) {
       DECORATE.onConnection(
           span,
-          InstrumentationContext.get(StatefulConnection.class, RedisURI.class)
+          InstrumentationContext.get(StatefulConnection.class, LettuceConnectionInfo.class)
               .get(state.connection));
     }
     DECORATE.onCommand(span, command);

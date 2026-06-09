@@ -2,6 +2,7 @@ package redis.clients.jedis;
 
 import datadog.trace.api.Config;
 import datadog.trace.api.naming.SpanNaming;
+import datadog.trace.bootstrap.InstrumentationContext;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.api.InternalSpanTypes;
 import datadog.trace.bootstrap.instrumentation.api.UTF8BytesString;
@@ -55,13 +56,20 @@ public class JedisClientDecorator extends DBTypeProcessingDatabaseClientDecorato
 
   @Override
   protected String dbHostname(Connection connection) {
+    if (Config.get().isPeerHostnameFromConfigEnabled()) {
+      String configuredHost =
+          InstrumentationContext.get(Connection.class, String.class).get(connection);
+      if (configuredHost != null && !configuredHost.isEmpty()) {
+        return configuredHost;
+      }
+    }
     // getHostAndPort is protected hence the decorator sits in the same package
     return connection.getHostAndPort().getHost();
   }
 
   public AgentSpan setRaw(AgentSpan span, String raw) {
-    if (RedisCommandRaw){
-      span.setTag("redis.command.args",raw);
+    if (RedisCommandRaw) {
+      span.setTag("redis.command.args", raw);
     }
     return span;
   }

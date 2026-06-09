@@ -83,6 +83,8 @@ public final class TraceInstrumentationConfig {
   public static final String ROCKETMQ_CONSUME_IGNORE = "rocketmq.consume.ignore";
   public static final String MONGO_OBFUSCATION = "mongo.obfuscation";
   public static final String REDIS_COMMAND_ARGS = "redis.command.args";
+  public static final String PEER_HOSTNAME_FROM_CONFIG_ENABLED =
+      "trace.peer.hostname.from.config.enabled";
 
   public static final String JDBC_POOL_WAITING_ENABLED =
       "trace.experimental.jdbc.pool.waiting.enabled";

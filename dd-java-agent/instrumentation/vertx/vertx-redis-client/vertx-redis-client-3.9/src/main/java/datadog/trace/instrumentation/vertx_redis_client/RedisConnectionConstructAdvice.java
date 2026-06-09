@@ -5,15 +5,20 @@ import io.vertx.core.net.NetSocket;
 import io.vertx.core.net.SocketAddress;
 import io.vertx.redis.client.Redis;
 import io.vertx.redis.client.RedisConnection;
+import io.vertx.redis.client.RedisOptions;
 import net.bytebuddy.asm.Advice;
 
 public class RedisConnectionConstructAdvice {
   @Advice.OnMethodExit(suppress = Throwable.class)
   public static void afterConstructor(
-      @Advice.Argument(3) final NetSocket netSocket, @Advice.This final RedisConnection thiz) {
-    if (netSocket != null && netSocket.remoteAddress() != null) {
-      InstrumentationContext.get(RedisConnection.class, SocketAddress.class)
-          .put(thiz, netSocket.remoteAddress());
+      @Advice.Argument(3) final NetSocket netSocket,
+      @Advice.Argument(4) final RedisOptions options,
+      @Advice.This final RedisConnection thiz) {
+    final SocketAddress socketAddress = netSocket != null ? netSocket.remoteAddress() : null;
+    final String configuredHost = RedisOptionsHostParser.configuredHost(options);
+    if (socketAddress != null || (configuredHost != null && !configuredHost.isEmpty())) {
+      InstrumentationContext.get(RedisConnection.class, VertxRedisConnectionInfo.class)
+          .put(thiz, new VertxRedisConnectionInfo(socketAddress, configuredHost));
     }
   }
 

@@ -1,13 +1,16 @@
 package datadog.trace.instrumentation.vertx_redis_client;
 
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.startSpan;
+import static datadog.trace.bootstrap.instrumentation.api.ServiceNameSources.DB_CLIENT_SPLIT_BY_HOST;
 
+import datadog.trace.api.Config;
 import datadog.trace.api.cache.DDCache;
 import datadog.trace.api.cache.DDCaches;
 import datadog.trace.api.naming.SpanNaming;
 import datadog.trace.bootstrap.ContextStore;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.api.InternalSpanTypes;
+import datadog.trace.bootstrap.instrumentation.api.Tags;
 import datadog.trace.bootstrap.instrumentation.api.UTF8BytesString;
 import datadog.trace.bootstrap.instrumentation.decorator.DBTypeProcessingDatabaseClientDecorator;
 import io.vertx.core.net.SocketAddress;
@@ -66,6 +69,30 @@ public class VertxRedisClientDecorator
 
   @Override
   protected String dbHostname(final SocketAddress socketAddress) {
+    return socketAddress.host();
+  }
+
+  public AgentSpan onConnection(
+      final AgentSpan span, final SocketAddress socketAddress, final String configuredHost) {
+    if (socketAddress != null) {
+      final String hostName = peerHostname(socketAddress, configuredHost);
+      if (hostName != null) {
+        span.setTag(Tags.PEER_HOSTNAME, hostName);
+        if (Config.get().isDbClientSplitByHost()) {
+          span.setServiceName(hostName, DB_CLIENT_SPLIT_BY_HOST);
+        }
+      }
+    }
+    return span;
+  }
+
+  private static String peerHostname(
+      final SocketAddress socketAddress, final String configuredHost) {
+    if (Config.get().isPeerHostnameFromConfigEnabled()
+        && configuredHost != null
+        && !configuredHost.isEmpty()) {
+      return configuredHost;
+    }
     return socketAddress.host();
   }
 

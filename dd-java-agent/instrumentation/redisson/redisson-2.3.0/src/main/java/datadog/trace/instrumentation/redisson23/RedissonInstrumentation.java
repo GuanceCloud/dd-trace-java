@@ -10,13 +10,17 @@ import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
 import com.google.auto.service.AutoService;
 import datadog.trace.agent.tooling.Instrumenter;
 import datadog.trace.agent.tooling.InstrumenterModule;
+import datadog.trace.bootstrap.InstrumentationContext;
 import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.api.AgentTracer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import net.bytebuddy.asm.Advice;
 import org.redisson.api.RFuture;
+import org.redisson.client.RedisClient;
 import org.redisson.client.RedisConnection;
 import org.redisson.client.protocol.CommandData;
 import org.redisson.client.protocol.CommandsData;
@@ -32,6 +36,11 @@ public final class RedissonInstrumentation extends InstrumenterModule.Tracing
   @Override
   public String instrumentedType() {
     return "org.redisson.client.RedisConnection";
+  }
+
+  @Override
+  public Map<String, String> contextStore() {
+    return Collections.singletonMap("org.redisson.client.RedisClient", String.class.getName());
   }
 
   @Override
@@ -68,7 +77,11 @@ public final class RedissonInstrumentation extends InstrumenterModule.Tracing
       }
       final AgentSpan span = startSpan(RedissonClientDecorator.OPERATION_NAME);
       RedissonClientDecorator.DECORATE.afterStart(span);
-      RedissonClientDecorator.DECORATE.onConnection(span, thiz.getRedisClient().getAddr());
+      final RedisClient redisClient = thiz.getRedisClient();
+      RedissonClientDecorator.DECORATE.onConnection(
+          span,
+          redisClient.getAddr(),
+          InstrumentationContext.get(RedisClient.class, String.class).get(redisClient));
       RedissonClientDecorator.DECORATE.onStatement(span, command.getCommand().getName());
       RedissonClientDecorator.DECORATE.onArgs(span, command.getParams());
       ((RFuture<?>) command.getPromise())
@@ -95,7 +108,11 @@ public final class RedissonInstrumentation extends InstrumenterModule.Tracing
 
       final AgentSpan span = startSpan(RedissonClientDecorator.OPERATION_NAME);
       RedissonClientDecorator.DECORATE.afterStart(span);
-      RedissonClientDecorator.DECORATE.onConnection(span, thiz.getRedisClient().getAddr());
+      final RedisClient redisClient = thiz.getRedisClient();
+      RedissonClientDecorator.DECORATE.onConnection(
+          span,
+          redisClient.getAddr(),
+          InstrumentationContext.get(RedisClient.class, String.class).get(redisClient));
 
       List<String> commandResourceNames = new ArrayList<>();
       for (CommandData<?, ?> commandData : command.getCommands()) {

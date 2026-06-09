@@ -30,7 +30,8 @@ public final class LettuceClientInstrumentation extends InstrumenterModule.Traci
   @Override
   public Map<String, String> contextStore() {
     return Collections.singletonMap(
-        "io.lettuce.core.api.StatefulConnection", "io.lettuce.core.RedisURI");
+        "io.lettuce.core.api.StatefulConnection",
+        "datadog.trace.instrumentation.lettuce5.LettuceConnectionInfo");
   }
 
   @Override
@@ -39,6 +40,7 @@ public final class LettuceClientInstrumentation extends InstrumenterModule.Traci
       packageName + ".LettuceClientDecorator",
       packageName + ".LettuceInstrumentationUtil",
       packageName + ".LettuceAsyncBiConsumer",
+      packageName + ".LettuceConnectionInfo",
       packageName + ".ConnectionContextBiConsumer"
     };
   }

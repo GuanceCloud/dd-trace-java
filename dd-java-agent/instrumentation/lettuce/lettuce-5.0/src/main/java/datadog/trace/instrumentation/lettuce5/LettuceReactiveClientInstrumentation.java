@@ -69,6 +69,7 @@ public class LettuceReactiveClientInstrumentation extends InstrumenterModule.Tra
       packageName + ".rx.RedisSubscriptionState",
       packageName + ".LettuceInstrumentationUtil",
       packageName + ".LettuceClientDecorator",
+      packageName + ".LettuceConnectionInfo",
       packageName + ".ConnectionContextBiConsumer"
     };
   }
@@ -80,7 +81,7 @@ public class LettuceReactiveClientInstrumentation extends InstrumenterModule.Tra
         "io.lettuce.core.RedisPublisher$RedisSubscription",
         packageName + ".rx.RedisSubscriptionState");
     store.put("io.lettuce.core.protocol.RedisCommand", AgentSpan.class.getName());
-    store.put("io.lettuce.core.api.StatefulConnection", "io.lettuce.core.RedisURI");
+    store.put("io.lettuce.core.api.StatefulConnection", packageName + ".LettuceConnectionInfo");
     return store;
   }
 
