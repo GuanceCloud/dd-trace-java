@@ -101,7 +101,7 @@ public class RocketMqDecorator extends ClientDecorator {
         span.setTag("product_span_id", parentContext.getSpanId());
       }
     } else {
-      span = startSpan(name, parentContext);
+      span = startSpan(name.toString(),name, parentContext);
     }
 
     span.setResourceName(name);
@@ -166,7 +166,7 @@ public class RocketMqDecorator extends ClientDecorator {
   public AgentScope start(SendMessageContext context) {
     String topic = context.getMessage().getTopic();
     UTF8BytesString spanName = UTF8BytesString.create(topic + " send");
-    AgentSpan span = startSpan(spanName);
+    AgentSpan span = startSpan(ROCKETMQ,spanName);
     span.setResourceName(spanName);
 
     span.setTag(BROKER_HOST, context.getBornHost());

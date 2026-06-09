@@ -49,7 +49,7 @@ public class DubboDecorator extends BaseDecorator {
       RequestMetadata requestMetadata = (RequestMetadata)Dubbo3Constants.getValue(TripleClientCall.class, tripleClientCall, "requestMetadata");
       DubboMetadata metadata = new DubboMetadata(null,requestMetadata);
       AgentSpanContext parentContext = extractContextAndGetSpanContext(metadata, GETTER);
-      AgentSpan span = startSpan("onMessage", parentContext);
+      AgentSpan span = startSpan("dubbo","onMessage", parentContext);
       return  activateSpan(span);
     }catch (Exception e){
       log.error("dubboException:",e);
@@ -60,14 +60,14 @@ public class DubboDecorator extends BaseDecorator {
   public AgentScope clientComplete(RequestMetadata requestMetadata, TriRpcStatus status) {
       DubboMetadata metadata = new DubboMetadata(null,requestMetadata);
       AgentSpanContext parentContext = extractContextAndGetSpanContext(metadata, GETTER);
-      AgentSpan span = startSpan("onComplete", parentContext);
+      AgentSpan span = startSpan("dubbo","onComplete", parentContext);
       return  activateSpan(span);
   }
 
   public AgentScope serverCall(RpcInvocation rpcInvocation){
       DubboMetadata metadata = new DubboMetadata(rpcInvocation,null);
       AgentSpanContext parentContext = extractContextAndGetSpanContext(metadata, GETTER);
-      AgentSpan span = startSpan("onMessage", parentContext);
+      AgentSpan span = startSpan("dubbo","onMessage", parentContext);
 //      defaultPropagator().inject(span, metadata, SETTER);
       return  activateSpan(span);
   }
@@ -75,14 +75,14 @@ public class DubboDecorator extends BaseDecorator {
   public AgentScope serverComplete(RpcInvocation invocation) {
     DubboMetadata metadata = new DubboMetadata(invocation,null);
     AgentSpanContext parentContext = extractContextAndGetSpanContext(metadata, GETTER);
-    AgentSpan span = startSpan("onComplete", parentContext);
+    AgentSpan span = startSpan("dubbo","onComplete", parentContext);
     return  activateSpan(span);
   }
 
   public AgentScope serverOnData(RequestMetadata httpMetadata) {
     DubboMetadata metadata = new DubboMetadata(null,httpMetadata);
     AgentSpanContext parentContext = extractContextAndGetSpanContext(metadata, GETTER);
-    AgentSpan span = startSpan("onCompleted", parentContext);
+    AgentSpan span = startSpan("dubbo","onCompleted", parentContext);
     return  activateSpan(span);
   }
 }

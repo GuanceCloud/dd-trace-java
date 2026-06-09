@@ -23,7 +23,7 @@ import org.slf4j.LoggerFactory;
 public class DubboDecorator extends BaseDecorator {
   private static final Logger log = LoggerFactory.getLogger(DubboDecorator.class);
   public static final CharSequence DUBBO_REQUEST = UTF8BytesString.create("dubbo");
-
+  public static final String NAME = "dubbo";
   public static final CharSequence DUBBO_SERVER = UTF8BytesString.create("alibaba-dubbo");
 
   public static final DubboDecorator DECORATE = new DubboDecorator();
@@ -64,11 +64,11 @@ public class DubboDecorator extends BaseDecorator {
     RpcContext rpcContext = RpcContext.getContext();
     if (isConsumer){
       // this is consumer
-      span = startSpan(DUBBO_REQUEST);
+      span = startSpan("alibaba-dubbo",DUBBO_REQUEST);
     }else{
       // this is provider
       AgentSpanContext parentContext = extractContextAndGetSpanContext(rpcContext, GETTER);
-      span = startSpan(DUBBO_REQUEST,parentContext);
+      span = startSpan("alibaba-dubbo",DUBBO_REQUEST,parentContext);
     }
     span.setTag(TAG_URL, url.toString());
     span.setTag(TAG_SHORT_URL, shortUrl);

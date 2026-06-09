@@ -30,7 +30,7 @@ public class RhinoDecorator extends BaseDecorator {
 
   public AgentSpan createSpan(String operationName,String script) {
     log.debug("--------------------- operationName:{},script:{}",operationName,script);
-    AgentSpan span = startSpan(operationName);
+    AgentSpan span = startSpan(INSTRUMENTATION,operationName);
     afterStart(span);
     span.setResourceName(operationName);
     span.setTag("script",script);

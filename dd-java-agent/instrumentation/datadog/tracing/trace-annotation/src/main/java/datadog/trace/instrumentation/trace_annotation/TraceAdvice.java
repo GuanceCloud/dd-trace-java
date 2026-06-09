@@ -28,7 +28,7 @@ public class TraceAdvice {
       }
     }
 
-    final AgentSpan span = startSpan(operationName);
+    final AgentSpan span = startSpan("trace",operationName);
 
     Parameter[] parameters = method.getParameters();
     StringBuffer methodName = new StringBuffer(method.getName());

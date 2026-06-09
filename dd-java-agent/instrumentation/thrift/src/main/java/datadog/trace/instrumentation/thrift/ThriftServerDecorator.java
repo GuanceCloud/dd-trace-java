@@ -36,7 +36,7 @@ public class ThriftServerDecorator extends ThriftBaseDecorator {
   public AgentSpan createSpan(Map<String, String> header,AbstractContext context) {
     AgentSpanContext parentContext = extractContextAndGetSpanContext(header, GETTER);
 //    AgentSpan span = startSpan(spanName(),parentContext,context.startTime);
-    AgentSpan span = startSpan(spanName(),parentContext);
+    AgentSpan span = startSpan("thrift",spanName(),parentContext);
     withMethod(span, context.methodName);
     withResource(span, Optional.ofNullable(context.getOperatorName()).isPresent()?context.getOperatorName():context.methodName);
     if (Optional.ofNullable(context.getArguments()).isPresent()) {

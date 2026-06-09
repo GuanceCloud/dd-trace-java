@@ -58,7 +58,7 @@ public class SpringAIStreamingChatModelInstrumentation extends InstrumenterModul
   public static class StreamingCallAdvice {
     @Advice.OnMethodEnter(suppress = Throwable.class)
     public static AgentSpan onEnter(@Advice.Argument(0) final Object prompt) {
-      final AgentSpan span = startSpan(SPRING_AI_REQUEST);
+      final AgentSpan span = startSpan("spring-ai",SPRING_AI_REQUEST);
       DECORATE.afterStart(span);
       DECORATE.onPrompt(span, prompt);
       return span;

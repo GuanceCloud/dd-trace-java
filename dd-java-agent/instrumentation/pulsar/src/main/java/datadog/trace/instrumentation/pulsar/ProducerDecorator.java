@@ -33,7 +33,7 @@ public class ProducerDecorator extends BaseDecorator {
 
   public static AgentScope start(PulsarRequest request){
     UTF8BytesString spanName = UTF8BytesString.create(request.getDestination()+" send");
-     final AgentSpan span = startSpan(spanName);
+     final AgentSpan span = startSpan("pulsar",spanName);
     span.setServiceName("pulsar");
     span.setResourceName(spanName);
     span.setTag("topic",request.getDestination());

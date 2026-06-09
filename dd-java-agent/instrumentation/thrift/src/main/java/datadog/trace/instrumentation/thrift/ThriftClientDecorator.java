@@ -33,7 +33,7 @@ public class ThriftClientDecorator extends ThriftBaseDecorator {
   }
 
   public AgentSpan createSpan(String operationName, TBase tb) {
-    AgentSpan span = startSpan(spanName());
+    AgentSpan span = startSpan("thrift",spanName());
     withMethod(span, operationName);
     withResource(span, operationName);
     withArgs(span,operationName,tb);

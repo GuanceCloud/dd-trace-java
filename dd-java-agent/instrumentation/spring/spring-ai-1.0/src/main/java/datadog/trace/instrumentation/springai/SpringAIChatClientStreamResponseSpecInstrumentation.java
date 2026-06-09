@@ -56,7 +56,7 @@ public class SpringAIChatClientStreamResponseSpecInstrumentation extends Instrum
   public static class StreamResponseAdvice {
     @Advice.OnMethodEnter(suppress = Throwable.class)
     public static AgentSpan onEnter(@Advice.This final Object streamResponseSpec) {
-      final AgentSpan span = startSpan(SPRING_AI_REQUEST);
+      final AgentSpan span = startSpan("spring-ai",SPRING_AI_REQUEST);
       DECORATE.afterStart(span);
       DECORATE.onPrompt(span, streamResponseSpec);
       return span;

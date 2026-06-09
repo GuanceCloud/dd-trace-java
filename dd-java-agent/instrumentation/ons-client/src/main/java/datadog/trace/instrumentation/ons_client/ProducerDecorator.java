@@ -38,7 +38,7 @@ public class ProducerDecorator extends BaseDecorator {
 
   public AgentScope OnStart(Message message){
     String topic = message.getTopic();
-    AgentSpan span = startSpan(topic+" send");
+    AgentSpan span = startSpan("ons-client",topic+" send");
     span.setResourceName(topic + " send");
     span.setServiceName("ons-client");
     if (message.getTag() != null){

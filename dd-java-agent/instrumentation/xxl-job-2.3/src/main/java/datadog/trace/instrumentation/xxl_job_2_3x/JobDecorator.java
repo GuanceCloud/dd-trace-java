@@ -30,7 +30,7 @@ public class JobDecorator extends BaseDecorator {
   }
 
   public AgentSpan createSpan(String operationName) {
-    AgentSpan span = startSpan(XXL_JOB_REQUEST);
+    AgentSpan span = startSpan("xxl-job",XXL_JOB_REQUEST);
     withMethod(span, operationName);
     afterStart(span);
     return span;

@@ -44,9 +44,9 @@ public class MqDecorator extends BaseDecorator {
     UTF8BytesString spanName = UTF8BytesString.create("producer send");
     AgentSpan span;
     if (parentContext == null) {
-       span = startSpan(spanName);
+       span = startSpan("ons-client",spanName);
     }else {
-      span = startSpan(spanName,parentContext);
+      span = startSpan("ons-client",spanName,parentContext);
     }
 
     span.setTag("topic",topic);

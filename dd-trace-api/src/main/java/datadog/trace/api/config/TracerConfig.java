@@ -17,6 +17,7 @@ public final class TracerConfig {
   public static final String ID_GENERATION_STRATEGY = "id.generation.strategy";
   public static final String WRITER_TYPE = "writer.type";
   public static final String WRITER_BAGGAGE_INJECT = "writer.baggage.inject";
+  public static final String WRITER_LINKS_INJECT = "writer.links.inject";
 
   public static final String PRIORITIZATION_TYPE = "prioritization.type";
   public static final String TRACE_AGENT_URL = "trace.agent.url";
@@ -35,6 +36,7 @@ public final class TracerConfig {
   public static final String PRIORITY_SAMPLING_FORCE = "priority.sampling.force";
   @Deprecated public static final String TRACE_RESOLVER_ENABLED = "trace.resolver.enabled";
   public static final String SERVICE_MAPPING = "service.mapping";
+  public static final String SERVICE_MAPPING_FILE = "service.mapping.file";
 
   public static final String TRACE_EXPERIMENTAL_FEATURES_ENABLED =
       "trace.experimental.features.enabled";
@@ -110,6 +112,8 @@ public final class TracerConfig {
       "trace.inferred.proxy.services.enabled";
 
   public static final String ENABLE_TRACE_AGENT_V05 = "trace.agent.v0.5.enabled";
+
+  public static final String TRACE_AGENT_PROTOCOL_VERSION = "trace.agent.protocol.version";
 
   public static final String CLIENT_IP_ENABLED = "trace.client-ip.enabled";
 

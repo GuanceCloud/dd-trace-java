@@ -21,7 +21,9 @@ public class LettuceAsyncCommandsAdvice {
   public static AgentScope onEnter(
       @Advice.Argument(0) final RedisCommand command,
       @Advice.This final AbstractRedisAsyncCommands thiz) {
-    final AgentSpan span = startSpan(LettuceClientDecorator.OPERATION_NAME);
+    final AgentSpan span =
+        startSpan(
+            LettuceClientDecorator.REDIS_CLIENT.toString(), LettuceClientDecorator.OPERATION_NAME);
     DECORATE.afterStart(span);
     DECORATE.onCommand(span, command);
 

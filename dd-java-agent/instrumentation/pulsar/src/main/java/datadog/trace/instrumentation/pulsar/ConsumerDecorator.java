@@ -49,7 +49,7 @@ public class ConsumerDecorator extends BaseDecorator {
     AgentSpanContext parentContext = extractContextAndGetSpanContext(pr, GETTER);
     String topic = pr.getMessage().getTopicName();
     UTF8BytesString spanName = UTF8BytesString.create(topic + " receive");
-    final AgentSpan span = startSpan(spanName, parentContext);
+    final AgentSpan span = startSpan("pulsar",spanName, parentContext);
     span.setResourceName(spanName);
     span.setTag(TOPIC, pr.getMessage().getTopicName());
     span.setTag("destination", pr.getDestination());

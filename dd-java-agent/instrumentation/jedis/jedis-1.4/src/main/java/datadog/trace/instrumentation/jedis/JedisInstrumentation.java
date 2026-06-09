@@ -4,6 +4,7 @@ import static datadog.trace.agent.tooling.bytebuddy.matcher.ClassLoaderMatchers.
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSpan;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.startSpan;
+import static datadog.trace.instrumentation.jedis.JedisClientDecorator.COMPONENT_NAME;
 import static datadog.trace.instrumentation.jedis.JedisClientDecorator.DECORATE;
 import static java.util.Collections.singletonMap;
 import static net.bytebuddy.matcher.ElementMatchers.isConstructor;
@@ -92,7 +93,8 @@ public final class JedisInstrumentation extends InstrumenterModule.Tracing
       if (CallDepthThreadLocalMap.incrementCallDepth(Connection.class) > 0) {
         return null;
       }
-      final AgentSpan span = startSpan(JedisClientDecorator.OPERATION_NAME);
+      final AgentSpan span =
+          startSpan(COMPONENT_NAME.toString(), JedisClientDecorator.OPERATION_NAME);
       DECORATE.afterStart(span);
       DECORATE.onConnection(span, thiz);
       DECORATE.setPeerPort(span, thiz.getPort());

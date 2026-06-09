@@ -10,6 +10,7 @@ import static datadog.trace.api.ConfigDefaults.DEFAULT_DATA_JOBS_ENABLED;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_IAST_ENABLED;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_INTEGRATIONS_ENABLED;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_LLM_OBS_ENABLED;
+import static datadog.trace.api.ConfigDefaults.DEFAULT_LOGS_OTEL_ENABLED;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_MEASURE_METHODS;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_MEASURE_NATIVE_METHODS;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_METRICS_OTEL_ENABLED;
@@ -43,6 +44,7 @@ import static datadog.trace.api.config.GeneralConfig.TRACE_TRIAGE;
 import static datadog.trace.api.config.GeneralConfig.TRIAGE_REPORT_TRIGGER;
 import static datadog.trace.api.config.IastConfig.IAST_ENABLED;
 import static datadog.trace.api.config.LlmObsConfig.LLMOBS_ENABLED;
+import static datadog.trace.api.config.OtlpConfig.LOGS_OTEL_ENABLED;
 import static datadog.trace.api.config.OtlpConfig.METRICS_OTEL_ENABLED;
 import static datadog.trace.api.config.OtlpConfig.TRACE_OTEL_ENABLED;
 import static datadog.trace.api.config.ProfilingConfig.PROFILING_DIRECT_ALLOCATION_ENABLED;
@@ -56,6 +58,7 @@ import static datadog.trace.api.config.TraceInstrumentationConfig.AKKA_FORK_JOIN
 import static datadog.trace.api.config.TraceInstrumentationConfig.AXIS_TRANSPORT_CLASS_NAME;
 import static datadog.trace.api.config.TraceInstrumentationConfig.CODE_ORIGIN_FOR_SPANS_ENABLED;
 import static datadog.trace.api.config.TraceInstrumentationConfig.CODE_ORIGIN_FOR_SPANS_INTERFACE_SUPPORT;
+import static datadog.trace.api.config.TraceInstrumentationConfig.DETAILED_INSTRUMENTATION_ERRORS;
 import static datadog.trace.api.config.TraceInstrumentationConfig.EXPERIMENTAL_DEFER_INTEGRATIONS_UNTIL;
 import static datadog.trace.api.config.TraceInstrumentationConfig.HTTP_URL_CONNECTION_CLASS_NAME;
 import static datadog.trace.api.config.TraceInstrumentationConfig.INSTRUMENTATION_CONFIG_ID;
@@ -153,12 +156,14 @@ public class InstrumenterConfig {
   private final boolean triageEnabled;
 
   private final boolean integrationsEnabled;
+  private final boolean detailedInstrumentationErrors;
 
   private final boolean codeOriginEnabled;
   private final boolean codeOriginInterfaceSupport;
   private final boolean traceEnabled;
   private final boolean traceOtelEnabled;
   private final boolean metricsOtelEnabled;
+  private final boolean logsOtelEnabled;
   private final ProfilingEnablement profilingEnabled;
   private final boolean ciVisibilityEnabled;
   private final ProductActivation appSecActivation;
@@ -258,6 +263,8 @@ public class InstrumenterConfig {
 
     integrationsEnabled =
         configProvider.getBoolean(INTEGRATIONS_ENABLED, DEFAULT_INTEGRATIONS_ENABLED);
+    detailedInstrumentationErrors =
+        configProvider.getBoolean(DETAILED_INSTRUMENTATION_ERRORS, false);
 
     codeOriginEnabled =
         configProvider.getBoolean(
@@ -270,6 +277,7 @@ public class InstrumenterConfig {
     traceOtelEnabled = configProvider.getBoolean(TRACE_OTEL_ENABLED, DEFAULT_TRACE_OTEL_ENABLED);
     metricsOtelEnabled =
         configProvider.getBoolean(METRICS_OTEL_ENABLED, DEFAULT_METRICS_OTEL_ENABLED);
+    logsOtelEnabled = configProvider.getBoolean(LOGS_OTEL_ENABLED, DEFAULT_LOGS_OTEL_ENABLED);
 
     profilingEnabled =
         ProfilingEnablement.of(
@@ -477,6 +485,10 @@ public class InstrumenterConfig {
     return integrationsEnabled;
   }
 
+  public boolean isDetailedInstrumentationErrors() {
+    return detailedInstrumentationErrors;
+  }
+
   /**
    * isIntegrationEnabled determines whether an integration under the specified name(s) is enabled
    * according to the following list of configurations, from highest to lowest precedence:
@@ -524,6 +536,10 @@ public class InstrumenterConfig {
 
   public boolean isMetricsOtelEnabled() {
     return metricsOtelEnabled;
+  }
+
+  public boolean isLogsOtelEnabled() {
+    return logsOtelEnabled;
   }
 
   public boolean isProfilingEnabled() {
@@ -836,6 +852,8 @@ public class InstrumenterConfig {
         + traceOtelEnabled
         + ", metricsOtelEnabled="
         + metricsOtelEnabled
+        + ", logsOtelEnabled="
+        + logsOtelEnabled
         + ", profilingEnabled="
         + profilingEnabled
         + ", ciVisibilityEnabled="

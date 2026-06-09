@@ -41,7 +41,7 @@ public class HSFDecorator extends BaseDecorator {
     Invocation.ClientInvocationContext context = invocation.getClientInvocationContext();
     String methodInterface = context.getMethodModel().getUniqueName();
     String methodName = context.getMethodModel().getMethodName();
-    AgentSpan span = startSpan(component());
+    AgentSpan span = startSpan("hsf",component());
     span.setResourceName(methodInterface +":"+ methodName);
     span.setTag("invoke_type",context.getMethodModel().getInvokeType().toLowerCase());
     afterStart(span);
@@ -53,7 +53,7 @@ public class HSFDecorator extends BaseDecorator {
 
   public AgentSpan buildServerSpan(Invocation invocation){
     AgentSpanContext parentContext = extractContextAndGetSpanContext(RPCContext.getServerContext(), GETTER);
-    AgentSpan span = startSpan(component(),parentContext);
+    AgentSpan span = startSpan("hsf",component(),parentContext);
 
     span.setResourceName(invocation.getServerInvocationContext().getMetadata().getUniqueName());
     afterStart(span);

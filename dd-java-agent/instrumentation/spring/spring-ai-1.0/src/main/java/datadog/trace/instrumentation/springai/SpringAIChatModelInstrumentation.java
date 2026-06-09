@@ -58,7 +58,7 @@ public class SpringAIChatModelInstrumentation extends InstrumenterModule.Tracing
   public static class ChatModelCallAdvice {
     @Advice.OnMethodEnter(suppress = Throwable.class)
     public static AgentScope onEnter(@Advice.Argument(0) final Object prompt) {
-      final AgentSpan span = startSpan(SPRING_AI_REQUEST);
+      final AgentSpan span = startSpan("spring-ai",SPRING_AI_REQUEST);
       DECORATE.afterStart(span);
       DECORATE.onPrompt(span, prompt);
       return activateSpan(span);

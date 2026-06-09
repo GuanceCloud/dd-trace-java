@@ -53,7 +53,7 @@ public class MessageListenerWrapper<T> implements MessageListener<T> {
 
     String topicName = message.getTopicName();
     UTF8BytesString spanName = UTF8BytesString.create(topicName + " process");
-    AgentSpan span = startSpan(spanName, parentContext);
+    AgentSpan span = startSpan("pulsar",spanName, parentContext);
     span.setResourceName(spanName);
     span.setTag("topic", message.getTopicName());
     span.setTag("destination", message.getTopicName());

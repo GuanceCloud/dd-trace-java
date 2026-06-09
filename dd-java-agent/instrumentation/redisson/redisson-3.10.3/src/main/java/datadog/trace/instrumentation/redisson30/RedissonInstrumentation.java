@@ -80,7 +80,7 @@ public final class RedissonInstrumentation extends InstrumenterModule.Tracing
       if (promise == null) {
         return null;
       }
-      final AgentSpan span = startSpan(RedissonClientDecorator.OPERATION_NAME);
+      final AgentSpan span = startSpan("redis-command", RedissonClientDecorator.OPERATION_NAME);
       RedissonClientDecorator.DECORATE.afterStart(span);
       final RedisClient redisClient = thiz.getRedisClient();
       RedissonClientDecorator.DECORATE.onConnection(
@@ -117,7 +117,7 @@ public final class RedissonInstrumentation extends InstrumenterModule.Tracing
       if (promise == null) {
         return null;
       }
-      final AgentSpan span = startSpan(RedissonClientDecorator.OPERATION_NAME);
+      final AgentSpan span = startSpan("redis-command", RedissonClientDecorator.OPERATION_NAME);
       RedissonClientDecorator.DECORATE.afterStart(span);
       final RedisClient redisClient = thiz.getRedisClient();
       RedissonClientDecorator.DECORATE.onConnection(

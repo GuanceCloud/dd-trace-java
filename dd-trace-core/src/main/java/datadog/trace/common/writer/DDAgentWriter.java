@@ -10,6 +10,7 @@ import static datadog.trace.common.writer.ddagent.Prioritization.FAST_LANE;
 import datadog.communication.ddagent.DDAgentFeaturesDiscovery;
 import datadog.metrics.api.Monitoring;
 import datadog.trace.api.Config;
+import datadog.trace.api.ProtocolVersion;
 import datadog.trace.common.sampling.SingleSpanSampler;
 import datadog.trace.common.writer.ddagent.DDAgentApi;
 import datadog.trace.common.writer.ddagent.DDAgentMapperDiscovery;
@@ -38,8 +39,9 @@ public class DDAgentWriter extends RemoteWriter {
     HealthMetrics healthMetrics = HealthMetrics.NO_OP;
     int flushIntervalMilliseconds = 1000;
     Monitoring monitoring = Monitoring.DISABLED;
-    boolean traceAgentV05Enabled = Config.get().isTraceAgentV05Enabled();
+    ProtocolVersion protocolVersion = Config.get().getProtocolVersion();
     boolean metricsReportingEnabled = Config.get().isTracerMetricsEnabled();
+    boolean metricsIgnoreAgentVersion = Config.get().isTracerMetricsIgnoreAgentVersion();
     private int flushTimeout = 1;
     private TimeUnit flushTimeoutUnit = TimeUnit.SECONDS;
     boolean alwaysFlush = false;
@@ -104,13 +106,18 @@ public class DDAgentWriter extends RemoteWriter {
       return this;
     }
 
-    public DDAgentWriterBuilder traceAgentV05Enabled(boolean traceAgentV05Enabled) {
-      this.traceAgentV05Enabled = traceAgentV05Enabled;
+    public DDAgentWriterBuilder traceAgentProtocolVersion(ProtocolVersion protocolVersion) {
+      this.protocolVersion = protocolVersion;
       return this;
     }
 
     public DDAgentWriterBuilder metricsReportingEnabled(boolean metricsReportingEnabled) {
       this.metricsReportingEnabled = metricsReportingEnabled;
+      return this;
+    }
+
+    public DDAgentWriterBuilder metricsIgnoreAgentVersion(boolean metricsIgnoreAgentVersion) {
+      this.metricsIgnoreAgentVersion = metricsIgnoreAgentVersion;
       return this;
     }
 
@@ -144,7 +151,12 @@ public class DDAgentWriter extends RemoteWriter {
       if (null == featureDiscovery) {
         featureDiscovery =
             new DDAgentFeaturesDiscovery(
-                client, monitoring, agentUrl, traceAgentV05Enabled, metricsReportingEnabled);
+                client,
+                monitoring,
+                agentUrl,
+                protocolVersion,
+                metricsReportingEnabled,
+                metricsIgnoreAgentVersion);
       }
       if (null == agentApi) {
         agentApi =

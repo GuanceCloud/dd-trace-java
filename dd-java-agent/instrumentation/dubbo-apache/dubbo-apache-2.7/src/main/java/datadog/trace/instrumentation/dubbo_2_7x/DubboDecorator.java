@@ -73,12 +73,12 @@ public class DubboDecorator extends BaseDecorator {
 
     if (isConsumer) {
       // this is consumer
-      span = startSpan(DUBBO_REQUEST);
+      span = startSpan("dubbo",DUBBO_REQUEST);
       defaultPropagator().inject(span, dubboTraceInfo, SETTER);
     } else {
       // this is provider
       AgentSpanContext parentContext = extractContextAndGetSpanContext(dubboTraceInfo, GETTER);
-      span = startSpan(DUBBO_REQUEST, parentContext);
+      span = startSpan("dubbo",DUBBO_REQUEST, parentContext);
       if (Config.get().isDubboProviderPropagateEnabled()) {
         defaultPropagator().inject(span, dubboTraceInfo, SETTER);
       }

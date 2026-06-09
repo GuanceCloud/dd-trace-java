@@ -22,25 +22,14 @@ public class DubboInvokeAdvice {
       @Advice.Argument(1) Invocation invocation) {
     DubboTraceInfo dubboTraceInfo =
         new DubboTraceInfo((RpcInvocation) invocation, RpcContext.getContext());
-    /*    AgentScope scope = activeScope();
-    if(filter.getClass().getPackage().getName().contains("org.apache.dubbo")){
-      return scope;
-    }
-    if (null == scope) {
-      AgentSpanContext parentContext = extractContextAndGetSpanContext(dubboTraceInfo, GETTER);
-      if (null != parentContext) {
-        hasSpan = true;
-        return activateSpan(startSpan("dubbo/filter",parentContext));
-      }
-    }
-    return scope;*/
+
     if(filter.getClass().getPackage().getName().contains("org.apache.dubbo") || filter.getClass().getPackage().getName().contains("com.alibaba")){
       // skip
       return null;
     }
     AgentSpanContext parentContext = extractContextAndGetSpanContext(dubboTraceInfo, GETTER);
     if (null != parentContext) {
-      return activateSpan(startSpan(filter.getClass().getName(), parentContext));
+      return activateSpan(startSpan("dubbo",filter.getClass().getName(), parentContext));
     }
     return null;
   }

@@ -56,7 +56,7 @@ public class SpringAIChatClientCallResponseSpecInstrumentation extends Instrumen
   public static class CallResponseAdvice {
     @Advice.OnMethodEnter(suppress = Throwable.class)
     public static AgentSpan onEnter(@Advice.This final Object callResponseSpec) {
-      final AgentSpan span = startSpan(SPRING_AI_REQUEST);
+      final AgentSpan span = startSpan("spring-ai",SPRING_AI_REQUEST);
       DECORATE.afterStart(span);
       DECORATE.onPrompt(span, callResponseSpec);
       return span;

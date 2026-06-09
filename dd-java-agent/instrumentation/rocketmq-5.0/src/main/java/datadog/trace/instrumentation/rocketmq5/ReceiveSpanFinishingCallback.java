@@ -38,9 +38,9 @@ public class ReceiveSpanFinishingCallback implements FutureCallback<ReceiveMessa
       AgentSpanContext parentContext = extractContextAndGetSpanContext(messageView,GetterView);
       AgentSpan childSpan ;
       if (null != parentContext){
-        childSpan = startSpan("receive_message",parentContext);
+        childSpan = startSpan("rocketmq","receive_message",parentContext);
       }else {
-        childSpan = startSpan("receive_message");
+        childSpan = startSpan("rocketmq","receive_message");
       }
       childSpan.setServiceName("rocketmq-consume");
       childSpan.setTag("messageID",messageView.getMessageId());

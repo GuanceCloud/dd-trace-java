@@ -26,9 +26,9 @@ public class MessageListenerWrapper implements MessageListener {
 
     AgentSpan span ;
     if (null != parentContext){
-      span = startSpan("messageListener",parentContext);
+      span = startSpan("rocketmq","messageListener",parentContext);
     }else {
-     span =  startSpan("messageListener");
+     span =  startSpan("rocketmq","messageListener");
     }
     span.setSpanType("rocketmq");
     span.setTag("messageID",messageView.getMessageId());
