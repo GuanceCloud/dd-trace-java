@@ -4,6 +4,7 @@ import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSp
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.noopSpan;
 import static datadog.trace.bootstrap.instrumentation.api.Java8BytecodeBridge.spanFromContext;
 import static datadog.trace.instrumentation.netty41.AttributeKeys.CLIENT_PARENT_ATTRIBUTE_KEY;
+import static datadog.trace.instrumentation.netty41.AttributeKeys.CLIENT_RESPONSE_STREAM_ATTRIBUTE_KEY;
 import static datadog.trace.instrumentation.netty41.AttributeKeys.CONTEXT_ATTRIBUTE_KEY;
 import static datadog.trace.instrumentation.netty41.client.NettyHttpClientDecorator.DECORATE;
 
@@ -13,9 +14,12 @@ import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.Attribute;
 
 @ChannelHandler.Sharable
@@ -44,7 +48,13 @@ public class HttpClientResponseTracingHandler extends ChannelInboundHandlerAdapt
                       .equals(((HttpResponse) msg).headers().get(HttpHeaderNames.UPGRADE)));
       if (finishSpan) {
         try (final AgentScope scope = activateSpan(span)) {
-          DECORATE.onResponse(span, (HttpResponse) msg);
+          final HttpResponse response = (HttpResponse) msg;
+          DECORATE.onResponse(span, response);
+          final NettyClientResponseStream stream =
+              NettyClientResponseStream.startIfSse(span, response);
+          if (stream != null) {
+            ctx.channel().attr(CLIENT_RESPONSE_STREAM_ATTRIBUTE_KEY).set(stream);
+          }
           DECORATE.beforeFinish(span);
           span.finish();
         }
@@ -53,6 +63,10 @@ public class HttpClientResponseTracingHandler extends ChannelInboundHandlerAdapt
           ctx.channel().attr(CONTEXT_ATTRIBUTE_KEY).set(storedContext);
         }
       }
+    }
+
+    if (msg instanceof HttpObject) {
+      handleResponseStream(ctx, msg);
     }
 
     // We want the callback in the scope of the parent, not the client span
@@ -83,6 +97,7 @@ public class HttpClientResponseTracingHandler extends ChannelInboundHandlerAdapt
         span.finish();
       }
     }
+    finishResponseStreamWithError(ctx, cause);
     // We want the callback in the scope of the parent, not the client span
     try (final AgentScope scope = activateSpan(parent)) {
       super.exceptionCaught(ctx, cause);
@@ -108,9 +123,45 @@ public class HttpClientResponseTracingHandler extends ChannelInboundHandlerAdapt
         span.finish();
       }
     }
+    finishResponseStream(ctx);
     // We want the callback in the scope of the parent, not the client span
     try (final AgentScope scope = activateSpan(parent)) {
       super.channelInactive(ctx);
+    }
+  }
+
+  private static void handleResponseStream(final ChannelHandlerContext ctx, final Object msg) {
+    final NettyClientResponseStream stream = getResponseStream(ctx);
+    if (stream == null) {
+      return;
+    }
+    if (msg instanceof HttpContent) {
+      stream.onChunk();
+    }
+    if (msg instanceof LastHttpContent) {
+      finishResponseStream(ctx);
+    }
+  }
+
+  private static NettyClientResponseStream getResponseStream(final ChannelHandlerContext ctx) {
+    final Object stream = ctx.channel().attr(CLIENT_RESPONSE_STREAM_ATTRIBUTE_KEY).get();
+    return stream instanceof NettyClientResponseStream ? (NettyClientResponseStream) stream : null;
+  }
+
+  private static void finishResponseStream(final ChannelHandlerContext ctx) {
+    final NettyClientResponseStream stream = getResponseStream(ctx);
+    if (stream != null) {
+      ctx.channel().attr(CLIENT_RESPONSE_STREAM_ATTRIBUTE_KEY).remove();
+      stream.finish();
+    }
+  }
+
+  private static void finishResponseStreamWithError(
+      final ChannelHandlerContext ctx, final Throwable cause) {
+    final NettyClientResponseStream stream = getResponseStream(ctx);
+    if (stream != null) {
+      ctx.channel().attr(CLIENT_RESPONSE_STREAM_ATTRIBUTE_KEY).remove();
+      stream.finishWithError(cause);
     }
   }
 }
