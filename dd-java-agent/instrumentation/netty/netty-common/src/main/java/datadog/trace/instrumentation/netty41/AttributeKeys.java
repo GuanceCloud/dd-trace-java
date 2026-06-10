@@ -23,6 +23,9 @@ public final class AttributeKeys {
   public static final AttributeKey<AgentSpan> CLIENT_PARENT_ATTRIBUTE_KEY =
       attributeKey("datadog.client.parent.span");
 
+  public static final AttributeKey<Object> CLIENT_RESPONSE_STREAM_ATTRIBUTE_KEY =
+      attributeKey("datadog.client.response.stream");
+
   public static final AttributeKey<AgentScope.Continuation>
       CONNECT_PARENT_CONTINUATION_ATTRIBUTE_KEY =
           attributeKey("datadog.connect.parent.continuation");
