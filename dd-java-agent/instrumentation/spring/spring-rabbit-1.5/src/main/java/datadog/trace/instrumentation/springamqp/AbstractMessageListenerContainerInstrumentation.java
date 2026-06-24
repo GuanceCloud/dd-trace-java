@@ -17,6 +17,7 @@ import datadog.trace.agent.tooling.InstrumenterModule;
 import datadog.trace.bootstrap.InstrumentationContext;
 import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
+import datadog.trace.bootstrap.instrumentation.api.AgentSpanContext;
 import datadog.trace.bootstrap.instrumentation.java.concurrent.ExcludeFilter;
 import datadog.trace.bootstrap.instrumentation.java.concurrent.State;
 import java.net.InetSocketAddress;
@@ -42,7 +43,9 @@ public class AbstractMessageListenerContainerInstrumentation extends Instrumente
 
   @Override
   public String[] helperClassNames() {
-    return new String[] {packageName + ".RabbitListenerDecorator"};
+    return new String[] {
+      packageName + ".RabbitListenerDecorator", packageName + ".SpringRabbitMessageContextHelper"
+    };
   }
 
   @Override
@@ -95,6 +98,25 @@ public class AbstractMessageListenerContainerInstrumentation extends Instrumente
               return activateSpan(span);
             }
           }
+        }
+        AgentSpanContext parentContext = SpringRabbitMessageContextHelper.extractParent(message);
+        if (parentContext != null) {
+          AgentSpan span = startSpan("rabbitmq-amqp", AMQP_CONSUME, parentContext);
+          span.setMeasured(true);
+          DECORATE.afterStart(span);
+          MessageProperties properties = message.getMessageProperties();
+          if (properties != null) {
+            InetSocketAddress connection =
+                InstrumentationContext.get(MessageProperties.class, InetSocketAddress.class)
+                    .get(properties);
+            if (connection != null) {
+              DECORATE.onPeerConnection(span, connection);
+            }
+            DECORATE.onConsume(span, properties.getConsumerQueue());
+          } else {
+            DECORATE.onConsume(span, null);
+          }
+          return activateSpan(span);
         }
       }
       return null;
