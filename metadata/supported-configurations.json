@@ -7961,6 +7961,22 @@
         "aliases": []
       }
     ],
+    "DD_TRACE_METHOD_FILE": [
+      {
+        "version": "A",
+        "type": "string",
+        "default": null,
+        "aliases": []
+      }
+    ],
+    "DD_TRACE_METHOD_PACKAGES": [
+      {
+        "version": "A",
+        "type": "string",
+        "default": null,
+        "aliases": []
+      }
+    ],
     "DD_TRACE_NATIVE_METHODS": [
       {
         "version": "A",

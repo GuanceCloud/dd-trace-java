@@ -15,8 +15,12 @@ import net.bytebuddy.implementation.bytecode.assign.Assigner;
 
 public class TraceAdvice {
   private static final String DEFAULT_OPERATION_NAME = "trace.annotation";
+
   @Advice.OnMethodEnter(suppress = Throwable.class)
-  public static AgentScope onEnter(@Advice.Origin final Method method,@Advice.AllArguments final Object[] args) {
+  public static AgentScope onEnter(
+      @Advice.Origin("#t") final String className,
+      @Advice.Origin final Method method,
+      @Advice.AllArguments final Object[] args) {
     final Trace traceAnnotation = method.getAnnotation(Trace.class);
     CharSequence operationName = traceAnnotation == null ? null : traceAnnotation.operationName();
 
@@ -28,33 +32,38 @@ public class TraceAdvice {
       }
     }
 
-    final AgentSpan span = startSpan("trace",operationName);
+    final AgentSpan span = startSpan("trace", operationName);
 
     Parameter[] parameters = method.getParameters();
     StringBuffer methodName = new StringBuffer(method.getName());
     methodName.append("(");
     Integer max_size = 1024;
-    if (parameters.length>0){
+    if (parameters.length > 0) {
       for (int i = 0; i < parameters.length; i++) {
-        if (args[i]==null){
-          span.setTag(parameters[i].getName(),"null");
-        }else {
+        if (args[i] == null) {
+          span.setTag(parameters[i].getName(), "null");
+        } else {
           String value = args[i].toString();
-          span.setTag(parameters[i].getName(), args[i].toString().substring(0,value.length()>=max_size?max_size:value.length()));
+          span.setTag(
+              parameters[i].getName(),
+              args[i]
+                  .toString()
+                  .substring(0, value.length() >= max_size ? max_size : value.length()));
         }
-        methodName.append(parameters[i].getType().getTypeName()).append(" ").append(parameters[i].getName());
-        if (i<parameters.length-1){
+        methodName
+            .append(parameters[i].getType().getTypeName())
+            .append(" ")
+            .append(parameters[i].getName());
+        if (i < parameters.length - 1) {
           methodName.append(",");
         }
       }
     }
     methodName.append(")");
-    span.setTag("method_name",methodName.toString());
+    span.setTag("method_name", methodName.toString());
     CharSequence resourceName = traceAnnotation == null ? null : traceAnnotation.resourceName();
     if (resourceName == null || resourceName.length() == 0) {
-      StackTraceElement[] stackTraceElements = Thread.currentThread().getStackTrace();
-      String className = stackTraceElements[1].getClassName(); // 第一个元素是当前方法
-      resourceName = DECORATE.getMethodName(className)+"."+method.getName();
+      resourceName = DECORATE.getMethodName(className) + "." + method.getName();
     }
     span.setResourceName(resourceName);
     DECORATE.afterStart(span);
