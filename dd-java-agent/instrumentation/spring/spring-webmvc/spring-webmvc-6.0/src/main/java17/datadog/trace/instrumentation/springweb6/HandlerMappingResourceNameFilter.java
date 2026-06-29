@@ -15,9 +15,12 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -114,9 +117,8 @@ public class HandlerMappingResourceNameFilter extends OncePerRequestFilter imple
 
       if (Config.get().isTracerRequestBodyEnabled()
           && "POST".equalsIgnoreCase(methodType)
-          && contextType != null
-          && (contextType.contains("application/json"))) {
-        span.setTag("request_body", new String(requestWrapper.getContentAsByteArray()));
+          && isSupportedRequestBodyContentType(contextType)) {
+        span.setTag("request_body", decodeRequestBody(requestWrapper));
       }
       int dataLength = data==null?0:data.length;
       log.debug(
@@ -152,6 +154,27 @@ public class HandlerMappingResourceNameFilter extends OncePerRequestFilter imple
   }
   private boolean isEmpty(String str) {
     return str == null || str.length() == 0;
+  }
+
+  private boolean isSupportedRequestBodyContentType(String contentType) {
+    if (contentType == null) {
+      return false;
+    }
+    String normalizedContentType = contentType.toLowerCase(Locale.ROOT);
+    return normalizedContentType.contains("application/json")
+        || normalizedContentType.contains("text/x-gwt-rpc");
+  }
+
+  private String decodeRequestBody(ContentCachingRequestWrapper requestWrapper) {
+    Charset charset = StandardCharsets.UTF_8;
+    String encoding = requestWrapper.getCharacterEncoding();
+    if (encoding != null) {
+      try {
+        charset = Charset.forName(encoding);
+      } catch (IllegalArgumentException ignored) {
+      }
+    }
+    return new String(requestWrapper.getContentAsByteArray(), charset);
   }
 
   public static boolean matchPath(String requestPath, String[] patterns) {

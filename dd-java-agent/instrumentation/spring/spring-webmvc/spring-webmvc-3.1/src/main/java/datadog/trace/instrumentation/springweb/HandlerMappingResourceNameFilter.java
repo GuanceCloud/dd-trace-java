@@ -10,9 +10,12 @@ import datadog.trace.api.Config;
 import datadog.trace.api.GlobalTracer;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import java.io.IOException;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.CopyOnWriteArrayList;
 import javax.servlet.FilterChain;
 import javax.servlet.ServletException;
@@ -109,9 +112,8 @@ public class HandlerMappingResourceNameFilter extends OncePerRequestFilter imple
 
       if (Config.get().isTracerRequestBodyEnabled()
           && "POST".equalsIgnoreCase(methodType)
-          && contextType != null
-          && (contextType.contains("application/json"))) {
-        span.setTag("request_body", new String(requestWrapper.getContentAsByteArray()));
+          && isSupportedRequestBodyContentType(contextType)) {
+        span.setTag("request_body", decodeRequestBody(requestWrapper));
       }
       int dataLength = data==null?0:data.length;
       if (log.isDebugEnabled()) {
@@ -216,6 +218,27 @@ public class HandlerMappingResourceNameFilter extends OncePerRequestFilter imple
 
   private boolean isEmpty(String str) {
     return str == null || str.length() == 0;
+  }
+
+  private boolean isSupportedRequestBodyContentType(String contentType) {
+    if (contentType == null) {
+      return false;
+    }
+    String normalizedContentType = contentType.toLowerCase(Locale.ROOT);
+    return normalizedContentType.contains("application/json")
+        || normalizedContentType.contains("text/x-gwt-rpc");
+  }
+
+  private String decodeRequestBody(ContentCachingRequestWrapper requestWrapper) {
+    Charset charset = StandardCharsets.UTF_8;
+    String encoding = requestWrapper.getCharacterEncoding();
+    if (encoding != null) {
+      try {
+        charset = Charset.forName(encoding);
+      } catch (IllegalArgumentException ignored) {
+      }
+    }
+    return new String(requestWrapper.getContentAsByteArray(), charset);
   }
 
   private void buildHeaderTags(AgentSpan span,final HttpServletRequest request, final HttpServletResponse response) {
