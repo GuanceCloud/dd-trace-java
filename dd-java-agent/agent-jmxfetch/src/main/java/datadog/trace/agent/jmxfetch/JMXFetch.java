@@ -147,6 +147,14 @@ public class JMXFetch {
 
     final AppConfig appConfig = configBuilder.build();
 
+    if (!otlpRuntimeMetricsEnabled) {
+      JvmThreadCountStatsDReporter.start(
+          statsd,
+          globalTags,
+          appConfig.getCheckPeriod(),
+          () -> !appConfig.getExitWatcher().shouldExit());
+    }
+
     final Thread thread =
         newAgentThread(
             JMX_COLLECTOR,
