@@ -17,9 +17,6 @@ import datadog.trace.bootstrap.otel.metrics.OtelInstrumentType;
 import datadog.trace.bootstrap.otel.metrics.data.OtelMetricRegistry;
 import datadog.trace.bootstrap.otel.metrics.data.OtelMetricStorage;
 import datadog.trace.bootstrap.otel.metrics.data.OtelRunnableObservable;
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
 import java.lang.management.BufferPoolMXBean;
 import java.lang.management.ClassLoadingMXBean;
 import java.lang.management.GarbageCollectorMXBean;
@@ -27,13 +24,9 @@ import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import java.lang.management.MemoryPoolMXBean;
 import java.lang.management.MemoryUsage;
-import java.lang.management.ThreadInfo;
-import java.lang.management.ThreadMXBean;
 import java.util.Arrays;
-import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -89,42 +82,15 @@ public final class JvmOtlpRuntimeMetrics {
     return result;
   }
 
-  /**
-   * MethodHandle for {@code ThreadInfo#isDaemon()}: non-null on Java 9+, null on Java 8. Doubles as
-   * the Java-version probe since this code is compiled against Java 8 and cannot reference the
-   * symbol directly.
-   */
-  private static final MethodHandle THREAD_INFO_IS_DAEMON = resolveThreadInfoIsDaemon();
-
-  private static final ThreadMXBean THREAD_BEAN = ManagementFactory.getThreadMXBean();
-
-  /**
-   * jvm.thread.count collector, chosen once at class load. Java 9+ uses {@link
-   * ThreadMXBean#getThreadInfo(long[])} (the single-arg overload omits stack-trace capture); Java 8
-   * (and GraalVM native image, where ThreadMXBean is unsupported) walks the root {@link
-   * ThreadGroup}. Avoids {@link Thread#getAllStackTraces()}, which forces a safepoint and allocates
-   * a {@code StackTraceElement[]} per thread on every poll.
-   */
   private static final Consumer<OtelMetricStorage> THREAD_COUNT_COLLECTOR =
-      chooseThreadCountCollector();
-
-  private static MethodHandle resolveThreadInfoIsDaemon() {
-    try {
-      return MethodHandles.publicLookup()
-          .findVirtual(ThreadInfo.class, "isDaemon", MethodType.methodType(boolean.class));
-    } catch (NoSuchMethodException | IllegalAccessException e) {
-      return null; // Java 8 — fall back to ThreadGroup walk
-    }
-  }
-
-  private static Consumer<OtelMetricStorage> chooseThreadCountCollector() {
-    boolean isJava9OrNewer = THREAD_INFO_IS_DAEMON != null;
-    boolean isNativeImage = System.getProperty("org.graalvm.nativeimage.imagecode") != null;
-    if (isJava9OrNewer && !isNativeImage) {
-      return JvmOtlpRuntimeMetrics::collectThreadCountsViaThreadMXBean;
-    }
-    return JvmOtlpRuntimeMetrics::collectThreadCountsViaThreadGroup;
-  }
+      storage ->
+          JvmThreadCountCollector.collect(
+              (daemon, state, count) ->
+                  storage.recordLong(
+                      count,
+                      daemon
+                          ? DAEMON_THREAD_STATE_ATTRS[state.ordinal()]
+                          : NON_DAEMON_THREAD_STATE_ATTRS[state.ordinal()]));
 
   /** Explicit bucket advice for jvm.gc.duration in seconds (matches OTel runtime-telemetry). */
   private static final List<Double> GC_DURATION_BUCKETS = Arrays.asList(0.01, 0.1, 1.0, 10.0);
@@ -310,80 +276,6 @@ public final class JvmOtlpRuntimeMetrics {
         "{thread}",
         UP_DOWN_COUNTER,
         THREAD_COUNT_COLLECTOR);
-  }
-
-  /**
-   * Java 9+ path. Enumerates threads via {@link ThreadMXBean#getThreadInfo(long[])}; the single-arg
-   * overload omits stack-trace capture, avoiding the safepoint and per-frame allocation incurred by
-   * {@link Thread#getAllStackTraces()}.
-   */
-  private static void collectThreadCountsViaThreadMXBean(OtelMetricStorage storage) {
-    Map<Thread.State, long[]> daemonCounts = new EnumMap<>(Thread.State.class);
-    Map<Thread.State, long[]> nonDaemonCounts = new EnumMap<>(Thread.State.class);
-    long[] ids = THREAD_BEAN.getAllThreadIds();
-    for (ThreadInfo info : THREAD_BEAN.getThreadInfo(ids)) {
-      if (info == null) {
-        continue; // thread terminated between getAllThreadIds and getThreadInfo
-      }
-      Map<Thread.State, long[]> bucket = threadInfoIsDaemon(info) ? daemonCounts : nonDaemonCounts;
-      bucket.computeIfAbsent(info.getThreadState(), k -> new long[1])[0]++;
-    }
-    recordThreadStateCounts(storage, daemonCounts, DAEMON_THREAD_STATE_ATTRS);
-    recordThreadStateCounts(storage, nonDaemonCounts, NON_DAEMON_THREAD_STATE_ATTRS);
-  }
-
-  /**
-   * Java 8 / GraalVM fallback. Walks the root {@link ThreadGroup} because {@code
-   * ThreadInfo.isDaemon()} was added in Java 9 and {@link ThreadMXBean} is not supported on GraalVM
-   * native images.
-   */
-  private static void collectThreadCountsViaThreadGroup(OtelMetricStorage storage) {
-    Map<Thread.State, long[]> daemonCounts = new EnumMap<>(Thread.State.class);
-    Map<Thread.State, long[]> nonDaemonCounts = new EnumMap<>(Thread.State.class);
-    for (Thread thread : enumerateAllThreads()) {
-      Map<Thread.State, long[]> bucket = thread.isDaemon() ? daemonCounts : nonDaemonCounts;
-      bucket.computeIfAbsent(thread.getState(), k -> new long[1])[0]++;
-    }
-    recordThreadStateCounts(storage, daemonCounts, DAEMON_THREAD_STATE_ATTRS);
-    recordThreadStateCounts(storage, nonDaemonCounts, NON_DAEMON_THREAD_STATE_ATTRS);
-  }
-
-  /** Invokes {@code ThreadInfo#isDaemon()} via {@link #THREAD_INFO_IS_DAEMON} (Java 9+ only). */
-  private static boolean threadInfoIsDaemon(ThreadInfo info) {
-    try {
-      return (boolean) THREAD_INFO_IS_DAEMON.invoke(info);
-    } catch (Throwable t) {
-      throw new IllegalStateException("Unexpected error invoking ThreadInfo#isDaemon()", t);
-    }
-  }
-
-  /**
-   * Walks the root {@link ThreadGroup} and returns a snapshot of active threads. Allocates a
-   * slightly oversized buffer to absorb threads created between {@code activeCount()} and {@code
-   * enumerate()}; if the buffer is still too small the returned array may be truncated.
-   */
-  private static Thread[] enumerateAllThreads() {
-    ThreadGroup group = Thread.currentThread().getThreadGroup();
-    // ThreadGroup.enumerate() recursively descends through children by default, so enumerating from
-    // the root gives every live thread in the JVM.
-    while (group.getParent() != null) {
-      group = group.getParent();
-    }
-    Thread[] buffer = new Thread[group.activeCount() + 10];
-    int n = group.enumerate(buffer);
-    if (n == buffer.length) {
-      return buffer;
-    }
-    Thread[] trimmed = new Thread[n];
-    System.arraycopy(buffer, 0, trimmed, 0, n);
-    return trimmed;
-  }
-
-  private static void recordThreadStateCounts(
-      OtelMetricStorage storage, Map<Thread.State, long[]> counts, Attributes[] attrsByState) {
-    for (Map.Entry<Thread.State, long[]> entry : counts.entrySet()) {
-      storage.recordLong(entry.getValue()[0], attrsByState[entry.getKey().ordinal()]);
-    }
   }
 
   /**
