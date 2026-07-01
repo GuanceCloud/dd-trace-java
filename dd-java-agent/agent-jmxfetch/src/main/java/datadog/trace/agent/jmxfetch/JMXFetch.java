@@ -148,6 +148,11 @@ public class JMXFetch {
     final AppConfig appConfig = configBuilder.build();
 
     if (!otlpRuntimeMetricsEnabled) {
+      JvmGcStatsDReporter.start(
+          statsd,
+          globalTags,
+          appConfig.getCheckPeriod(),
+          () -> !appConfig.getExitWatcher().shouldExit());
       JvmThreadCountStatsDReporter.start(
           statsd,
           globalTags,

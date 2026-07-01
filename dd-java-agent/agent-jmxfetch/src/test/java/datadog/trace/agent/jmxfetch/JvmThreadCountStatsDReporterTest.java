@@ -84,7 +84,8 @@ class JvmThreadCountStatsDReporterTest {
     public void distribution(String metricName, double value, String... tags) {}
 
     @Override
-    public void serviceCheck(String serviceCheckName, String status, String message, String... tags) {}
+    public void serviceCheck(
+        String serviceCheckName, String status, String message, String... tags) {}
 
     @Override
     public void error(Exception error) {}

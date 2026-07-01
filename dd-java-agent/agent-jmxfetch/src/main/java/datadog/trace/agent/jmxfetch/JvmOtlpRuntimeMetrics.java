@@ -278,7 +278,6 @@ public final class JvmOtlpRuntimeMetrics {
         THREAD_COUNT_COLLECTOR);
   }
 
-
   /**
    * jvm.class.loaded (Counter), jvm.class.unloaded (Counter), jvm.class.count (UpDownCounter) — all
    * Stable per spec.

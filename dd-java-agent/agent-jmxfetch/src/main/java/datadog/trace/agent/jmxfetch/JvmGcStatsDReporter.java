@@ -4,32 +4,50 @@ import static datadog.trace.util.AgentThreadFactory.AgentThread.JMX_COLLECTOR;
 import static datadog.trace.util.AgentThreadFactory.newAgentThread;
 
 import datadog.metrics.api.statsd.StatsDClient;
+import java.lang.management.GarbageCollectorMXBean;
+import java.lang.management.ManagementFactory;
 import java.util.Arrays;
-import java.util.Locale;
+import java.util.List;
 import java.util.Map;
 import java.util.function.BooleanSupplier;
 
-final class JvmThreadCountStatsDReporter implements Runnable {
-  static final String METRIC_NAME = "jvm.thread.count";
+final class JvmGcStatsDReporter implements Runnable {
+  static final String COLLECTION_COUNT_METRIC = "jvm.gc.collection_count";
+  static final String COLLECTION_TIME_METRIC = "jvm.gc.collection_time";
 
   private static final long MIN_CHECK_PERIOD_MILLIS = 1_000L;
-  private static final String THREAD_DAEMON_TAG = "jvm.thread.daemon:";
-  private static final String THREAD_STATE_TAG = "jvm.thread.state:";
+  private static final String GC_TAG = "gc:";
 
   private final StatsDClient statsd;
   private final String[] commonTags;
   private final BooleanSupplier shouldCollect;
   private final long checkPeriodMillis;
+  private final List<GarbageCollectorMXBean> gcBeans;
 
-  JvmThreadCountStatsDReporter(
+  JvmGcStatsDReporter(
       StatsDClient statsd,
       Map<String, String> commonTags,
       long checkPeriodMillis,
       BooleanSupplier shouldCollect) {
+    this(
+        statsd,
+        commonTags,
+        checkPeriodMillis,
+        shouldCollect,
+        ManagementFactory.getGarbageCollectorMXBeans());
+  }
+
+  JvmGcStatsDReporter(
+      StatsDClient statsd,
+      Map<String, String> commonTags,
+      long checkPeriodMillis,
+      BooleanSupplier shouldCollect,
+      List<GarbageCollectorMXBean> gcBeans) {
     this.statsd = statsd;
     this.commonTags = toTagArray(commonTags);
     this.checkPeriodMillis = Math.max(MIN_CHECK_PERIOD_MILLIS, checkPeriodMillis);
     this.shouldCollect = shouldCollect;
+    this.gcBeans = gcBeans;
   }
 
   static void start(
@@ -40,8 +58,8 @@ final class JvmThreadCountStatsDReporter implements Runnable {
     Thread thread =
         newAgentThread(
             JMX_COLLECTOR,
-            "-thread-count",
-            new JvmThreadCountStatsDReporter(statsd, commonTags, checkPeriodMillis, shouldCollect),
+            "-gc",
+            new JvmGcStatsDReporter(statsd, commonTags, checkPeriodMillis, shouldCollect),
             true);
     thread.start();
   }
@@ -62,14 +80,22 @@ final class JvmThreadCountStatsDReporter implements Runnable {
   }
 
   void reportOnce() {
-    JvmThreadCountCollector.collect(
-        (daemon, state, count) -> statsd.gauge(METRIC_NAME, count, tagsFor(daemon, state)));
+    for (GarbageCollectorMXBean gcBean : gcBeans) {
+      String[] tags = tagsFor(gcBean.getName());
+      long collectionCount = gcBean.getCollectionCount();
+      if (collectionCount >= 0) {
+        statsd.gauge(COLLECTION_COUNT_METRIC, collectionCount, tags);
+      }
+      long collectionTime = gcBean.getCollectionTime();
+      if (collectionTime >= 0) {
+        statsd.gauge(COLLECTION_TIME_METRIC, collectionTime, tags);
+      }
+    }
   }
 
-  private String[] tagsFor(boolean daemon, Thread.State state) {
-    String[] tags = Arrays.copyOf(commonTags, commonTags.length + 2);
-    tags[commonTags.length] = THREAD_DAEMON_TAG + daemon;
-    tags[commonTags.length + 1] = THREAD_STATE_TAG + state.name().toLowerCase(Locale.ROOT);
+  private String[] tagsFor(String gcName) {
+    String[] tags = Arrays.copyOf(commonTags, commonTags.length + 1);
+    tags[commonTags.length] = GC_TAG + gcName;
     return tags;
   }
 
