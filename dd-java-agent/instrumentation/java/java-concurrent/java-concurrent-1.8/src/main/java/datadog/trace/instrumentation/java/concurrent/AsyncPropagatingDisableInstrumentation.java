@@ -45,6 +45,14 @@ public final class AsyncPropagatingDisableInstrumentation extends InstrumenterMo
       nameEndsWith("io.grpc.internal.ManagedChannelImpl");
   private static final ElementMatcher<TypeDescription> REACTOR_DISABLED_TYPE_INITIALIZERS =
       namedOneOf("reactor.core.scheduler.SchedulerTask", "reactor.core.scheduler.WorkerTask");
+  private static final ElementMatcher<TypeDescription> NACOS_SERVICE_INFO_UPDATERS =
+      namedOneOf(
+          "com.alibaba.nacos.client.naming.core.HostReactor",
+          "com.alibaba.nacos.client.naming.core.ServiceInfoUpdateService");
+  private static final ElementMatcher<TypeDescription> NACOS_UPDATE_TASKS =
+      namedOneOf(
+          "com.alibaba.nacos.client.naming.core.HostReactor$UpdateTask",
+          "com.alibaba.nacos.client.naming.core.ServiceInfoUpdateService$UpdateTask");
 
   @Override
   public boolean onlyMatchKnownTypes() {
@@ -77,7 +85,11 @@ public final class AsyncPropagatingDisableInstrumentation extends InstrumenterMo
       "net.sf.ehcache.store.disk.DiskStorageFactory",
       "org.springframework.jms.listener.DefaultMessageListenerContainer",
       "org.apache.activemq.broker.TransactionBroker",
-      "com.mongodb.internal.connection.DefaultConnectionPool$AsyncWorkManager"
+      "com.mongodb.internal.connection.DefaultConnectionPool$AsyncWorkManager",
+      "com.alibaba.nacos.client.naming.core.HostReactor",
+      "com.alibaba.nacos.client.naming.core.HostReactor$UpdateTask",
+      "com.alibaba.nacos.client.naming.core.ServiceInfoUpdateService",
+      "com.alibaba.nacos.client.naming.core.ServiceInfoUpdateService$UpdateTask"
     };
   }
 
@@ -88,7 +100,11 @@ public final class AsyncPropagatingDisableInstrumentation extends InstrumenterMo
 
   @Override
   public ElementMatcher<TypeDescription> hierarchyMatcher() {
-    return RX_WORKERS.or(GRPC_MANAGED_CHANNEL).or(REACTOR_DISABLED_TYPE_INITIALIZERS);
+    return RX_WORKERS
+        .or(GRPC_MANAGED_CHANNEL)
+        .or(REACTOR_DISABLED_TYPE_INITIALIZERS)
+        .or(NACOS_SERVICE_INFO_UPDATERS)
+        .or(NACOS_UPDATE_TASKS);
   }
 
   @Override
@@ -170,6 +186,11 @@ public final class AsyncPropagatingDisableInstrumentation extends InstrumenterMo
                     named(
                         "com.mongodb.internal.connection.DefaultConnectionPool$AsyncWorkManager"))),
         advice);
+    transformer.applyAdvice(
+        namedOneOf("scheduleUpdateIfAbsent", "addTask")
+            .and(isDeclaredBy(NACOS_SERVICE_INFO_UPDATERS)),
+        advice);
+    transformer.applyAdvice(named("run").and(isDeclaredBy(NACOS_UPDATE_TASKS)), advice);
     transformer.applyAdvice(
         isTypeInitializer().and(isDeclaredBy(REACTOR_DISABLED_TYPE_INITIALIZERS)), advice);
   }
