@@ -5,6 +5,7 @@ import datadog.trace.bootstrap.ContextStore;
 import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.websocket.HandlerContext;
+import java.io.ByteArrayOutputStream;
 import org.jboss.netty.handler.codec.http.HttpHeaders;
 
 public class ChannelTraceContext {
@@ -22,6 +23,11 @@ public class ChannelTraceContext {
   AgentSpan clientSpan;
   AgentSpan clientParentSpan;
   HttpHeaders requestHeaders;
+  String requestUri;
+  ByteArrayOutputStream requestBodyBuffer;
+  String requestBodyEncoding;
+  ByteArrayOutputStream responseBodyBuffer;
+  String responseBodyEncoding;
   boolean analyzedResponse;
   boolean blockedResponse;
 
@@ -34,6 +40,11 @@ public class ChannelTraceContext {
     this.clientSpan = null;
     this.clientParentSpan = null;
     this.requestHeaders = null;
+    this.requestUri = null;
+    this.requestBodyBuffer = null;
+    this.requestBodyEncoding = null;
+    this.responseBodyBuffer = null;
+    this.responseBodyEncoding = null;
     this.analyzedResponse = false;
     this.blockedResponse = false;
   }
@@ -44,6 +55,50 @@ public class ChannelTraceContext {
 
   public HttpHeaders getRequestHeaders() {
     return requestHeaders;
+  }
+
+  public void setRequestUri(String requestUri) {
+    this.requestUri = requestUri;
+  }
+
+  public String getRequestUri() {
+    return requestUri;
+  }
+
+  public void setRequestBody(ByteArrayOutputStream buffer, String encoding) {
+    this.requestBodyBuffer = buffer;
+    this.requestBodyEncoding = encoding;
+  }
+
+  public ByteArrayOutputStream getRequestBodyBuffer() {
+    return requestBodyBuffer;
+  }
+
+  public String getRequestBodyEncoding() {
+    return requestBodyEncoding;
+  }
+
+  public void clearRequestBody() {
+    this.requestBodyBuffer = null;
+    this.requestBodyEncoding = null;
+  }
+
+  public void setResponseBody(ByteArrayOutputStream buffer, String encoding) {
+    this.responseBodyBuffer = buffer;
+    this.responseBodyEncoding = encoding;
+  }
+
+  public ByteArrayOutputStream getResponseBodyBuffer() {
+    return responseBodyBuffer;
+  }
+
+  public String getResponseBodyEncoding() {
+    return responseBodyEncoding;
+  }
+
+  public void clearResponseBody() {
+    this.responseBodyBuffer = null;
+    this.responseBodyEncoding = null;
   }
 
   public boolean isAnalyzedResponse() {
