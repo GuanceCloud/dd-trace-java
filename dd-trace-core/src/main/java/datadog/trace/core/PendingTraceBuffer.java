@@ -5,10 +5,9 @@ import static datadog.trace.util.AgentThreadFactory.THREAD_JOIN_TIMOUT_MS;
 import static datadog.trace.util.AgentThreadFactory.newAgentThread;
 
 import datadog.trace.api.time.TimeSource;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.jctools.queues.MessagePassingQueue;
-import org.jctools.queues.MpscBlockingConsumerArrayQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,7 +38,7 @@ public abstract class PendingTraceBuffer implements AutoCloseable {
     private static final long SEND_DELAY_NS = TimeUnit.MILLISECONDS.toNanos(500);
     private static final long SLEEP_TIME_MS = 100;
 
-    private final MpscBlockingConsumerArrayQueue<Element> queue;
+    private final ArrayBlockingQueue<Element> queue;
     private final Thread worker;
     private final TimeSource timeSource;
 
@@ -104,11 +103,13 @@ public abstract class PendingTraceBuffer implements AutoCloseable {
       }
     }
 
-    private static final class WriteDrain implements MessagePassingQueue.Consumer<Element> {
-      private static final WriteDrain WRITE_DRAIN = new WriteDrain();
-
-      @Override
-      public void accept(Element pendingTrace) {
+    private void drainAndWrite() {
+      int size = queue.size();
+      for (int i = 0; i < size; i++) {
+        Element pendingTrace = queue.poll();
+        if (pendingTrace == null) {
+          break;
+        }
         pendingTrace.write();
       }
     }
@@ -150,8 +151,8 @@ public abstract class PendingTraceBuffer implements AutoCloseable {
             Element pendingTrace = queue.take(); // block until available.
 
             if (pendingTrace instanceof FlushElement) {
-              // Since this is an MPSC queue, the drain needs to be called on the consumer thread
-              queue.drain(WriteDrain.WRITE_DRAIN);
+              // Drain a bounded snapshot on the consumer thread.
+              drainAndWrite();
               flushCounter.incrementAndGet();
               continue;
             }
@@ -184,7 +185,7 @@ public abstract class PendingTraceBuffer implements AutoCloseable {
     }
 
     public DelayingPendingTraceBuffer(int bufferSize, TimeSource timeSource) {
-      this.queue = new MpscBlockingConsumerArrayQueue<>(bufferSize);
+      this.queue = new ArrayBlockingQueue<>(bufferSize);
       this.worker = newAgentThread(TRACE_MONITOR, new Worker());
       this.timeSource = timeSource;
     }
