@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - fix/jdk7-queue-spin-v0.105.0
+      - maintenance/guance-105
 
 permissions:
   contents: read
