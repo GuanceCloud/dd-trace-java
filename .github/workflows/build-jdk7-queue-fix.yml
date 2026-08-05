@@ -2,6 +2,9 @@ name: Build JDK 7 queue-fix agent
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - maintenance/guance-105
   push:
     branches:
       - fix/jdk7-queue-spin-v0.105.0
