@@ -1,4 +1,5 @@
 plugins {
+  id 'com.github.johnrengelman.shadow'
   id 'me.champeau.jmh'
 }
 
@@ -74,4 +75,20 @@ dependencies {
 jmh {
   jmhVersion = '1.28'
   duplicateClassesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+// Builds only the Java 7 queue-fix classes. The resulting classes are relocated in the same way
+// as the full agent's `inst` payload, so they can be injected into the archived guance-105 JAR
+// without resolving the historical AppSec and instrumentation dependencies.
+tasks.register('jdk7QueueFixJar', com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar) {
+  archiveClassifier = 'jdk7-queue-fix'
+  configurations = []
+  from sourceSets.main.output
+
+  include 'datadog/trace/core/PendingTraceBuffer*.class'
+  include 'datadog/trace/common/writer/TraceProcessingWorker*.class'
+
+  relocate 'datadog.trace.common', 'datadog.trace.agent.common'
+  relocate 'datadog.trace.core', 'datadog.trace.agent.core'
+  relocate 'org.slf4j', 'datadog.slf4j'
 }

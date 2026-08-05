@@ -1,0 +1,92 @@
+name: Build JDK 7 queue-fix agent
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - fix/jdk7-queue-spin-v0.105.0
+
+permissions:
+  contents: read
+
+env:
+  BASE_AGENT_URL: https://github.com/GuanceCloud/dd-trace-java/releases/download/guance-105/dd-java-agent-guance-0.105.0.jar
+  BASE_AGENT_SHA256: 4822115ec65d30a18894ab032cbd079403ee4ab852530906b23e38efab0a24b8
+  JDK7_URL: https://cdn.azul.com/zulu/bin/zulu7.56.0.11-ca-jdk7.0.352-linux_x64.tar.gz
+  JDK7_SHA256: 8a7387c1ed151474301b6553c6046f865dc6c1e1890bcf106acc2780c55727c8
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up build JDK
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: zulu
+          java-version: '11'
+          cache: gradle
+
+      - name: Download archived Guance 0.105.0 agent
+        shell: bash
+        run: |
+          mkdir -p build/jdk7-fix
+          curl --fail --location --retry 3 \
+            "$BASE_AGENT_URL" \
+            --output build/jdk7-fix/dd-java-agent-guance-0.105.0.jar
+          echo "$BASE_AGENT_SHA256  build/jdk7-fix/dd-java-agent-guance-0.105.0.jar" | sha256sum --check --strict
+
+      - name: Compile and test queue fix
+        shell: bash
+        run: |
+          ./gradlew --configure-on-demand --no-daemon \
+            :dd-trace-core:test \
+            --tests datadog.trace.core.PendingTraceBufferTest \
+            --tests datadog.trace.common.writer.TraceProcessingWorkerTest
+          ./gradlew --configure-on-demand --no-daemon \
+            :dd-trace-core:jdk7QueueFixJar
+
+      - name: Repack agent
+        shell: bash
+        run: |
+          chmod +x .github/scripts/repack-jdk7-agent.sh
+          .github/scripts/repack-jdk7-agent.sh \
+            build/jdk7-fix/dd-java-agent-guance-0.105.0.jar \
+            dd-trace-core/build/libs/*-jdk7-queue-fix.jar \
+            build/jdk7-fix/dd-java-agent-guance-0.105.0-jdk7-queue-fix.jar
+
+      - name: Download Java 7 runtime
+        shell: bash
+        run: |
+          curl --fail --location --retry 3 \
+            "$JDK7_URL" \
+            --output "$RUNNER_TEMP/zulu7.tar.gz"
+          echo "$JDK7_SHA256  $RUNNER_TEMP/zulu7.tar.gz" | sha256sum --check --strict
+
+      - name: Set up Java 7 runtime
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: jdkfile
+          jdk-file: ${{ runner.temp }}/zulu7.tar.gz
+          java-version: '7.0.352'
+          architecture: x64
+
+      - name: Smoke-test on Java 7
+        shell: bash
+        run: |
+          java -version
+          java -javaagent:build/jdk7-fix/dd-java-agent-guance-0.105.0-jdk7-queue-fix.jar -version
+
+      - name: Upload fixed agent
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dd-java-agent-guance-0.105.0-jdk7-queue-fix
+          path: |
+            build/jdk7-fix/dd-java-agent-guance-0.105.0-jdk7-queue-fix.jar
+            build/jdk7-fix/dd-java-agent-guance-0.105.0-jdk7-queue-fix.jar.sha256
+          if-no-files-found: error
+          retention-days: 30

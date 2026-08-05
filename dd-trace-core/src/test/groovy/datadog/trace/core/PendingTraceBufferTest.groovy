@@ -163,13 +163,13 @@ class PendingTraceBufferTest extends DDSpecification {
     // Don't start the buffer thread
 
     when: "Fill the buffer"
-    for (i in  1..buffer.queue.capacity()) {
+    for (i in  1..BUFFER_SIZE) {
       addContinuation(newSpanOf(factory.create(DDId.ONE))).finish()
     }
 
     then:
     buffer.queue.size() == BUFFER_SIZE
-    buffer.queue.capacity() * bufferSpy.enqueue(_)
+    BUFFER_SIZE * bufferSpy.enqueue(_)
     _ * tracer.getPartialFlushMinSpans() >> 10
     _ * tracer.mapServiceName(_)
     _ * tracer.onStart(_)
@@ -366,14 +366,14 @@ class PendingTraceBufferTest extends DDSpecification {
     0 * _
 
     when: "fail to fill the buffer"
-    for (i in  1..buffer.queue.capacity()) {
+    for (i in  1..BUFFER_SIZE) {
       addContinuation(newSpanOf(span)).finish()
     }
 
     then:
     pendingTrace.isEnqueued == 1
     buffer.queue.size() == 1
-    buffer.queue.capacity() * bufferSpy.enqueue(_)
+    BUFFER_SIZE * bufferSpy.enqueue(_)
     _ * tracer.getPartialFlushMinSpans() >> 10000
     _ * tracer.mapServiceName(_)
     _ * tracer.onStart(_)
