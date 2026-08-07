@@ -51,6 +51,7 @@ public final class ConsumerCoordinatorInstrumentation extends InstrumenterModule
   public String[] helperClassNames() {
     return new String[] {
       packageName + ".KafkaConsumerInfo",
+      "datadog.trace.instrumentation.kafka_common.KafkaConfigHelper",
       "datadog.trace.instrumentation.kafka_common.PendingConfig",
       "datadog.trace.instrumentation.kafka_common.MetadataState",
     };
@@ -61,5 +62,8 @@ public final class ConsumerCoordinatorInstrumentation extends InstrumenterModule
     transformer.applyAdvice(
         isMethod().and(named("sendOffsetCommitRequest")).and(takesArguments(1)),
         packageName + ".ConsumerCoordinatorAdvice");
+    transformer.applyAdvice(
+        isMethod().and(named("onJoinComplete")).and(takesArguments(4)),
+        packageName + ".JoinGroupAdvice");
   }
 }

@@ -6,6 +6,7 @@ import static java.nio.charset.StandardCharsets.ISO_8859_1;
 import datadog.communication.serialization.GrowableBuffer;
 import datadog.communication.serialization.WritableFormatter;
 import datadog.communication.serialization.msgpack.MsgPackWriter;
+import datadog.metrics.api.Histogram;
 import datadog.trace.api.ProcessTags;
 import datadog.trace.api.WellKnownTags;
 import datadog.trace.api.cache.DDCache;
@@ -13,6 +14,7 @@ import datadog.trace.api.cache.DDCaches;
 import datadog.trace.api.git.GitInfo;
 import datadog.trace.api.git.GitInfoProvider;
 import datadog.trace.bootstrap.instrumentation.api.UTF8BytesString;
+import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.function.Function;
 
@@ -41,6 +43,7 @@ public final class SerializingMetricWriter implements MetricWriter {
   private static final byte[] IS_TRACE_ROOT = "IsTraceRoot".getBytes(ISO_8859_1);
   private static final byte[] SPAN_KIND = "SpanKind".getBytes(ISO_8859_1);
   private static final byte[] PEER_TAGS = "PeerTags".getBytes(ISO_8859_1);
+  private static final byte[] ADDITIONAL_METRIC_TAGS = "AdditionalMetricTags".getBytes(ISO_8859_1);
   private static final byte[] HTTP_METHOD = "HTTPMethod".getBytes(ISO_8859_1);
   private static final byte[] HTTP_ENDPOINT = "HTTPEndpoint".getBytes(ISO_8859_1);
   private static final byte[] GRPC_STATUS_CODE = "GRPCStatusCode".getBytes(ISO_8859_1);
@@ -60,14 +63,35 @@ public final class SerializingMetricWriter implements MetricWriter {
   private final WellKnownTags wellKnownTags;
   private final WritableFormatter writer;
   private final Sink sink;
+
+  /**
+   * Whether the span-derived additional-tags feature is configured (at least one key). When {@code
+   * true}, the {@code AdditionalMetricTags} field is always emitted -- as an empty array for
+   * entries that matched no configured key -- so the field is present whenever the feature is on,
+   * per the Span-Derived Primary Tags RFC. When {@code false} (the common case: feature off) the
+   * field is omitted entirely, so non-users pay zero payload overhead.
+   */
+  private final boolean additionalTagsConfigured;
+
   private final GrowableBuffer buffer;
   private final DDCache<GitInfo, UTF8BytesString> gitInfoCache =
       DDCaches.newFixedSizeWeakKeyCache(4);
   private long sequence = 0;
   private final GitInfoProvider gitInfoProvider;
+  // Not final/eager: Histogram.newHistogram() requires the Histograms factory to be
+  // registered first. SerializingMetricWriter is constructed during tracer startup before that
+  // registration completes, so eager init would throw. Lazy init on first add() call is safe
+  // because add() only runs on the aggregator thread, which starts after factory registration.
+  // The single-writer invariant also means no synchronization is needed on this field.
+  private byte[] emptyHistogramBytesCache;
 
   public SerializingMetricWriter(WellKnownTags wellKnownTags, Sink sink) {
-    this(wellKnownTags, sink, 512 * 1024);
+    this(wellKnownTags, sink, false);
+  }
+
+  public SerializingMetricWriter(
+      WellKnownTags wellKnownTags, Sink sink, boolean additionalTagsConfigured) {
+    this(wellKnownTags, sink, 512 * 1024, GitInfoProvider.INSTANCE, additionalTagsConfigured);
   }
 
   public SerializingMetricWriter(WellKnownTags wellKnownTags, Sink sink, int initialCapacity) {
@@ -79,11 +103,21 @@ public final class SerializingMetricWriter implements MetricWriter {
       Sink sink,
       int initialCapacity,
       final GitInfoProvider gitInfoProvider) {
+    this(wellKnownTags, sink, initialCapacity, gitInfoProvider, false);
+  }
+
+  public SerializingMetricWriter(
+      WellKnownTags wellKnownTags,
+      Sink sink,
+      int initialCapacity,
+      final GitInfoProvider gitInfoProvider,
+      boolean additionalTagsConfigured) {
     this.wellKnownTags = wellKnownTags;
     this.buffer = new GrowableBuffer(initialCapacity);
     this.writer = new MsgPackWriter(buffer);
     this.sink = sink;
-    this.gitInfoProvider = new GitInfoProvider();
+    this.gitInfoProvider = gitInfoProvider;
+    this.additionalTagsConfigured = additionalTagsConfigured;
   }
 
   @Override
@@ -143,17 +177,22 @@ public final class SerializingMetricWriter implements MetricWriter {
 
   @Override
   public void add(AggregateEntry entry) {
-    // Calculate dynamic map size based on optional fields
-    final boolean hasHttpMethod = entry.getHttpMethod() != null;
-    final boolean hasHttpEndpoint = entry.getHttpEndpoint() != null;
-    final boolean hasServiceSource = entry.getServiceSource() != null;
-    final boolean hasGrpcStatusCode = entry.getGrpcStatusCode() != null;
+    // Dynamic map size based on optional fields; AggregateEntry encapsulates the EMPTY-as-absent
+    // sentinel via its hasFoo() predicates so the serializer doesn't depend on the storage choice.
+    final boolean hasHttpMethod = entry.hasHttpMethod();
+    final boolean hasHttpEndpoint = entry.hasHttpEndpoint();
+    final boolean hasServiceSource = entry.hasServiceSource();
+    final boolean hasGrpcStatusCode = entry.hasGrpcStatusCode();
+    final UTF8BytesString[] additionalTags = entry.getAdditionalTags();
+    // When the feature is configured the field is always emitted (empty array for entries that
+    // matched no key); when it is off the field is omitted entirely so non-users pay nothing.
     final int mapSize =
         15
             + (hasServiceSource ? 1 : 0)
             + (hasHttpMethod ? 1 : 0)
             + (hasHttpEndpoint ? 1 : 0)
-            + (hasGrpcStatusCode ? 1 : 0);
+            + (hasGrpcStatusCode ? 1 : 0)
+            + (additionalTagsConfigured ? 1 : 0);
 
     writer.startMap(mapSize);
 
@@ -187,6 +226,18 @@ public final class SerializingMetricWriter implements MetricWriter {
 
     for (UTF8BytesString peerTag : peerTags) {
       writer.writeUTF8(peerTag);
+    }
+
+    // Emit AdditionalMetricTags as a packed array of pre-built "key:value" UTF8BytesStrings, in
+    // schema (alphabetical-by-key) order. Present whenever the feature is configured -- an empty
+    // array for entries that matched no key -- and omitted entirely when the feature is off, so
+    // spans in non-using deployments pay zero payload overhead.
+    if (additionalTagsConfigured) {
+      writer.writeUTF8(ADDITIONAL_METRIC_TAGS);
+      writer.startArray(additionalTags.length);
+      for (UTF8BytesString slot : additionalTags) {
+        writer.writeUTF8(slot);
+      }
     }
 
     if (hasServiceSource) {
@@ -227,7 +278,30 @@ public final class SerializingMetricWriter implements MetricWriter {
     writer.writeBinary(entry.getOkLatencies().serialize());
 
     writer.writeUTF8(ERROR_SUMMARY);
-    writer.writeBinary(entry.getErrorLatencies().serialize());
+    final datadog.metrics.api.Histogram errorLatencies = entry.getErrorLatencies();
+    if (errorLatencies != null) {
+      writer.writeBinary(errorLatencies.serialize());
+    } else {
+      // Entry never saw an error; emit a cached empty-histogram payload so the wire format is
+      // unchanged without allocating a histogram per entry.
+      writer.writeBinary(emptyErrorHistogramBytes());
+    }
+  }
+
+  /**
+   * Returns the cached serialized form of an empty histogram. Computed lazily on first call so the
+   * {@link datadog.metrics.api.Histograms} factory has been registered (by the producer-side tracer
+   * startup or test setup) before we sample its output.
+   */
+  private byte[] emptyErrorHistogramBytes() {
+    byte[] cached = emptyHistogramBytesCache;
+    if (cached == null) {
+      ByteBuffer buf = Histogram.newHistogram().serialize();
+      cached = new byte[buf.remaining()];
+      buf.get(cached);
+      emptyHistogramBytesCache = cached;
+    }
+    return cached;
   }
 
   @Override

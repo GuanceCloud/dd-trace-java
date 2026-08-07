@@ -52,14 +52,14 @@ public final class SpanDecoratingContextDataInjector implements ContextDataInjec
       newContextData.putValue(Tags.DD_VERSION, version);
     }
     if (span != null) {
-      DDTraceId traceId = span.context().getTraceId();
+      DDTraceId traceId = span.spanContext().getTraceId();
       String traceIdValue =
           Config.get().isLogs128bitTraceIdEnabled() && traceId.toHighOrderLong() != 0
               ? traceId.toHexString()
               : traceId.toString();
       newContextData.putValue(CorrelationIdentifier.getTraceIdKey(), traceIdValue);
       newContextData.putValue(
-          CorrelationIdentifier.getSpanIdKey(), DDSpanId.toString(span.context().getSpanId()));
+          CorrelationIdentifier.getSpanIdKey(), DDSpanId.toString(span.spanContext().getSpanId()));
     }
 
     newContextData.putAll(contextData);

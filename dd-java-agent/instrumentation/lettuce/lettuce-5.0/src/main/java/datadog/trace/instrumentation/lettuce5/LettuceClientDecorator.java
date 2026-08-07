@@ -60,23 +60,22 @@ public class LettuceClientDecorator extends DBTypeProcessingDatabaseClientDecora
   }
 
   @Override
-  public AgentSpan onConnection(final AgentSpan span, final RedisURI connection) {
+  public void onConnection(final AgentSpan span, final RedisURI connection) {
     if (connection != null) {
       setPeerPort(span, connection.getPort());
 
       span.setTag("db.redis.dbIndex", connection.getDatabase());
     }
-    return super.onConnection(span, connection);
+    super.onConnection(span, connection);
   }
 
-  public AgentSpan onCommand(final AgentSpan span, final RedisCommand command) {
+  public void onCommand(final AgentSpan span, final RedisCommand command) {
     if (command.getArgs()!=null && RedisCommandRaw){
       CommandArgs args = command.getArgs();
       span.setTag("redis.command.args",args.toString());
     }
     final String commandName = LettuceInstrumentationUtil.getCommandName(command);
     span.setResourceName(LettuceInstrumentationUtil.getCommandResourceName(commandName));
-    return span;
   }
 
   public String resourceNameForConnection(final RedisURI redisURI) {
