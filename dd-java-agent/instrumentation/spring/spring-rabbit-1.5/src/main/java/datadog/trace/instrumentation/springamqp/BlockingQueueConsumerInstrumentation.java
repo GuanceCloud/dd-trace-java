@@ -6,9 +6,8 @@ import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
 import com.google.auto.service.AutoService;
 import datadog.trace.agent.tooling.Instrumenter;
 import datadog.trace.agent.tooling.InstrumenterModule;
-import datadog.trace.bootstrap.ContextStore;
-import datadog.trace.bootstrap.InstrumentationContext;
 import datadog.trace.bootstrap.instrumentation.java.concurrent.State;
+import java.net.InetSocketAddress;
 import java.util.Map;
 import java.util.TreeMap;
 import net.bytebuddy.asm.Advice;
@@ -28,6 +27,13 @@ public class BlockingQueueConsumerInstrumentation extends InstrumenterModule.Tra
   }
 
   @Override
+  public String[] helperClassNames() {
+    return new String[] {
+      packageName + ".RabbitListenerDecorator", packageName + ".BlockingQueueConsumerStateHelper"
+    };
+  }
+
+  @Override
   public void methodAdvice(MethodTransformer transformer) {
     transformer.applyAdvice(
         named("handle")
@@ -39,23 +45,19 @@ public class BlockingQueueConsumerInstrumentation extends InstrumenterModule.Tra
   public Map<String, String> contextStore() {
     Map<String, String> contextStore = new TreeMap<>();
     contextStore.put("org.springframework.amqp.core.Message", State.class.getName());
+    contextStore.put(
+        "org.springframework.amqp.core.MessageProperties", InetSocketAddress.class.getName());
     contextStore.put("org.springframework.amqp.rabbit.support.Delivery", State.class.getName());
     return contextStore;
   }
 
   public static class TransferState {
-    @Advice.OnMethodExit
+    @Advice.OnMethodExit(suppress = Throwable.class)
     public static void transfer(
-        @Advice.Argument(0) Delivery delivery, @Advice.Return Message message) {
-      if (null != delivery) {
-        ContextStore<Delivery, State> from =
-            InstrumentationContext.get(Delivery.class, State.class);
-        State state = from.get(delivery);
-        if (null != state) {
-          from.put(delivery, null);
-          InstrumentationContext.get(Message.class, State.class).put(message, state);
-        }
-      }
+        @Advice.This Object consumer,
+        @Advice.Argument(0) Delivery delivery,
+        @Advice.Return Message message) {
+      BlockingQueueConsumerStateHelper.transfer(consumer, delivery, message);
     }
   }
 }

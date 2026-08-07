@@ -1,6 +1,7 @@
 package datadog.trace.instrumentation.trace_annotation;
 
 import static datadog.trace.agent.tooling.bytebuddy.matcher.HierarchyMatchers.hasSuperType;
+import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.nameStartsWith;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.namedOneOf;
 import static java.util.Collections.emptyList;
@@ -39,10 +40,12 @@ import net.bytebuddy.matcher.ElementMatcher;
 @AutoService(InstrumenterModule.class)
 public class TraceConfigInstrumentation extends InstrumenterModule.Tracing {
   private final Map<String, Set<String>> classMethodsToTrace;
+  private final Set<String> packagesToTrace;
 
   public TraceConfigInstrumentation() {
     super("trace", "trace-config");
     classMethodsToTrace = InstrumenterConfig.get().getTraceMethods();
+    packagesToTrace = InstrumenterConfig.get().getTraceMethodPackages();
   }
 
   @Override
@@ -54,7 +57,7 @@ public class TraceConfigInstrumentation extends InstrumenterModule.Tracing {
 
   @Override
   public List<Instrumenter> typeInstrumentations() {
-    if (classMethodsToTrace.isEmpty()) {
+    if (classMethodsToTrace.isEmpty() && packagesToTrace.isEmpty()) {
       return emptyList();
     }
     List<Instrumenter> typeInstrumentations = new ArrayList<>();
@@ -62,9 +65,27 @@ public class TraceConfigInstrumentation extends InstrumenterModule.Tracing {
       List<String> integrationNames = singletonList("trace-config_" + entry.getKey());
       if (InstrumenterConfig.get().isIntegrationEnabled(integrationNames, true)) {
         typeInstrumentations.add(new TracerClassInstrumentation(entry.getKey(), entry.getValue()));
+        System.out.println("Instrumenting " + entry.getKey() + " with " + entry.getValue());
+      }
+    }
+    for (String packageName : packagesToTrace) {
+      List<String> integrationNames = singletonList("trace-config_" + packageName);
+      if (InstrumenterConfig.get().isIntegrationEnabled(integrationNames, true)) {
+        typeInstrumentations.add(new TracerPackageInstrumentation(packageName));
       }
     }
     return typeInstrumentations;
+  }
+
+  private static ElementMatcher<MethodDescription> tracedMethodFilter() {
+    return not(
+        isHashCode()
+            .or(isEquals())
+            .or(isToString())
+            .or(isFinalizer())
+            .or(isGetter())
+            .or(isSetter())
+            .or(isSynthetic()));
   }
 
   // Not Using AutoService to hook up this instrumentation
@@ -95,20 +116,37 @@ public class TraceConfigInstrumentation extends InstrumenterModule.Tracing {
       }
       ElementMatcher<MethodDescription> methodFilter;
       if (hasWildcard) {
-        methodFilter =
-            not(
-                isHashCode()
-                    .or(isEquals())
-                    .or(isToString())
-                    .or(isFinalizer())
-                    .or(isGetter())
-                    .or(isSetter())
-                    .or(isSynthetic()));
+        methodFilter = tracedMethodFilter();
       } else {
         methodFilter = namedOneOf(methodNames);
       }
       transformer.applyAdvice(
           isMethod().and(methodFilter),
+          "datadog.trace.instrumentation.trace_annotation.TraceAdvice");
+    }
+  }
+
+  public static class TracerPackageInstrumentation implements ForTypeHierarchy, HasMethodAdvice {
+    private final String packagePrefix;
+
+    public TracerPackageInstrumentation(final String packageName) {
+      this.packagePrefix = packageName.endsWith(".") ? packageName : packageName + ".";
+    }
+
+    @Override
+    public String hierarchyMarkerType() {
+      return null;
+    }
+
+    @Override
+    public ElementMatcher<TypeDescription> hierarchyMatcher() {
+      return nameStartsWith(packagePrefix);
+    }
+
+    @Override
+    public void methodAdvice(MethodTransformer transformer) {
+      transformer.applyAdvice(
+          isMethod().and(tracedMethodFilter()),
           "datadog.trace.instrumentation.trace_annotation.TraceAdvice");
     }
   }

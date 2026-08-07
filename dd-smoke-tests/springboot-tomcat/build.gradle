@@ -3,6 +3,13 @@ plugins {
   id 'dd-trace-java.mass'
 }
 
+ext {
+  serverName = 'tomcat'
+  serverModule = 'tomcat-9'
+  serverVersion = '9.0.117'
+  serverExtension = 'zip'
+}
+
 apply from: "$rootDir/gradle/java.gradle"
 
 description = 'SpringBoot Tomcat Smoke Tests.'

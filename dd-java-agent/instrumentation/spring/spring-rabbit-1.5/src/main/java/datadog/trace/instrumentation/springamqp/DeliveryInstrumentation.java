@@ -38,7 +38,7 @@ public class DeliveryInstrumentation extends InstrumenterModule.Tracing
   }
 
   public static class CaptureActiveScope {
-    @Advice.OnMethodExit
+    @Advice.OnMethodExit(suppress = Throwable.class)
     public static void captureActiveScope(@Advice.This Delivery delivery) {
       Context context = currentContext();
       if (shouldCapture(context)) {

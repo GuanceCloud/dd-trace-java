@@ -16,7 +16,6 @@ import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.api.UTF8BytesString;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Handler;
-import io.vertx.core.net.SocketAddress;
 import io.vertx.redis.client.Command;
 import io.vertx.redis.client.Redis;
 import io.vertx.redis.client.RedisAPI;
@@ -79,14 +78,15 @@ public class RedisSendAdvice {
       @Advice.Enter final AgentScope clientScope, @Advice.This final Object thiz) {
     CallDepthThreadLocalMap.decrementCallDepth(RedisAPI.class);
     if (thiz instanceof RedisConnection) {
-      final SocketAddress socketAddress =
-          InstrumentationContext.get(RedisConnection.class, SocketAddress.class)
-              .get((RedisConnection) thiz);
+      final RedisConnection connection = (RedisConnection) thiz;
+      final VertxRedisConnectionInfo connectionInfo =
+          InstrumentationContext.get(RedisConnection.class, VertxRedisConnectionInfo.class)
+              .get(connection);
       final AgentSpan span = clientScope != null ? clientScope.span() : activeSpan();
-      // Verify the activeSpan() fallback is actually a REDIS_COMMAND span
-      if (socketAddress != null && span != null && REDIS_COMMAND.equals(span.getOperationName())) {
-        DECORATE.onConnection(span, socketAddress);
-        DECORATE.setPeerPort(span, socketAddress.port());
+      if (connectionInfo != null && connectionInfo.getSocketAddress() != null && span != null) {
+        DECORATE.onConnection(
+            span, connectionInfo.getSocketAddress(), connectionInfo.getConfiguredHost());
+        DECORATE.setPeerPort(span, connectionInfo.getSocketAddress().port());
       }
     }
     if (null != clientScope) {

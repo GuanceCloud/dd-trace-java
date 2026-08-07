@@ -34,6 +34,7 @@ dependencies {
   testImplementation group: 'org.apache.tomcat', name: 'tomcat-juli', version: '7.0.19'
   testImplementation group: 'com.zaxxer', name: 'HikariCP', version: '2.4.0'
   testImplementation group: 'com.mchange', name: 'c3p0', version: '0.9.5'
+  testImplementation group: 'com.alibaba', name: 'druid', version: '1.2.23'
 
   testImplementation group: 'mysql', name: 'mysql-connector-java', version: '8.0.23'
   testImplementation group: 'org.postgresql', name: 'postgresql', version: '[9.4,42.2.18]'

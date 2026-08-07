@@ -37,6 +37,7 @@ public final class TracerConfig {
   public static final String PRIORITY_SAMPLING_FORCE = "priority.sampling.force";
   @Deprecated public static final String TRACE_RESOLVER_ENABLED = "trace.resolver.enabled";
   public static final String SERVICE_MAPPING = "service.mapping";
+  public static final String SERVICE_MAPPING_FILE = "service.mapping.file";
 
   public static final String TRACE_EXPERIMENTAL_FEATURES_ENABLED =
       "trace.experimental.features.enabled";
@@ -57,6 +58,7 @@ public final class TracerConfig {
   // a global rate used for all services (that don’t have a dedicated rule defined).
   public static final String TRACE_SAMPLE_RATE = "trace.sample.rate";
   public static final String TRACE_RATE_LIMIT = "trace.rate.limit";
+  public static final String TRACE_BUFFER_SIZE = "trace.buffer.size";
   public static final String TRACE_REPORT_HOSTNAME = "trace.report-hostname";
   public static final String TRACE_CLIENT_IP_HEADER = "trace.client-ip-header";
   public static final String TRACE_CLIENT_IP_RESOLVER_ENABLED = "trace.client-ip.resolver.enabled";
@@ -79,6 +81,8 @@ public final class TracerConfig {
   // Use TRACE_HTTP_CLIENT_ERROR_STATUSES instead
   @Deprecated public static final String HTTP_CLIENT_ERROR_STATUSES = "http.client.error.statuses";
   public static final String TRACE_HTTP_CLIENT_ERROR_STATUSES = "trace.http.client.error.statuses";
+
+  public static final String HTTP_ERROR_ENABLED = "http.error.enabled";
 
   public static final String SPLIT_BY_TAGS = "trace.split-by-tags";
   // trace latency interceptor value should be in ms
@@ -157,6 +161,22 @@ public final class TracerConfig {
   public static final String TRACE_FLUSH_INTERVAL = "trace.flush.interval";
 
   public static final String TRACE_POST_PROCESSING_TIMEOUT = "trace.post-processing.timeout";
+
+  public static final String TRACE_HEADER_ENABLED = "trace.headers.enabled";
+
+  public static final String TRACE_REQUEST_BODY_ENABLED = "trace.request.body.enabled";
+
+  public static final String TRACE_RESPONSE_BODY_ENABLED = "trace.response.body.enabled";
+
+  public static final String TRACE_RESPONSE_BODY_BLACKLIST_URLS = "trace.response.body.blacklist.urls";
+  public static final String TRACE_RESPONSE_BODY_WHITELIST_URLS = "trace.response.body.whitelist.urls";
+
+  public static final String TRACE_RESPONSE_BODY_ENCODING = "trace.response.body.encoding";
+
+  public static final String TRACE_DUBBO_PROVIDER_PROPAGATE_ENABLED =
+      "trace.dubbo.provider.propagate.enabled";
+  public static final String TRACE_DUBBO_REQUEST_ENABLED = "trace.dubbo.request.enabled";
+  public static final String TRACE_DUBBO_RESPONSE_ENABLED = "trace.dubbo.response.enabled";
 
   public static final String TRACE_CLOUD_PAYLOAD_TAGGING_SERVICES =
       "trace.cloud.payload.tagging.services";

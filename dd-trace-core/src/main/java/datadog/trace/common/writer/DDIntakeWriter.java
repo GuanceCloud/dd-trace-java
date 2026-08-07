@@ -1,5 +1,7 @@
 package datadog.trace.common.writer;
 
+import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_BUFFER_SIZE;
+
 import datadog.communication.ddagent.DroppingPolicy;
 import datadog.metrics.api.Monitoring;
 import datadog.trace.api.Config;
@@ -18,7 +20,7 @@ public class DDIntakeWriter extends RemoteWriter {
   public static final String DEFAULT_INTAKE_VERSION = "v2";
   public static final long DEFAULT_INTAKE_TIMEOUT = 10; // timeout in seconds
 
-  private static final int BUFFER_SIZE = 1024;
+  static final int BUFFER_SIZE = DEFAULT_TRACE_BUFFER_SIZE;
 
   public static DDIntakeWriterBuilder builder() {
     return new DDIntakeWriterBuilder();
@@ -26,7 +28,7 @@ public class DDIntakeWriter extends RemoteWriter {
 
   public static class DDIntakeWriterBuilder {
     CiVisibilityWellKnownTags wellKnownTags = Config.get().getCiVisibilityWellKnownTags();
-    int traceBufferSize = BUFFER_SIZE;
+    int traceBufferSize = Config.get().getTraceBufferSize();
     HealthMetrics healthMetrics = HealthMetrics.NO_OP;
     int flushIntervalMilliseconds = 1000;
     Monitoring monitoring = Monitoring.DISABLED;

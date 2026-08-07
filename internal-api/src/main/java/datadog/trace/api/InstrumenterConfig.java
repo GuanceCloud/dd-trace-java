@@ -23,6 +23,8 @@ import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_ANNOTATIONS;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_ANNOTATION_ASYNC;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_ENABLED;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_EXECUTORS_ALL;
+import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_METHOD_FILE_LENGTH;
+import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_METHOD_PACKAGES;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_METHODS;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_NATIVE_METHODS;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_OTEL_ENABLED;
@@ -89,6 +91,8 @@ import static datadog.trace.api.config.TraceInstrumentationConfig.TRACE_EXECUTOR
 import static datadog.trace.api.config.TraceInstrumentationConfig.TRACE_EXECUTORS_ALL;
 import static datadog.trace.api.config.TraceInstrumentationConfig.TRACE_EXTENSIONS_PATH;
 import static datadog.trace.api.config.TraceInstrumentationConfig.TRACE_METHODS;
+import static datadog.trace.api.config.TraceInstrumentationConfig.TRACE_METHODS_FILE;
+import static datadog.trace.api.config.TraceInstrumentationConfig.TRACE_METHOD_PACKAGES;
 import static datadog.trace.api.config.TraceInstrumentationConfig.TRACE_NATIVE_METHODS;
 import static datadog.trace.api.config.TraceInstrumentationConfig.TRACE_PEKKO_SCHEDULER_ENABLED;
 import static datadog.trace.api.config.TraceInstrumentationConfig.TRACE_THREAD_POOL_EXECUTORS_EXCLUDE;
@@ -107,9 +111,15 @@ import datadog.trace.api.telemetry.OtelEnvMetricCollectorImpl;
 import datadog.trace.api.telemetry.OtelEnvMetricCollectorProvider;
 import datadog.trace.bootstrap.config.provider.ConfigProvider;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -212,6 +222,8 @@ public class InstrumenterConfig {
   private final String traceAnnotations;
   private final boolean traceAnnotationAsync;
   private final Map<String, Set<String>> traceMethods;
+  private final Set<String> traceMethodPackages;
+  private final String traceMethodsFile;
   private final Map<String, Set<String>> traceNativeMethods;
   private final Map<String, Set<String>> measureMethods;
   private final Map<String, Set<String>> measureNativeMethods;
@@ -361,9 +373,14 @@ public class InstrumenterConfig {
     traceAnnotations = configProvider.getString(TRACE_ANNOTATIONS, DEFAULT_TRACE_ANNOTATIONS);
     traceAnnotationAsync =
         configProvider.getBoolean(TRACE_ANNOTATION_ASYNC, DEFAULT_TRACE_ANNOTATION_ASYNC);
-    traceMethods =
+    Map<String, Set<String>> baseTraceMethods =
         MethodFilterConfigParser.parse(
             configProvider.getString(TRACE_METHODS, DEFAULT_TRACE_METHODS));
+    traceMethodsFile = configProvider.getString(TRACE_METHODS_FILE, null);
+    traceMethods = buildTraceMethods(baseTraceMethods, traceMethodsFile);
+    traceMethodPackages =
+        buildPackages(
+            configProvider.getString(TRACE_METHOD_PACKAGES, DEFAULT_TRACE_METHOD_PACKAGES));
     traceNativeMethods =
         MethodFilterConfigParser.parse(
             configProvider.getString(TRACE_NATIVE_METHODS, DEFAULT_TRACE_NATIVE_METHODS));
@@ -394,6 +411,62 @@ public class InstrumenterConfig {
         configProvider.getBoolean(APP_LOGS_COLLECTION_ENABLED, DEFAULT_APP_LOGS_COLLECTION_ENABLED);
 
     legacyContextManagerEnabled = configProvider.getBoolean(LEGACY_CONTEXT_MANAGER_ENABLED, true);
+  }
+
+  private Set<String> buildPackages(String packages) {
+    if (packages == null) {
+      return Collections.emptySet();
+    }
+
+    String[] split = packages.split(",");
+    Set<String> result = new HashSet<>(split.length);
+    for (String entry : split) {
+      String packageName = entry.trim();
+      if (!packageName.isEmpty()) {
+        result.add(packageName);
+      }
+    }
+    return Collections.unmodifiableSet(result);
+  }
+
+  private Map<String, Set<String>> buildTraceMethods(
+      Map<String, Set<String>> base, String traceMethodsFile) {
+    if (traceMethodsFile == null) {
+      return Collections.unmodifiableMap(base);
+    }
+
+    try {
+      String content = readFileIfSmall(new File(traceMethodsFile));
+      if (content == null) {
+        return Collections.unmodifiableMap(base);
+      }
+
+      Map<String, Set<String>> combined = new HashMap<>(base);
+      combined.putAll(MethodFilterConfigParser.parse(content.replaceAll("\\R", ";")));
+      return Collections.unmodifiableMap(combined);
+    } catch (IOException e) {
+      return Collections.unmodifiableMap(base);
+    }
+  }
+
+  public static String readFileIfSmall(File file) throws IOException {
+    long length = file.length();
+    if (length > DEFAULT_TRACE_METHOD_FILE_LENGTH) {
+      return null;
+    }
+
+    byte[] bytes = new byte[(int) length];
+    int offset = 0;
+    try (FileInputStream in = new FileInputStream(file)) {
+      while (offset < bytes.length) {
+        int read = in.read(bytes, offset, bytes.length - offset);
+        if (read < 0) {
+          break;
+        }
+        offset += read;
+      }
+    }
+    return new String(bytes, 0, offset, "UTF-8");
   }
 
   public boolean isCodeOriginEnabled() {
@@ -661,6 +734,14 @@ public class InstrumenterConfig {
     return traceAnnotations;
   }
 
+  public String getTraceMethodsFile() {
+    return traceMethodsFile;
+  }
+
+  public Set<String> getTraceMethodPackages() {
+    return traceMethodPackages;
+  }
+
   public Collection<String> getAdditionalJaxRsAnnotations() {
     return additionalJaxRsAnnotations;
   }
@@ -844,6 +925,12 @@ public class InstrumenterConfig {
         + traceAnnotationAsync
         + ", traceMethods='"
         + traceMethods
+        + '\''
+        + ", traceMethodsFile='"
+        + traceMethodsFile
+        + '\''
+        + ", traceMethodPackages='"
+        + traceMethodPackages
         + '\''
         + ", traceNativeMethods='"
         + traceNativeMethods

@@ -76,6 +76,7 @@ public class NettyChannelPipelineInstrumentation extends InstrumenterModule.Trac
       // client helpers
       packageName + ".client.NettyHttpClientDecorator",
       packageName + ".client.NettyResponseInjectAdapter",
+      packageName + ".client.NettyClientResponseStream",
       packageName + ".client.HttpClientRequestTracingHandler",
       packageName + ".client.HttpClientResponseTracingHandler",
       packageName + ".client.HttpClientTracingHandler",

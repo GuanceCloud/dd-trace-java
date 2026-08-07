@@ -127,8 +127,19 @@ public final class PreparedStatementInstrumentation extends AbstractPreparedStat
     "com.sybase.jdbc2.jdbc.SybCallableStatement",
     "com.sybase.jdbc4.jdbc.SybPreparedStatement",
     "com.sybase.jdbc4.jdbc.SybCallableStatement",
+    // Druid statement wrappers
+    "com.alibaba.druid.pool.DruidPooledPreparedStatement",
+    "com.alibaba.druid.pool.DruidPooledCallableStatement",
     // for testing purposes
-    "test.TestPreparedStatement"
+    "test.TestPreparedStatement",
+    // 达梦DB
+    "dm.jdbc.driver.DmdbPreparedStatement",
+    "dm.jdbc.driver.DmdbCallableStatement",
+    "dm.jdbc.driver.DmdbStatement",
+    // kingbase
+    "com.kingbase8.jdbc.KbCallableStatement",
+    "com.kingbase8.jdbc.KbPreparedStatement",
+    "com.kingbase8.jdbc.KbStatement"
   };
 
   @Override

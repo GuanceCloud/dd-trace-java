@@ -3873,6 +3873,14 @@
         "aliases": []
       }
     ],
+    "DD_SERVICE_MAPPING_FILE": [
+      {
+        "version": "A",
+        "type": "string",
+        "default": null,
+        "aliases": []
+      }
+    ],
     "DD_SERVICE_NAME": [
       {
         "version": "A",
@@ -5450,6 +5458,14 @@
       }
     ],
     "DD_TRACE_DB_CLIENT_SPLIT_BY_HOST": [
+      {
+        "version": "A",
+        "type": "boolean",
+        "default": "false",
+        "aliases": []
+      }
+    ],
+    "DD_TRACE_PEER_HOSTNAME_FROM_CONFIG_ENABLED": [
       {
         "version": "A",
         "type": "boolean",
@@ -8073,6 +8089,22 @@
         "aliases": []
       }
     ],
+    "DD_TRACE_METHOD_FILE": [
+      {
+        "version": "A",
+        "type": "string",
+        "default": null,
+        "aliases": []
+      }
+    ],
+    "DD_TRACE_METHOD_PACKAGES": [
+      {
+        "version": "A",
+        "type": "string",
+        "default": null,
+        "aliases": []
+      }
+    ],
     "DD_TRACE_NATIVE_METHODS": [
       {
         "version": "A",
@@ -9222,6 +9254,14 @@
         "version": "A",
         "type": "int",
         "default": "100",
+        "aliases": []
+      }
+    ],
+    "DD_TRACE_BUFFER_SIZE": [
+      {
+        "version": "A",
+        "type": "int",
+        "default": "1024",
         "aliases": []
       }
     ],

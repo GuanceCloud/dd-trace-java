@@ -20,8 +20,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Predicate;
-import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,11 +31,6 @@ public class DebuggerProductChangesListener implements ProductListener {
   public static final String SPAN_DECORATION_PROBE_PREFIX = "spanDecorationProbe_";
   private static final Logger LOGGER =
       LoggerFactory.getLogger(DebuggerProductChangesListener.class);
-
-  private static final Predicate<String> IS_UUID =
-      Pattern.compile(
-              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-          .asPredicate();
 
   private final ConfigurationAcceptor configurationAcceptor;
   private final Map<String, ProbeDefinition> probeByConfigId = new HashMap<>();

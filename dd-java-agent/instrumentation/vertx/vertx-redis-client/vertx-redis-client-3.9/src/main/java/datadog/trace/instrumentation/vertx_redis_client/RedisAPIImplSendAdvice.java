@@ -7,7 +7,6 @@ import static datadog.trace.instrumentation.vertx_redis_client.VertxRedisClientD
 import datadog.context.ContextScope;
 import datadog.trace.bootstrap.InstrumentationContext;
 import io.vertx.core.Future;
-import io.vertx.core.net.SocketAddress;
 import io.vertx.redis.client.Redis;
 import io.vertx.redis.client.RedisAPI;
 import io.vertx.redis.client.RedisConnection;
@@ -33,12 +32,15 @@ public class RedisAPIImplSendAdvice {
           InstrumentationContext.get(RedisAPI.class, ResponseHandlerWrapper.class).get(self);
       if (handler != null) {
         if (handler.clientSpan != null && connection != null) {
-          final SocketAddress socketAddress =
-              InstrumentationContext.get(RedisConnection.class, SocketAddress.class)
+          final VertxRedisConnectionInfo connectionInfo =
+              InstrumentationContext.get(RedisConnection.class, VertxRedisConnectionInfo.class)
                   .get(connection);
-          if (socketAddress != null) {
-            DECORATE.onConnection(handler.clientSpan, socketAddress);
-            DECORATE.setPeerPort(handler.clientSpan, socketAddress.port());
+          if (connectionInfo != null && connectionInfo.getSocketAddress() != null) {
+            DECORATE.onConnection(
+                handler.clientSpan,
+                connectionInfo.getSocketAddress(),
+                connectionInfo.getConfiguredHost());
+            DECORATE.setPeerPort(handler.clientSpan, connectionInfo.getSocketAddress().port());
           }
         }
         if (!future.isComplete()) {

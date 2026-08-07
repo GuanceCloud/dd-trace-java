@@ -9,6 +9,7 @@ import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.websocket.HandlerContext;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.util.AttributeKey;
+import java.io.ByteArrayOutputStream;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -31,6 +32,27 @@ public final class AttributeKeys {
 
   public static final AttributeKey<HttpHeaders> REQUEST_HEADERS_ATTRIBUTE_KEY =
       attributeKey("datadog.server.request.headers");
+
+  public static final AttributeKey<String> REQUEST_URI_ATTRIBUTE_KEY =
+      attributeKey("datadog.server.request.uri");
+
+  public static final AttributeKey<String> REQUEST_METHOD_ATTRIBUTE_KEY =
+      attributeKey("datadog.server.request.method");
+
+  public static final AttributeKey<ByteArrayOutputStream> REQUEST_BODY_BUFFER_ATTRIBUTE_KEY =
+      attributeKey("datadog.server.request.body-buffer");
+
+  public static final AttributeKey<String> REQUEST_BODY_ENCODING_ATTRIBUTE_KEY =
+      attributeKey("datadog.server.request.body-encoding");
+
+  public static final AttributeKey<ByteArrayOutputStream> RESPONSE_BODY_BUFFER_ATTRIBUTE_KEY =
+      attributeKey("datadog.server.response.body-buffer");
+
+  public static final AttributeKey<String> RESPONSE_BODY_ENCODING_ATTRIBUTE_KEY =
+      attributeKey("datadog.server.response.body-encoding");
+
+  public static final AttributeKey<Long> RESPONSE_BODY_REMAINING_BYTES_ATTRIBUTE_KEY =
+      attributeKey("datadog.server.response.body-remaining-bytes");
 
   public static final AttributeKey<Boolean> ANALYZED_RESPONSE_KEY =
       new AttributeKey<>("datadog.server.analyzed_response");

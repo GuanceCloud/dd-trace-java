@@ -45,6 +45,14 @@ public final class AsyncPropagatingDisableInstrumentation extends InstrumenterMo
       nameEndsWith("io.grpc.internal.ManagedChannelImpl");
   private static final ElementMatcher<TypeDescription> REACTOR_DISABLED_TYPE_INITIALIZERS =
       namedOneOf("reactor.core.scheduler.SchedulerTask", "reactor.core.scheduler.WorkerTask");
+  private static final ElementMatcher<TypeDescription> NACOS_SERVICE_INFO_UPDATERS =
+      namedOneOf(
+          "com.alibaba.nacos.client.naming.core.HostReactor",
+          "com.alibaba.nacos.client.naming.core.ServiceInfoUpdateService");
+  private static final ElementMatcher<TypeDescription> NACOS_UPDATE_TASKS =
+      namedOneOf(
+          "com.alibaba.nacos.client.naming.core.HostReactor$UpdateTask",
+          "com.alibaba.nacos.client.naming.core.ServiceInfoUpdateService$UpdateTask");
   private static final ElementMatcher<TypeDescription> RXJAVA2_DISABLED_TYPE_INITIALIZERS =
       named("io.reactivex.internal.schedulers.AbstractDirectTask");
 
@@ -104,7 +112,11 @@ public final class AsyncPropagatingDisableInstrumentation extends InstrumenterMo
       "io.netty.util.concurrent.GlobalEventExecutor",
       "io.grpc.netty.shaded.io.netty.util.concurrent.GlobalEventExecutor",
       "com.linecorp.armeria.client.HttpClientFactory",
-      "com.linecorp.armeria.client.HttpChannelPool"
+      "com.linecorp.armeria.client.HttpChannelPool",
+      "com.alibaba.nacos.client.naming.core.HostReactor",
+      "com.alibaba.nacos.client.naming.core.HostReactor$UpdateTask",
+      "com.alibaba.nacos.client.naming.core.ServiceInfoUpdateService",
+      "com.alibaba.nacos.client.naming.core.ServiceInfoUpdateService$UpdateTask"
     };
   }
 
@@ -118,6 +130,8 @@ public final class AsyncPropagatingDisableInstrumentation extends InstrumenterMo
     return RX_WORKERS
         .or(GRPC_MANAGED_CHANNEL)
         .or(REACTOR_DISABLED_TYPE_INITIALIZERS)
+        .or(NACOS_SERVICE_INFO_UPDATERS)
+        .or(NACOS_UPDATE_TASKS)
         .or(RXJAVA2_DISABLED_TYPE_INITIALIZERS)
         .or(RXJAVA3_DISABLED_TYPE_INITIALIZERS)
         .or(JAVA_HTTP_CLIENT);
@@ -204,6 +218,11 @@ public final class AsyncPropagatingDisableInstrumentation extends InstrumenterMo
         advice);
     transformer.applyAdvice(
         isTypeInitializer().and(isDeclaredBy(REACTOR_DISABLED_TYPE_INITIALIZERS)), advice);
+    transformer.applyAdvice(
+        namedOneOf("scheduleUpdateIfAbsent", "addTask")
+            .and(isDeclaredBy(NACOS_SERVICE_INFO_UPDATERS)),
+        advice);
+    transformer.applyAdvice(named("run").and(isDeclaredBy(NACOS_UPDATE_TASKS)), advice);
     transformer.applyAdvice(
         isTypeInitializer().and(isDeclaredBy(RXJAVA2_DISABLED_TYPE_INITIALIZERS)), advice);
     transformer.applyAdvice(

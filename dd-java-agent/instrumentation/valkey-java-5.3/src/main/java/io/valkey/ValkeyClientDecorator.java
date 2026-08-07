@@ -1,6 +1,8 @@
 package io.valkey;
 
+import datadog.trace.api.Config;
 import datadog.trace.api.naming.SpanNaming;
+import datadog.trace.bootstrap.InstrumentationContext;
 import datadog.trace.bootstrap.instrumentation.api.InternalSpanTypes;
 import datadog.trace.bootstrap.instrumentation.api.UTF8BytesString;
 import datadog.trace.bootstrap.instrumentation.decorator.DBTypeProcessingDatabaseClientDecorator;
@@ -52,6 +54,13 @@ public class ValkeyClientDecorator extends DBTypeProcessingDatabaseClientDecorat
 
   @Override
   protected String dbHostname(Connection connection) {
+    if (Config.get().isPeerHostnameFromConfigEnabled()) {
+      final String configuredHost =
+          InstrumentationContext.get(Connection.class, String.class).get(connection);
+      if (configuredHost != null && !configuredHost.isEmpty()) {
+        return configuredHost;
+      }
+    }
     return connection.getHostAndPort().getHost();
   }
 }

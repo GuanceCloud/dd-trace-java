@@ -4,11 +4,15 @@ import static datadog.trace.api.sampling.PrioritySampling.SAMPLER_DROP;
 import static datadog.trace.api.sampling.PrioritySampling.USER_DROP;
 
 import datadog.communication.ddagent.DroppingPolicy;
+import datadog.trace.api.Config;
 import datadog.trace.core.CoreSpan;
 import java.util.List;
+import java.util.concurrent.BlockingQueue;
 import java.util.Queue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public enum Prioritization {
   ENSURE_TRACE {
@@ -37,6 +41,47 @@ public enum Prioritization {
       Queue<Object> secondary,
       Queue<Object> spanSampling,
       DroppingPolicy droppingPolicy);
+
+  private static final Logger log = LoggerFactory.getLogger(Prioritization.class);
+
+  private static <T extends CoreSpan<T>> PrioritizationStrategy.PublishResult offerOrLogOverflow(
+      String queueName, Queue<Object> queue, T root, int priority, List<T> trace) {
+    if (queue.offer(trace)) {
+      return PrioritizationStrategy.PublishResult.ENQUEUED_FOR_SERIALIZATION;
+    }
+    logBufferOverflow(queueName, queue, root, priority, trace);
+    return PrioritizationStrategy.PublishResult.DROPPED_BUFFER_OVERFLOW;
+  }
+
+  private static <T extends CoreSpan<T>> PrioritizationStrategy.PublishResult offerOrLogSpanSamplingOverflow(
+      Queue<Object> queue, T root, int priority, List<T> trace) {
+    if (queue.offer(trace)) {
+      return PrioritizationStrategy.PublishResult.ENQUEUED_FOR_SINGLE_SPAN_SAMPLING;
+    }
+    logBufferOverflow("spanSampling", queue, root, priority, trace);
+    return PrioritizationStrategy.PublishResult.DROPPED_BUFFER_OVERFLOW;
+  }
+
+  private static <T extends CoreSpan<T>> void logBufferOverflow(
+      String queueName, Queue<Object> queue, T root, int priority, List<T> trace) {
+    Config config = Config.get();
+    if (!config.isDebugEnabled()) {
+      return;
+    }
+    int remainingCapacity = -1;
+    if (queue instanceof BlockingQueue) {
+      remainingCapacity = ((BlockingQueue<?>) queue).remainingCapacity();
+    }
+    log.debug(
+        "Trace buffer overflow on {} queue: traceBufferSize={}, queueSize={}, remainingCapacity={}, traceSize={}, priority={}, forceKeep={}",
+        queueName,
+        config.getTraceBufferSize(),
+        queue.size(),
+        remainingCapacity,
+        trace.size(),
+        priority,
+        root.isForceKeep());
+  }
 
   private abstract static class PrioritizationStrategyWithFlush implements PrioritizationStrategy {
 
@@ -90,13 +135,9 @@ public enum Prioritization {
         case USER_DROP:
           if (spanSampling != null) {
             // send dropped traces for single span sampling
-            return spanSampling.offer(trace)
-                ? PublishResult.ENQUEUED_FOR_SINGLE_SPAN_SAMPLING
-                : PublishResult.DROPPED_BUFFER_OVERFLOW;
+            return offerOrLogSpanSamplingOverflow(spanSampling, root, priority, trace);
           }
-          return secondary.offer(trace)
-              ? PublishResult.ENQUEUED_FOR_SERIALIZATION
-              : PublishResult.DROPPED_BUFFER_OVERFLOW;
+          return offerOrLogOverflow("secondary", secondary, root, priority, trace);
         default:
           blockingOffer(primary, trace);
           return PublishResult.ENQUEUED_FOR_SERIALIZATION;
@@ -124,29 +165,21 @@ public enum Prioritization {
     @Override
     public <T extends CoreSpan<T>> PublishResult publish(T root, int priority, List<T> trace) {
       if (root.isForceKeep()) {
-        return primary.offer(trace)
-            ? PublishResult.ENQUEUED_FOR_SERIALIZATION
-            : PublishResult.DROPPED_BUFFER_OVERFLOW;
+        return offerOrLogOverflow("primary", primary, root, priority, trace);
       }
       switch (priority) {
         case SAMPLER_DROP:
         case USER_DROP:
           if (spanSampling != null) {
             // send dropped traces for single span sampling
-            return spanSampling.offer(trace)
-                ? PublishResult.ENQUEUED_FOR_SINGLE_SPAN_SAMPLING
-                : PublishResult.DROPPED_BUFFER_OVERFLOW;
+            return offerOrLogSpanSamplingOverflow(spanSampling, root, priority, trace);
           }
           if (droppingPolicy.active()) {
             return PublishResult.DROPPED_BY_POLICY;
           }
-          return secondary.offer(trace)
-              ? PublishResult.ENQUEUED_FOR_SERIALIZATION
-              : PublishResult.DROPPED_BUFFER_OVERFLOW;
+          return offerOrLogOverflow("secondary", secondary, root, priority, trace);
         default:
-          return primary.offer(trace)
-              ? PublishResult.ENQUEUED_FOR_SERIALIZATION
-              : PublishResult.DROPPED_BUFFER_OVERFLOW;
+          return offerOrLogOverflow("primary", primary, root, priority, trace);
       }
     }
   }

@@ -7,7 +7,9 @@ import datadog.context.ContextContinuation;
 import datadog.trace.api.GenericClassValue;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.websocket.HandlerContext;
+import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.util.AttributeKey;
+import java.io.ByteArrayOutputStream;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -28,8 +30,41 @@ public final class AttributeKeys {
   public static final AttributeKey<Boolean> HTTP2_CONNECTION_CODEC_ATTRIBUTE_KEY =
       attributeKey("datadog.http2.connection.codec");
 
+  public static final AttributeKey<Object> CLIENT_RESPONSE_STREAM_ATTRIBUTE_KEY =
+      attributeKey("datadog.client.response.stream");
+
   public static final AttributeKey<Context> PARENT_CONTEXT_ATTRIBUTE_KEY =
       attributeKey("datadog.server.parent-context");
+
+  public static final AttributeKey<HttpHeaders> REQUEST_HEADERS_ATTRIBUTE_KEY =
+      attributeKey("datadog.server.request.headers");
+
+  public static final AttributeKey<String> REQUEST_URI_ATTRIBUTE_KEY =
+      attributeKey("datadog.server.request.uri");
+
+  public static final AttributeKey<String> REQUEST_METHOD_ATTRIBUTE_KEY =
+      attributeKey("datadog.server.request.method");
+
+  public static final AttributeKey<ByteArrayOutputStream> REQUEST_BODY_BUFFER_ATTRIBUTE_KEY =
+      attributeKey("datadog.server.request.body-buffer");
+
+  public static final AttributeKey<String> REQUEST_BODY_ENCODING_ATTRIBUTE_KEY =
+      attributeKey("datadog.server.request.body-encoding");
+
+  public static final AttributeKey<ByteArrayOutputStream> RESPONSE_BODY_BUFFER_ATTRIBUTE_KEY =
+      attributeKey("datadog.server.response.body-buffer");
+
+  public static final AttributeKey<String> RESPONSE_BODY_ENCODING_ATTRIBUTE_KEY =
+      attributeKey("datadog.server.response.body-encoding");
+
+  public static final AttributeKey<Long> RESPONSE_BODY_REMAINING_BYTES_ATTRIBUTE_KEY =
+      attributeKey("datadog.server.response.body-remaining-bytes");
+
+  public static final AttributeKey<Boolean> ANALYZED_RESPONSE_KEY =
+      attributeKey("datadog.server.analyzed_response");
+
+  public static final AttributeKey<Boolean> BLOCKED_RESPONSE_KEY =
+      attributeKey("datadog.server.blocked_response");
 
   public static final AttributeKey<HandlerContext.Sender> WEBSOCKET_SENDER_HANDLER_CONTEXT =
       attributeKey("datadog.server.websocket.sender.handler_context");

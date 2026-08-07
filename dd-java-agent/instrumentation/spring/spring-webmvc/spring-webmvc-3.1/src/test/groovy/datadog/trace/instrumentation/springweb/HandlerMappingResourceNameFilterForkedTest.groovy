@@ -50,4 +50,30 @@ class HandlerMappingResourceNameFilterForkedTest extends InstrumentationSpecific
     where:
     url << ["/single", "/not-found"]
   }
+
+  def "test filter tags request_body for gwt rpc content type"() {
+    given:
+    injectSysConfig('dd.trace.request.body.enabled', 'true')
+    def payload = '7|0|4|https://example.com/app/|com.foo.Service|doThing|1|2|3|4|'
+    def request = new MockHttpServletRequest("POST", "/single")
+    request.setCharacterEncoding("UTF-8")
+    request.setContentType("text/x-gwt-rpc; charset=UTF-8")
+    request.setContent(payload.getBytes("UTF-8"))
+    def response = Mock(HttpServletResponse)
+    def filterChain = Mock(FilterChain) {
+      1 * doFilter(_, _) >> { req, resp ->
+        req.reader.text
+      }
+    }
+
+    when:
+    runUnderTrace("test-servlet", {
+      request.setAttribute(DD_CONTEXT_ATTRIBUTE, activeSpan().context())
+      filter.doFilterInternal(request, response, filterChain)
+    })
+    TEST_WRITER.waitForTraces(1)
+
+    then:
+    TEST_WRITER.flatten().find { it.operationName == 'test-servlet' }.getTag('request_body') == payload
+  }
 }

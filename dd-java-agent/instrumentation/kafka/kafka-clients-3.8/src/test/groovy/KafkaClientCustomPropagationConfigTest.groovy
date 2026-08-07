@@ -63,6 +63,7 @@ class KafkaClientCustomPropagationConfigTest extends InstrumentationSpecificatio
     super.configurePreAgent()
 
     injectSysConfig("dd.kafka.e2e.duration.enabled", "true")
+    injectSysConfig("dd.trace.experimental.kafka.enabled","true")
   }
 
   def "test kafka client header propagation with topic filters"() {
