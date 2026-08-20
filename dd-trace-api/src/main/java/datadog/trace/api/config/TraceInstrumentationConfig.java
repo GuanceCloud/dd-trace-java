@@ -102,6 +102,8 @@ public final class TraceInstrumentationConfig {
       "trace.http.url.connection.class.name";
 
   public static final String AXIS_TRANSPORT_CLASS_NAME = "trace.axis.transport.class.name";
+  public static final String CXF_INVOKER_FALLBACK_TARGET_CLASSES =
+      "trace.cxf-invoker-fallback.target-classes";
 
   public static final String RUNTIME_CONTEXT_FIELD_INJECTION =
       "trace.runtime.context.field.injection";

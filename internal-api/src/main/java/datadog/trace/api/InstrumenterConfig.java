@@ -23,9 +23,9 @@ import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_ANNOTATIONS;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_ANNOTATION_ASYNC;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_ENABLED;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_EXECUTORS_ALL;
+import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_METHODS;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_METHOD_FILE_LENGTH;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_METHOD_PACKAGES;
-import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_METHODS;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_NATIVE_METHODS;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_TRACE_OTEL_ENABLED;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_USM_ENABLED;
@@ -58,6 +58,7 @@ import static datadog.trace.api.config.TraceInstrumentationConfig.AKKA_FORK_JOIN
 import static datadog.trace.api.config.TraceInstrumentationConfig.AXIS_TRANSPORT_CLASS_NAME;
 import static datadog.trace.api.config.TraceInstrumentationConfig.CODE_ORIGIN_FOR_SPANS_ENABLED;
 import static datadog.trace.api.config.TraceInstrumentationConfig.CODE_ORIGIN_FOR_SPANS_INTERFACE_SUPPORT;
+import static datadog.trace.api.config.TraceInstrumentationConfig.CXF_INVOKER_FALLBACK_TARGET_CLASSES;
 import static datadog.trace.api.config.TraceInstrumentationConfig.DETAILED_INSTRUMENTATION_ERRORS;
 import static datadog.trace.api.config.TraceInstrumentationConfig.EXPERIMENTAL_DEFER_INTEGRATIONS_UNTIL;
 import static datadog.trace.api.config.TraceInstrumentationConfig.HTTP_URL_CONNECTION_CLASS_NAME;
@@ -186,6 +187,7 @@ public class InstrumenterConfig {
 
   private final String httpURLConnectionClassName;
   private final String axisTransportClassName;
+  private final List<String> cxfInvokerFallbackTargetClasses;
   private final boolean websocketTracingEnabled;
   private final boolean pekkoSchedulerEnabled;
 
@@ -326,6 +328,8 @@ public class InstrumenterConfig {
 
     httpURLConnectionClassName = configProvider.getString(HTTP_URL_CONNECTION_CLASS_NAME, "");
     axisTransportClassName = configProvider.getString(AXIS_TRANSPORT_CLASS_NAME, "");
+    cxfInvokerFallbackTargetClasses =
+        tryMakeImmutableList(configProvider.getList(CXF_INVOKER_FALLBACK_TARGET_CLASSES));
 
     akkaForkJoinTaskName = configProvider.getString(AKKA_FORK_JOIN_TASK_NAME, "");
     akkaForkJoinExecutorTaskName = configProvider.getString(AKKA_FORK_JOIN_EXECUTOR_TASK_NAME, "");
@@ -618,6 +622,10 @@ public class InstrumenterConfig {
     return axisTransportClassName;
   }
 
+  public List<String> getCxfInvokerFallbackTargetClasses() {
+    return cxfInvokerFallbackTargetClasses;
+  }
+
   public String getAkkaForkJoinTaskName() {
     return akkaForkJoinTaskName;
   }
@@ -886,6 +894,8 @@ public class InstrumenterConfig {
         + ", axisTransportClassName='"
         + axisTransportClassName
         + '\''
+        + ", cxfInvokerFallbackTargetClasses="
+        + cxfInvokerFallbackTargetClasses
         + ", excludedClasses="
         + excludedClasses
         + ", excludedClassesFile="
