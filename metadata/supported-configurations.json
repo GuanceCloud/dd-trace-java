@@ -5281,6 +5281,14 @@
         "aliases": ["DD_TRACE_INTEGRATION_CXF_ENABLED", "DD_INTEGRATION_CXF_ENABLED"]
       }
     ],
+    "DD_TRACE_CXF_INVOKER_FALLBACK_TARGET_CLASSES": [
+      {
+        "version": "A",
+        "type": "string",
+        "default": null,
+        "aliases": []
+      }
+    ],
     "DD_TRACE_CXF_INVOKER_ENABLED": [
       {
         "version": "A",
