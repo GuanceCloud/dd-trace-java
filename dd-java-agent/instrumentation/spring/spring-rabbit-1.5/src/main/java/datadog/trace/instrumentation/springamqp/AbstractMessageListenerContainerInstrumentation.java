@@ -16,6 +16,7 @@ import datadog.context.ContextScope;
 import datadog.trace.agent.tooling.ExcludeFilterProvider;
 import datadog.trace.agent.tooling.Instrumenter;
 import datadog.trace.agent.tooling.InstrumenterModule;
+import datadog.trace.bootstrap.ContextStore;
 import datadog.trace.bootstrap.InstrumentationContext;
 import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
@@ -25,6 +26,7 @@ import datadog.trace.bootstrap.instrumentation.java.concurrent.State;
 import java.net.InetSocketAddress;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import net.bytebuddy.asm.Advice;
 import org.springframework.amqp.core.Message;
@@ -77,49 +79,72 @@ public class AbstractMessageListenerContainerInstrumentation extends Instrumente
   public static class ActivateContinuation {
     @Advice.OnMethodEnter(suppress = Throwable.class)
     public static AgentScope activate(@Advice.Argument(1) Object data) {
+      Message message = null;
+      ContextStore<Message, State> messageStateStore =
+          InstrumentationContext.get(Message.class, State.class);
       if (data instanceof Message) {
-        Message message = (Message) data;
-        State state = InstrumentationContext.get(Message.class, State.class).get(message);
-        if (null != state) {
-          ContextContinuation continuation = state.getAndResetContinuation();
-          if (null != continuation) {
-            try (ContextScope scope = continuation.resume()) {
-              AgentSpan span = startSpan("rabbitmq-amqp", AMQP_CONSUME);
-              span.setMeasured(true);
-              DECORATE.afterStart(span);
-              MessageProperties properties = message.getMessageProperties();
-              if (properties != null) {
-                InetSocketAddress connection =
-                    InstrumentationContext.get(MessageProperties.class, InetSocketAddress.class)
-                        .get(properties);
-                if (connection != null) {
-                  DECORATE.onPeerConnection(span, connection);
-                }
+        message = (Message) data;
+      } else if (data instanceof List) {
+        List<?> messages = (List<?>) data;
+        for (Object element : messages) {
+          if (element instanceof Message) {
+            Message batchMessage = (Message) element;
+            if (message == null) {
+              // A batch-level span uses the first message as its representative parent.
+              message = batchMessage;
+            } else if (batchMessage != message) {
+              // Other message contexts are intentionally not represented by the batch span.
+              State unusedState = messageStateStore.get(batchMessage);
+              if (unusedState != null) {
+                unusedState.closeContinuation();
               }
-              DECORATE.onConsume(span, message.getMessageProperties().getConsumerQueue());
-              return activateSpan(span);
             }
           }
         }
-        AgentSpanContext parentContext = SpringRabbitMessageContextHelper.extractParent(message);
-        if (parentContext != null) {
-          AgentSpan span = startSpan("rabbitmq-amqp", AMQP_CONSUME, parentContext);
-          span.setMeasured(true);
-          DECORATE.afterStart(span);
-          MessageProperties properties = message.getMessageProperties();
-          if (properties != null) {
-            InetSocketAddress connection =
-                InstrumentationContext.get(MessageProperties.class, InetSocketAddress.class)
-                    .get(properties);
-            if (connection != null) {
-              DECORATE.onPeerConnection(span, connection);
+      }
+      if (message == null) {
+        return null;
+      }
+      State state = messageStateStore.get(message);
+      if (null != state) {
+        ContextContinuation continuation = state.getAndResetContinuation();
+        if (null != continuation) {
+          try (ContextScope scope = continuation.resume()) {
+            AgentSpan span = startSpan("rabbitmq-amqp", AMQP_CONSUME);
+            span.setMeasured(true);
+            DECORATE.afterStart(span);
+            MessageProperties properties = message.getMessageProperties();
+            if (properties != null) {
+              InetSocketAddress connection =
+                  InstrumentationContext.get(MessageProperties.class, InetSocketAddress.class)
+                      .get(properties);
+              if (connection != null) {
+                DECORATE.onPeerConnection(span, connection);
+              }
             }
-            DECORATE.onConsume(span, properties.getConsumerQueue());
-          } else {
-            DECORATE.onConsume(span, null);
+            DECORATE.onConsume(span, message.getMessageProperties().getConsumerQueue());
+            return activateSpan(span);
           }
-          return activateSpan(span);
         }
+      }
+      AgentSpanContext parentContext = SpringRabbitMessageContextHelper.extractParent(message);
+      if (parentContext != null) {
+        AgentSpan span = startSpan("rabbitmq-amqp", AMQP_CONSUME, parentContext);
+        span.setMeasured(true);
+        DECORATE.afterStart(span);
+        MessageProperties properties = message.getMessageProperties();
+        if (properties != null) {
+          InetSocketAddress connection =
+              InstrumentationContext.get(MessageProperties.class, InetSocketAddress.class)
+                  .get(properties);
+          if (connection != null) {
+            DECORATE.onPeerConnection(span, connection);
+          }
+          DECORATE.onConsume(span, properties.getConsumerQueue());
+        } else {
+          DECORATE.onConsume(span, null);
+        }
+        return activateSpan(span);
       }
       return null;
     }

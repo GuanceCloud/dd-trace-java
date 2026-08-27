@@ -1,50 +1,15 @@
 package datadog.trace.instrumentation.springamqp;
 
-import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activeSpan;
-import static datadog.trace.instrumentation.springamqp.RabbitListenerDecorator.DECORATE;
-
-import datadog.trace.bootstrap.ContextStore;
-import datadog.trace.bootstrap.InstrumentationContext;
-import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
-import datadog.trace.bootstrap.instrumentation.java.concurrent.State;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import org.springframework.amqp.core.Message;
-import org.springframework.amqp.core.MessageProperties;
-import org.springframework.amqp.rabbit.support.Delivery;
 
 public final class BlockingQueueConsumerStateHelper {
 
   private BlockingQueueConsumerStateHelper() {}
 
-  public static void transfer(Object consumer, Delivery delivery, Message message) {
-    InetSocketAddress connection = extractConnection(consumer);
-    if (connection != null) {
-      AgentSpan span = activeSpan();
-      if (span != null) {
-        DECORATE.onPeerConnection(span, connection);
-      }
-      if (message != null) {
-        MessageProperties properties = message.getMessageProperties();
-        if (properties != null) {
-          InstrumentationContext.get(MessageProperties.class, InetSocketAddress.class)
-              .put(properties, connection);
-        }
-      }
-    }
-    if (delivery != null && message != null) {
-      ContextStore<Delivery, State> from = InstrumentationContext.get(Delivery.class, State.class);
-      State state = from.get(delivery);
-      if (state != null) {
-        from.put(delivery, null);
-        InstrumentationContext.get(Message.class, State.class).put(message, state);
-      }
-    }
-  }
-
-  private static InetSocketAddress extractConnection(Object consumer) {
+  public static InetSocketAddress extractConnection(Object consumer) {
     Object channel = invokeNoArg(consumer, "getChannel");
     if (channel == null) {
       channel = readField(consumer, "channel");

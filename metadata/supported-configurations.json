@@ -1745,6 +1745,14 @@
         "aliases": []
       }
     ],
+    "DD_HTTP_ERROR_ENABLED": [
+      {
+        "version": "A",
+        "type": "boolean",
+        "default": "false",
+        "aliases": []
+      }
+    ],
     "DD_HTTP_SERVER_DECODED_RESOURCE_PRESERVE_SPACES": [
       {
         "version": "A",
@@ -2335,6 +2343,150 @@
         "type": "boolean",
         "default": "true",
         "aliases": ["DD_LOGS_INJECTION"]
+      }
+    ],
+    "DD_LOGS_PATTERN": [
+      {
+        "version": "A",
+        "type": "string",
+        "default": "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger - [%method,%line] %X{dd.service} %X{dd.trace_id} %X{dd.span_id} - %msg%n",
+        "aliases": []
+      }
+    ],
+    "DD_LOGS_PATTERN_REPLACE": [
+      {
+        "version": "A",
+        "type": "boolean",
+        "default": "false",
+        "aliases": []
+      }
+    ],
+    "DD_ADD_SPAN_POINTERS": [
+      {
+        "version": "A",
+        "type": "boolean",
+        "default": "true",
+        "aliases": []
+      }
+    ],
+    "DD_JDBC_SQL_OBFUSCATION": [
+      {
+        "version": "A",
+        "type": "boolean",
+        "default": "false",
+        "aliases": []
+      }
+    ],
+    "DD_LOGS_MDC_TAGS_INJECTION": [
+      {
+        "version": "A",
+        "type": "boolean",
+        "default": "true",
+        "aliases": []
+      }
+    ],
+    "DD_MONGO_OBFUSCATION": [
+      {
+        "version": "A",
+        "type": "boolean",
+        "default": "false",
+        "aliases": []
+      }
+    ],
+    "DD_REDIS_COMMAND_ARGS": [
+      {
+        "version": "A",
+        "type": "boolean",
+        "default": "false",
+        "aliases": []
+      }
+    ],
+    "DD_ROCKETMQ_CONSUME_IGNORE": [
+      {
+        "version": "A",
+        "type": "boolean",
+        "default": "false",
+        "aliases": []
+      }
+    ],
+    "DD_TRACE_DUBBO_PROVIDER_PROPAGATE_ENABLED": [
+      {
+        "version": "A",
+        "type": "boolean",
+        "default": "false",
+        "aliases": []
+      }
+    ],
+    "DD_TRACE_DUBBO_REQUEST_ENABLED": [
+      {
+        "version": "A",
+        "type": "boolean",
+        "default": "false",
+        "aliases": []
+      }
+    ],
+    "DD_TRACE_DUBBO_RESPONSE_ENABLED": [
+      {
+        "version": "A",
+        "type": "boolean",
+        "default": "false",
+        "aliases": []
+      }
+    ],
+    "DD_TRACE_EXPERIMENTAL_KAFKA_ENABLED": [
+      {
+        "version": "A",
+        "type": "boolean",
+        "default": "false",
+        "aliases": []
+      }
+    ],
+    "DD_TRACE_HEADERS_ENABLED": [
+      {
+        "version": "A",
+        "type": "boolean",
+        "default": "false",
+        "aliases": []
+      }
+    ],
+    "DD_TRACE_REQUEST_BODY_ENABLED": [
+      {
+        "version": "A",
+        "type": "boolean",
+        "default": "false",
+        "aliases": []
+      }
+    ],
+    "DD_TRACE_RESPONSE_BODY_BLACKLIST_URLS": [
+      {
+        "version": "A",
+        "type": "string",
+        "default": null,
+        "aliases": []
+      }
+    ],
+    "DD_TRACE_RESPONSE_BODY_ENABLED": [
+      {
+        "version": "A",
+        "type": "boolean",
+        "default": "false",
+        "aliases": []
+      }
+    ],
+    "DD_TRACE_RESPONSE_BODY_ENCODING": [
+      {
+        "version": "A",
+        "type": "string",
+        "default": "utf-8",
+        "aliases": []
+      }
+    ],
+    "DD_TRACE_RESPONSE_BODY_WHITELIST_URLS": [
+      {
+        "version": "A",
+        "type": "string",
+        "default": null,
+        "aliases": []
       }
     ],
     "DD_LOGS_OTEL_ENABLED": [
