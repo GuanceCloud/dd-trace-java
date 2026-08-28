@@ -148,7 +148,7 @@ class DatadogHttpInjectorTest extends AbstractHttpInjectorTest {
             : "_dd.p.dm=-4,_dd.p.tid="
                 + toHexStringPadded(traceId.toHighOrderLong(), 16)
                 + ",_dd.p.anytag=value";
-    assertEquals(traceId.toString(), carrier.get(TRACE_ID_KEY));
+    assertEquals(Long.toUnsignedString(traceId.toLong()), carrier.get(TRACE_ID_KEY));
     assertEquals("2", carrier.get(SPAN_ID_KEY));
     assertEquals(expectedT0, carrier.get(OT_BAGGAGE_PREFIX + "t0"));
     assertEquals("v1", carrier.get(OT_BAGGAGE_PREFIX + "k1"));

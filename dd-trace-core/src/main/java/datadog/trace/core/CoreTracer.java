@@ -1679,7 +1679,7 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
           span.setEndpointTracker(tracker);
         }
       }
-      span.setTag("trace_128_bit_id", span.getTraceId().toString());
+      span.setTag("trace_128_bit_id", span.getTraceId().toHexString());
 
       if (!Objects.equals(DDTraceCoreInfo.VERSION, "")) {
         span.setTag("dd_ext_version", DDTraceCoreInfo.VERSION);
