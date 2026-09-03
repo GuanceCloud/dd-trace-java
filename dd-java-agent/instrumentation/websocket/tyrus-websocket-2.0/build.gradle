@@ -1,0 +1,33 @@
+muzzle {
+  pass {
+    name = "tyrus-websocket"
+    group = "org.glassfish.tyrus"
+    module = "tyrus-client"
+    versions = "[2.0.0,)"
+    javaVersion = "11"
+    extraDependency "org.glassfish.tyrus:tyrus-container-grizzly-client:2.0.0"
+  }
+}
+
+apply from: "$rootDir/gradle/java.gradle"
+
+testJvmConstraints {
+  minJavaVersion = JavaVersion.VERSION_11
+}
+
+addTestSuiteForDir("latestDepTest", "test")
+
+dependencies {
+  compileOnly group: "org.glassfish.tyrus", name: "tyrus-client", version: "2.0.0"
+
+  testImplementation group: "org.glassfish.tyrus", name: "tyrus-container-grizzly-client", version: "2.0.0"
+  testImplementation group: "org.java-websocket", name: "Java-WebSocket", version: "1.5.3"
+  testRuntimeOnly project(":dd-java-agent:instrumentation:websocket:jakarta-websocket-2.0")
+
+  latestDepTestImplementation(group: "org.glassfish.tyrus", name: "tyrus-container-grizzly-client", version: "2.+") {
+    version {
+      reject "2.3.0-M1"
+    }
+    because "Tyrus 2.3.0-M1 depends on broken Grizzly 5.0.0 POM metadata"
+  }
+}

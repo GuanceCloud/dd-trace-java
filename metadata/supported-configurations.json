@@ -11441,6 +11441,14 @@
         "aliases": ["DD_TRACE_INTEGRATION_TWILIO_SDK_ENABLED", "DD_INTEGRATION_TWILIO_SDK_ENABLED"]
       }
     ],
+    "DD_TRACE_TYRUS_WEBSOCKET_ENABLED": [
+      {
+        "version": "A",
+        "type": "boolean",
+        "default": "true",
+        "aliases": ["DD_TRACE_INTEGRATION_TYRUS_WEBSOCKET_ENABLED", "DD_INTEGRATION_TYRUS_WEBSOCKET_ENABLED"]
+      }
+    ],
     "DD_TRACE_UNDERTOW_2_0_ENABLED": [
       {
         "version": "A",
