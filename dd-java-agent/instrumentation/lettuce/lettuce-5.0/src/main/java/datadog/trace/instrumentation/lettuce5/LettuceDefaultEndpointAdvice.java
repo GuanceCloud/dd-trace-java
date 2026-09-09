@@ -30,7 +30,11 @@ public class LettuceDefaultEndpointAdvice {
     if (socketAddress instanceof InetSocketAddress) {
       InetSocketAddress inetSocketAddress = (InetSocketAddress) socketAddress;
       final String hostName = inetSocketAddress.getHostString();
-      if (hostName != null) {
+      // A deferred write can run after the command advice has already applied the seed host.
+      // Keep that name when configured-host naming is enabled; retain socket fallback otherwise.
+      if (hostName != null
+          && (!Config.get().isPeerHostnameFromConfigEnabled()
+              || span.getTag(Tags.PEER_HOSTNAME) == null)) {
         span.setTag(Tags.PEER_HOSTNAME, hostName);
         if (Config.get().isDbClientSplitByHost()) {
           span.setServiceName(hostName, DB_CLIENT_SPLIT_BY_HOST);

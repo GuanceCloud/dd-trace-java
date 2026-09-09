@@ -16,6 +16,7 @@ addTestSuiteForDir('lettuce51Test', 'test')
 addTestSuiteForDir('lettuce60Test', 'test')
 addTestSuiteForDir('lettuce61Test', 'test')
 addTestSuiteForDir('lettuce62Test', 'test')
+addTestSuiteExtendingForDir('lettuce62ForkedTest', 'lettuce62Test', 'test')
 
 dependencies {
   compileOnly group: 'io.lettuce', name: 'lettuce-core', version: '5.0.0.RELEASE'
