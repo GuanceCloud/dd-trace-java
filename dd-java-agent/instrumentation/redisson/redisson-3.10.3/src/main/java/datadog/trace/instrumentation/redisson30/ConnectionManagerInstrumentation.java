@@ -3,9 +3,7 @@ package datadog.trace.instrumentation.redisson30;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
 import static java.util.Collections.singletonMap;
 import static net.bytebuddy.matcher.ElementMatchers.isMethod;
-import static net.bytebuddy.matcher.ElementMatchers.isStatic;
 import static net.bytebuddy.matcher.ElementMatchers.returns;
-import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
 
 import com.google.auto.service.AutoService;
 import datadog.trace.agent.tooling.Instrumenter;
@@ -16,19 +14,18 @@ import java.util.Map;
 import net.bytebuddy.asm.Advice;
 import org.redisson.api.RTransaction;
 import org.redisson.client.RedisClient;
-import org.redisson.client.RedisClientConfig;
 
 @AutoService(InstrumenterModule.class)
-public final class RedisClientInstrumentation extends InstrumenterModule.Tracing
+public final class ConnectionManagerInstrumentation extends InstrumenterModule.Tracing
     implements Instrumenter.ForSingleType, Instrumenter.HasMethodAdvice {
 
-  public RedisClientInstrumentation() {
+  public ConnectionManagerInstrumentation() {
     super("redisson", "redis");
   }
 
   @Override
   public String instrumentedType() {
-    return "org.redisson.client.RedisClient";
+    return "org.redisson.connection.MasterSlaveConnectionManager";
   }
 
   @Override
@@ -38,31 +35,28 @@ public final class RedisClientInstrumentation extends InstrumenterModule.Tracing
 
   @Override
   public String[] helperClassNames() {
-    return new String[] {packageName + ".RedisClientHostParser"};
+    return new String[] {
+      packageName + ".RedisClientHostParser", packageName + ".ConnectionManagerHost"
+    };
   }
 
   @Override
   public void methodAdvice(MethodTransformer transformer) {
     transformer.applyAdvice(
         isMethod()
-            .and(isStatic())
-            .and(named("create"))
-            .and(takesArgument(0, named("org.redisson.client.RedisClientConfig")))
+            .and(named("createClient"))
             .and(returns(named("org.redisson.client.RedisClient"))),
-        RedisClientInstrumentation.class.getName() + "$CreateAdvice");
+        ConnectionManagerInstrumentation.class.getName() + "$CreateClientAdvice");
   }
 
-  public static class CreateAdvice {
+  public static class CreateClientAdvice {
     @Advice.OnMethodExit(suppress = Throwable.class)
-    public static void after(
-        @Advice.Argument(0) final RedisClientConfig config,
-        @Advice.Return final RedisClient client) {
-      if (!Config.get().isPeerHostnameFromConfigEnabled() || client == null || config == null) {
-        return;
-      }
-      String host = RedisClientHostParser.hostFromConfig(config);
-      if (host != null) {
-        InstrumentationContext.get(RedisClient.class, String.class).put(client, host);
+    public static void after(@Advice.This Object manager, @Advice.Return RedisClient client) {
+      if (Config.get().isPeerHostnameFromConfigEnabled() && client != null) {
+        String host = ConnectionManagerHost.getHost(manager);
+        if (host != null && !host.isEmpty()) {
+          InstrumentationContext.get(RedisClient.class, String.class).put(client, host);
+        }
       }
     }
 

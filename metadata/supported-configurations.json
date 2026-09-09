@@ -8105,6 +8105,14 @@
         "aliases": ["DD_TRACE_INTEGRATION_LETTUCE_5_ASYNC_ENABLED", "DD_INTEGRATION_LETTUCE_5_ASYNC_ENABLED"]
       }
     ],
+    "DD_TRACE_LETTUCE_5_CLUSTER_ENABLED": [
+      {
+        "version": "A",
+        "type": "boolean",
+        "default": "true",
+        "aliases": ["DD_TRACE_INTEGRATION_LETTUCE_5_CLUSTER_ENABLED", "DD_INTEGRATION_LETTUCE_5_CLUSTER_ENABLED"]
+      }
+    ],
     "DD_TRACE_LETTUCE_5_ENABLED": [
       {
         "version": "A",

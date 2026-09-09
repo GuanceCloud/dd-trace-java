@@ -11,6 +11,10 @@ muzzle {
 
 apply from: "$rootDir/gradle/java.gradle"
 
+addTestSuiteForDir('redisson311Test', 'test')
+addTestSuiteExtendingForDir('redisson311ForkedTest', 'redisson311Test', 'test')
+addTestSuiteForDir('redisson327Test', 'test')
+addTestSuiteExtendingForDir('redisson327ForkedTest', 'redisson327Test', 'test')
 addTestSuiteForDir('latestDepTest', 'test')
 addTestSuiteExtendingForDir('latestDepForkedTest', 'latestDepTest', 'test')
 
@@ -24,6 +28,8 @@ dependencies {
   testImplementation group: 'org.redisson', name: 'redisson', version: '3.10.3', {
     exclude group: 'org.slf4j', module: 'slf4j-api'
   }
+  redisson311TestImplementation 'org.redisson:redisson:3.11.6'
+  redisson327TestImplementation 'org.redisson:redisson:3.27.2'
   latestDepTestImplementation group: 'org.redisson', name: 'redisson', version: '3.+', {
     exclude group: 'org.slf4j', module: 'slf4j-api'
   }

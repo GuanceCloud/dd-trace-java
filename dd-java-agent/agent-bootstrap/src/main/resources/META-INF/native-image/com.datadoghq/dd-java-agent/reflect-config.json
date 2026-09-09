@@ -206,5 +206,44 @@
     "fields": [
       {"name": "consumerIndex", "allowUnsafeAccess": true}
     ]
+  },
+  {
+    "name" : "org.redisson.client.RedisClientConfig",
+    "methods": [
+      {"name": "getAddress", "parameterTypes": []}
+    ]
+  },
+  {
+    "name" : "org.redisson.misc.RedisURI",
+    "methods": [
+      {"name": "getHost", "parameterTypes": []}
+    ]
+  },
+  {
+    "name" : "org.redisson.connection.MasterSlaveConnectionManager",
+    "methods": [
+      {"name": "getCfg", "parameterTypes": []},
+      {"name": "getServiceManager", "parameterTypes": []}
+    ]
+  },
+  {
+    "name" : "org.redisson.connection.ServiceManager",
+    "methods": [
+      {"name": "getCfg", "parameterTypes": []}
+    ]
+  },
+  {
+    "name" : "org.redisson.config.Config",
+    "methods": [
+      {"name": "getClusterServersConfig", "parameterTypes": []},
+      {"name": "getReplicatedServersConfig", "parameterTypes": []},
+      {"name": "getSentinelServersConfig", "parameterTypes": []}
+    ]
+  },
+  {
+    "name" : "io.lettuce.core.protocol.DefaultEndpoint",
+    "fields": [
+      {"name": "channel"}
+    ]
   }
 ]

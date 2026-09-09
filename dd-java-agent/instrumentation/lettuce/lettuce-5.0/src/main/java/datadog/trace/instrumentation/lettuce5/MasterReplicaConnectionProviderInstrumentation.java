@@ -57,6 +57,7 @@ public class MasterReplicaConnectionProviderInstrumentation extends Instrumenter
   public String[] helperClassNames() {
     return new String[] {
       packageName + ".LettuceClientDecorator",
+      packageName + ".LettuceConnectionInfo",
       packageName + ".MasterReplicaConnectionHelper",
       packageName + ".LettuceInstrumentationUtil"
     };
