@@ -167,6 +167,7 @@ public class HttpServerRequestTracingHandler extends ChannelInboundHandlerAdapte
       span.finish();
     }
   }
+
   private static void publishSpanOnChannelClose(final Context storedContext) {
     final AgentSpan span = AgentSpan.fromContext(storedContext);
     if (span != null && span.phasedFinish()) {
