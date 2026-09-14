@@ -10,7 +10,6 @@ import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.api.UTF8BytesString;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpResponse;
-import java.util.concurrent.TimeUnit;
 
 public final class NettyClientResponseStream {
   public static final CharSequence NETTY_CLIENT_STREAM =
@@ -19,27 +18,27 @@ public final class NettyClientResponseStream {
   private static final CharSequence SSE = UTF8BytesString.create("sse");
 
   private final AgentSpan span;
-  private final long startTimeNano;
+  private final Long requestStartNanos;
   private long chunkCount;
   private boolean firstChunkSeen;
   private boolean finished;
 
-  private NettyClientResponseStream(final AgentSpan parentSpan) {
+  private NettyClientResponseStream(final AgentSpan parentSpan, final Long requestStartNanos) {
     this.span = startSpan(NETTY_CLIENT.toString(), NETTY_CLIENT_STREAM);
     this.span.setResourceName("SSE stream " + parentSpan.getResourceName());
     this.span.setTag(COMPONENT, NETTY_CLIENT);
     this.span.setTag(SPAN_KIND, SPAN_KIND_INTERNAL);
     this.span.setTag("stream.type", SSE);
-    this.startTimeNano = System.nanoTime();
+    this.requestStartNanos = requestStartNanos;
   }
 
   public static NettyClientResponseStream startIfSse(
-      final AgentSpan parentSpan, final HttpResponse response) {
+      final AgentSpan parentSpan, final HttpResponse response, final Long requestStartNanos) {
     final String contentType = response.headers().get(HttpHeaderNames.CONTENT_TYPE);
     if (contentType == null || !isEventStream(contentType)) {
       return null;
     }
-    return new NettyClientResponseStream(parentSpan);
+    return new NettyClientResponseStream(parentSpan, requestStartNanos);
   }
 
   public void onChunk() {
@@ -49,9 +48,11 @@ public final class NettyClientResponseStream {
     chunkCount++;
     if (!firstChunkSeen) {
       firstChunkSeen = true;
-      span.setMetric(
-          "stream.first_chunk.ms",
-          TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTimeNano));
+      // Both timestamps use the monotonic clock; span start timestamps use a different clock.
+      if (requestStartNanos != null) {
+        span.setMetric(
+            "stream.first_chunk.ms", (System.nanoTime() - requestStartNanos) / 1_000_000.0);
+      }
     }
   }
 

@@ -1,7 +1,6 @@
 package datadog.trace.instrumentation.netty41.server;
 
 import static datadog.trace.instrumentation.netty41.AttributeKeys.CONTEXT_ATTRIBUTE_KEY;
-import static datadog.trace.instrumentation.netty41.AttributeKeys.REQUEST_METHOD_ATTRIBUTE_KEY;
 import static datadog.trace.instrumentation.netty41.AttributeKeys.REQUEST_URI_ATTRIBUTE_KEY;
 import static datadog.trace.instrumentation.netty41.AttributeKeys.RESPONSE_BODY_BUFFER_ATTRIBUTE_KEY;
 import static datadog.trace.instrumentation.netty41.AttributeKeys.RESPONSE_BODY_ENCODING_ATTRIBUTE_KEY;

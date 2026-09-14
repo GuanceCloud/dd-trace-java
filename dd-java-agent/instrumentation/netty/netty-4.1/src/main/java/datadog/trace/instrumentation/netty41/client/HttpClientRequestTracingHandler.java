@@ -4,6 +4,7 @@ import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSp
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activeSpan;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.startSpan;
 import static datadog.trace.instrumentation.netty41.AttributeKeys.CLIENT_PARENT_ATTRIBUTE_KEY;
+import static datadog.trace.instrumentation.netty41.AttributeKeys.CLIENT_REQUEST_START_NANOS_ATTRIBUTE_KEY;
 import static datadog.trace.instrumentation.netty41.AttributeKeys.CONNECT_PARENT_CONTINUATION_ATTRIBUTE_KEY;
 import static datadog.trace.instrumentation.netty41.AttributeKeys.CONTEXT_ATTRIBUTE_KEY;
 import static datadog.trace.instrumentation.netty41.client.NettyHttpClientDecorator.DECORATE;
@@ -78,6 +79,7 @@ public class HttpClientRequestTracingHandler extends ChannelOutboundHandlerAdapt
     boolean isSecure = SSL_HANDLER != null && ctx.pipeline().get(SSL_HANDLER) != null;
     NettyHttpClientDecorator decorate = isSecure ? DECORATE_SECURE : DECORATE;
 
+    final long requestStartNanos = System.nanoTime();
     final AgentSpan span = startSpan(NETTY_CLIENT.toString(), NETTY_CLIENT_REQUEST);
     final Context context = Context.current().with(span);
     try (final ContextScope scope = activateSpan(span)) {
@@ -95,10 +97,12 @@ public class HttpClientRequestTracingHandler extends ChannelOutboundHandlerAdapt
       }
 
       ctx.channel().attr(CONTEXT_ATTRIBUTE_KEY).set(context);
+      ctx.channel().attr(CLIENT_REQUEST_START_NANOS_ATTRIBUTE_KEY).set(requestStartNanos);
 
       try {
         ctx.write(msg, prm);
       } catch (final Throwable throwable) {
+        ctx.channel().attr(CLIENT_REQUEST_START_NANOS_ATTRIBUTE_KEY).set(null);
         decorate.onError(span, throwable);
         decorate.beforeFinish(span);
         span.finish();

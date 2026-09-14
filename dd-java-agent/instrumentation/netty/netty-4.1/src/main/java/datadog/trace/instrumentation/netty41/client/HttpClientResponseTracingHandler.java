@@ -4,6 +4,7 @@ import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSp
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.noopSpan;
 import static datadog.trace.bootstrap.instrumentation.api.Java8BytecodeBridge.spanFromContext;
 import static datadog.trace.instrumentation.netty41.AttributeKeys.CLIENT_PARENT_ATTRIBUTE_KEY;
+import static datadog.trace.instrumentation.netty41.AttributeKeys.CLIENT_REQUEST_START_NANOS_ATTRIBUTE_KEY;
 import static datadog.trace.instrumentation.netty41.AttributeKeys.CLIENT_RESPONSE_STREAM_ATTRIBUTE_KEY;
 import static datadog.trace.instrumentation.netty41.AttributeKeys.CONTEXT_ATTRIBUTE_KEY;
 import static datadog.trace.instrumentation.netty41.client.NettyHttpClientDecorator.DECORATE;
@@ -43,15 +44,19 @@ public class HttpClientResponseTracingHandler extends ChannelInboundHandlerAdapt
     if (span != null) {
       final boolean finishSpan =
           msg instanceof HttpResponse
+              && (((HttpResponse) msg).status().code() >= 200
+                  || ((HttpResponse) msg).status().code() == 101)
               && (!HttpResponseStatus.SWITCHING_PROTOCOLS.equals(((HttpResponse) msg).status())
                   || "websocket"
                       .equals(((HttpResponse) msg).headers().get(HttpHeaderNames.UPGRADE)));
       if (finishSpan) {
         try (final AgentScope scope = activateSpan(span)) {
           final HttpResponse response = (HttpResponse) msg;
+          final Long requestStartNanos =
+              ctx.channel().attr(CLIENT_REQUEST_START_NANOS_ATTRIBUTE_KEY).getAndSet(null);
           DECORATE.onResponse(span, response);
           final NettyClientResponseStream stream =
-              NettyClientResponseStream.startIfSse(span, response);
+              NettyClientResponseStream.startIfSse(span, response, requestStartNanos);
           if (stream != null) {
             ctx.channel().attr(CLIENT_RESPONSE_STREAM_ATTRIBUTE_KEY).set(stream);
           }
@@ -77,6 +82,7 @@ public class HttpClientResponseTracingHandler extends ChannelInboundHandlerAdapt
 
   @Override
   public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+    ctx.channel().attr(CLIENT_REQUEST_START_NANOS_ATTRIBUTE_KEY).set(null);
     final Attribute<AgentSpan> parentAttr = ctx.channel().attr(CLIENT_PARENT_ATTRIBUTE_KEY);
     parentAttr.setIfAbsent(noopSpan());
     final AgentSpan parent = parentAttr.get();
@@ -106,6 +112,7 @@ public class HttpClientResponseTracingHandler extends ChannelInboundHandlerAdapt
 
   @Override
   public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+    ctx.channel().attr(CLIENT_REQUEST_START_NANOS_ATTRIBUTE_KEY).set(null);
     final Attribute<AgentSpan> parentAttr = ctx.channel().attr(CLIENT_PARENT_ATTRIBUTE_KEY);
     parentAttr.setIfAbsent(noopSpan());
     final AgentSpan parent = parentAttr.get();
@@ -135,7 +142,7 @@ public class HttpClientResponseTracingHandler extends ChannelInboundHandlerAdapt
     if (stream == null) {
       return;
     }
-    if (msg instanceof HttpContent) {
+    if (msg instanceof HttpContent && ((HttpContent) msg).content().isReadable()) {
       stream.onChunk();
     }
     if (msg instanceof LastHttpContent) {

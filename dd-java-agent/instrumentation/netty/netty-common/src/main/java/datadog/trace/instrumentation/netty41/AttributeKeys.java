@@ -33,6 +33,9 @@ public final class AttributeKeys {
   public static final AttributeKey<Object> CLIENT_RESPONSE_STREAM_ATTRIBUTE_KEY =
       attributeKey("datadog.client.response.stream");
 
+  public static final AttributeKey<Long> CLIENT_REQUEST_START_NANOS_ATTRIBUTE_KEY =
+      attributeKey("datadog.client.request.start-nanos");
+
   public static final AttributeKey<Context> PARENT_CONTEXT_ATTRIBUTE_KEY =
       attributeKey("datadog.server.parent-context");
 
