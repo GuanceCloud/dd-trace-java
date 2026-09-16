@@ -1,0 +1,1 @@
+{"data":{"items":[{"time":1789537946454,"请求耗时 P95":0.089229879}],"page_info":{"has_more":false},"sample":1,"sampling_required":false},"data_state":"present","meta":{"path":"/api/v1/data/query","tool":"owl.data.query","trace_id":"6aaa3568000000004f812c1ad8cf106e","upstream_path":"/api/v1/df/query_data_v1"},"success":true}

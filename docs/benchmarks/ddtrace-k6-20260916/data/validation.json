@@ -1,0 +1,19 @@
+{
+  "matrix_windows": 45,
+  "matrix_expected_windows": 45,
+  "coverage_complete": true,
+  "stable_business_windows": 30,
+  "stable_business_all_pass": true,
+  "k6_remote_write_every_window": true,
+  "owl_testids_expected": 45,
+  "owl_testids_observed": 45,
+  "owl_testids_missing": [],
+  "owl_testids_extra": [],
+  "trace_mode_received_at_100_300": true,
+  "profile_mode_received_every_window": true,
+  "metrics_mode_received_every_window": true,
+  "all_mode_stable_queue_complete": true,
+  "all_mode_500_queue_drop_reproduced": true,
+  "negative_process_cpu_samples": 0,
+  "generated_at": "2026-09-16T14:23:50.764483+08:00"
+}

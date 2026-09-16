@@ -1,0 +1,1017 @@
+{
+  "title": "ddtrace K6 压测回溯",
+  "dashboardType": "CUSTOM",
+  "dashboardExtend": {
+    "groupUnfoldStatus": {
+      "概览": true,
+      "趋势": true
+    }
+  },
+  "dashboardMapping": [],
+  "dashboardOwnerType": "node",
+  "iconSet": {
+    "url": "",
+    "icon": ""
+  },
+  "dashboardBindSet": [],
+  "thumbnail": "",
+  "tagInfo": [
+    {
+      "name": "K6"
+    },
+    {
+      "name": "APM压测"
+    }
+  ],
+  "summary": "按 benchmark_id 和 testid 回溯 ddtrace K6 压测请求、失败率与延迟。",
+  "main": {
+    "vars": [
+      {
+        "name": "压测批次",
+        "seq": 0,
+        "datasource": "dataflux",
+        "code": "benchmark_id",
+        "type": "QUERY",
+        "definition": {
+          "tag": "",
+          "field": "",
+          "metric": "",
+          "object": "",
+          "value": "show_tag_value(from=['k6'],keyin=['benchmark_id'])[7d]",
+          "defaultVal": {
+            "label": "ddtrace-20260916",
+            "value": "ddtrace-20260916"
+          }
+        },
+        "valueSort": "default",
+        "hide": 0,
+        "isHiddenAsterisk": 1,
+        "multiple": false,
+        "includeStar": false,
+        "extend": {}
+      },
+      {
+        "name": "测试窗口",
+        "seq": 1,
+        "datasource": "dataflux",
+        "code": "testid",
+        "type": "QUERY",
+        "definition": {
+          "tag": "",
+          "field": "",
+          "metric": "",
+          "object": "",
+          "value": "show_tag_value(from=['k6'],keyin=['testid'])[7d]",
+          "defaultVal": {
+            "label": "all-normal-r300-rep3",
+            "value": "all-normal-r300-rep3"
+          }
+        },
+        "valueSort": "default",
+        "hide": 0,
+        "isHiddenAsterisk": 1,
+        "multiple": false,
+        "includeStar": false,
+        "extend": {}
+      }
+    ],
+    "charts": [
+      {
+        "extend": {
+          "settings": {
+            "alias": [],
+            "units": [
+              {
+                "key": "请求总数",
+                "name": "请求总数",
+                "unit": "",
+                "units": [
+                  "custom",
+                  ""
+                ]
+              }
+            ],
+            "colors": [
+              {
+                "key": "请求总数",
+                "name": "请求总数",
+                "color": "#2563EB"
+              }
+            ],
+            "levels": [],
+            "density": "medium",
+            "showTitle": true,
+            "titleDesc": "当前 testid 的累计 HTTP 请求数",
+            "showLegend": false,
+            "legendPostion": "bottom",
+            "currentChartType": "singlestat",
+            "chartType": "",
+            "showFieldMapping": false,
+            "scientificNotation": true,
+            "valueColor": "#2563EB",
+            "bgColor": "#2563EB18",
+            "borderColor": "#E5E7EB"
+          },
+          "fixedTime": "",
+          "isRefresh": true,
+          "globalUnit": [],
+          "isSampling": true,
+          "timeInterval": "auto",
+          "isCombineChart": false,
+          "isTimeInterval": false,
+          "changeWorkspace": false,
+          "scientificNotation": true,
+          "enablePreflightEstimate": false
+        },
+        "group": {
+          "name": "概览"
+        },
+        "chartGroupUUID": "group_overview_ed230f8a8ae8",
+        "name": "请求总数",
+        "pos": {
+          "h": 6,
+          "w": 6,
+          "x": 0,
+          "y": 0
+        },
+        "type": "singlestat",
+        "queries": [
+          {
+            "name": "请求总数",
+            "type": "sequence",
+            "unit": "",
+            "color": "",
+            "qtype": "dql",
+            "queryGroup": "A",
+            "query": {
+              "q": "M::`k6`:(LAST(`k6_http_reqs_total`) AS `请求总数`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
+              "code": "A",
+              "fill": null,
+              "type": "simple",
+              "alias": "请求总数",
+              "field": "k6_http_reqs_total",
+              "filters": [
+                {
+                  "id": "filter_fe53c9e74cd1",
+                  "op": "=",
+                  "name": "benchmark_id",
+                  "type": "",
+                  "logic": "and",
+                  "value": "#{benchmark_id}"
+                },
+                {
+                  "id": "filter_cf29e24d22f9",
+                  "op": "=",
+                  "name": "testid",
+                  "type": "",
+                  "logic": "and",
+                  "value": "#{testid}"
+                }
+              ],
+              "groupBy": [],
+              "funcList": [],
+              "fieldFunc": "last",
+              "fieldType": "float",
+              "namespace": "metric",
+              "dataSource": "k6",
+              "queryFuncs": [],
+              "groupByTime": ""
+            },
+            "datasource": "dataflux"
+          }
+        ],
+        "prevGroupName": null,
+        "uuid": "chart_09f9133dcd38"
+      },
+      {
+        "extend": {
+          "settings": {
+            "alias": [],
+            "units": [
+              {
+                "key": "请求失败率",
+                "name": "请求失败率",
+                "unit": "ratio",
+                "units": [
+                  "custom",
+                  "ratio"
+                ]
+              }
+            ],
+            "colors": [
+              {
+                "key": "请求失败率",
+                "name": "请求失败率",
+                "color": "#EF4444"
+              }
+            ],
+            "levels": [],
+            "density": "medium",
+            "showTitle": true,
+            "titleDesc": "0–1 比例；500 RPS 可按 error_code 继续下钻",
+            "showLegend": false,
+            "legendPostion": "bottom",
+            "currentChartType": "singlestat",
+            "chartType": "",
+            "showFieldMapping": false,
+            "scientificNotation": true,
+            "valueColor": "#EF4444",
+            "bgColor": "#EF444418",
+            "borderColor": "#E5E7EB"
+          },
+          "fixedTime": "",
+          "isRefresh": true,
+          "globalUnit": [],
+          "isSampling": true,
+          "timeInterval": "auto",
+          "isCombineChart": false,
+          "isTimeInterval": false,
+          "changeWorkspace": false,
+          "scientificNotation": true,
+          "enablePreflightEstimate": false
+        },
+        "group": {
+          "name": "概览"
+        },
+        "chartGroupUUID": "group_overview_ed230f8a8ae8",
+        "name": "请求失败率",
+        "pos": {
+          "h": 6,
+          "w": 6,
+          "x": 6,
+          "y": 0
+        },
+        "type": "singlestat",
+        "queries": [
+          {
+            "name": "请求失败率",
+            "type": "sequence",
+            "unit": "",
+            "color": "",
+            "qtype": "dql",
+            "queryGroup": "A",
+            "query": {
+              "q": "M::`k6`:(LAST(`k6_http_req_failed_rate`) AS `请求失败率`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
+              "code": "A",
+              "fill": null,
+              "type": "simple",
+              "alias": "请求失败率",
+              "field": "k6_http_req_failed_rate",
+              "filters": [
+                {
+                  "id": "filter_20d65a54604a",
+                  "op": "=",
+                  "name": "benchmark_id",
+                  "type": "",
+                  "logic": "and",
+                  "value": "#{benchmark_id}"
+                },
+                {
+                  "id": "filter_bc2d124e95ea",
+                  "op": "=",
+                  "name": "testid",
+                  "type": "",
+                  "logic": "and",
+                  "value": "#{testid}"
+                }
+              ],
+              "groupBy": [],
+              "funcList": [],
+              "fieldFunc": "last",
+              "fieldType": "float",
+              "namespace": "metric",
+              "dataSource": "k6",
+              "queryFuncs": [],
+              "groupByTime": ""
+            },
+            "datasource": "dataflux"
+          }
+        ],
+        "prevGroupName": null,
+        "uuid": "chart_1eda4f857326"
+      },
+      {
+        "extend": {
+          "settings": {
+            "alias": [],
+            "units": [
+              {
+                "key": "请求耗时 P95",
+                "name": "请求耗时 P95",
+                "unit": "s",
+                "units": [
+                  "time",
+                  "s"
+                ]
+              }
+            ],
+            "colors": [
+              {
+                "key": "请求耗时 P95",
+                "name": "请求耗时 P95",
+                "color": "#7C3AED"
+              }
+            ],
+            "levels": [],
+            "density": "medium",
+            "showTitle": true,
+            "titleDesc": "K6 Prometheus Remote Write 的 P95，单位秒",
+            "showLegend": false,
+            "legendPostion": "bottom",
+            "currentChartType": "singlestat",
+            "chartType": "",
+            "showFieldMapping": false,
+            "scientificNotation": true,
+            "valueColor": "#7C3AED",
+            "bgColor": "#7C3AED18",
+            "borderColor": "#E5E7EB"
+          },
+          "fixedTime": "",
+          "isRefresh": true,
+          "globalUnit": [],
+          "isSampling": true,
+          "timeInterval": "auto",
+          "isCombineChart": false,
+          "isTimeInterval": false,
+          "changeWorkspace": false,
+          "scientificNotation": true,
+          "enablePreflightEstimate": false
+        },
+        "group": {
+          "name": "概览"
+        },
+        "chartGroupUUID": "group_overview_ed230f8a8ae8",
+        "name": "请求耗时 P95",
+        "pos": {
+          "h": 6,
+          "w": 6,
+          "x": 12,
+          "y": 0
+        },
+        "type": "singlestat",
+        "queries": [
+          {
+            "name": "请求耗时 P95",
+            "type": "sequence",
+            "unit": "",
+            "color": "",
+            "qtype": "dql",
+            "queryGroup": "A",
+            "query": {
+              "q": "M::`k6`:(LAST(`k6_http_req_duration_p95`) AS `请求耗时 P95`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
+              "code": "A",
+              "fill": null,
+              "type": "simple",
+              "alias": "请求耗时 P95",
+              "field": "k6_http_req_duration_p95",
+              "filters": [
+                {
+                  "id": "filter_595d41268e18",
+                  "op": "=",
+                  "name": "benchmark_id",
+                  "type": "",
+                  "logic": "and",
+                  "value": "#{benchmark_id}"
+                },
+                {
+                  "id": "filter_da201e413ee7",
+                  "op": "=",
+                  "name": "testid",
+                  "type": "",
+                  "logic": "and",
+                  "value": "#{testid}"
+                }
+              ],
+              "groupBy": [],
+              "funcList": [],
+              "fieldFunc": "last",
+              "fieldType": "float",
+              "namespace": "metric",
+              "dataSource": "k6",
+              "queryFuncs": [],
+              "groupByTime": ""
+            },
+            "datasource": "dataflux"
+          }
+        ],
+        "prevGroupName": null,
+        "uuid": "chart_b0374b8bd05c"
+      },
+      {
+        "extend": {
+          "settings": {
+            "alias": [],
+            "units": [
+              {
+                "key": "最大 VU",
+                "name": "最大 VU",
+                "unit": "",
+                "units": [
+                  "custom",
+                  ""
+                ]
+              }
+            ],
+            "colors": [
+              {
+                "key": "最大 VU",
+                "name": "最大 VU",
+                "color": "#0D9488"
+              }
+            ],
+            "levels": [],
+            "density": "medium",
+            "showTitle": true,
+            "titleDesc": "本窗口 K6 VU 上限",
+            "showLegend": false,
+            "legendPostion": "bottom",
+            "currentChartType": "singlestat",
+            "chartType": "",
+            "showFieldMapping": false,
+            "scientificNotation": true,
+            "valueColor": "#0D9488",
+            "bgColor": "#0D948818",
+            "borderColor": "#E5E7EB"
+          },
+          "fixedTime": "",
+          "isRefresh": true,
+          "globalUnit": [],
+          "isSampling": true,
+          "timeInterval": "auto",
+          "isCombineChart": false,
+          "isTimeInterval": false,
+          "changeWorkspace": false,
+          "scientificNotation": true,
+          "enablePreflightEstimate": false
+        },
+        "group": {
+          "name": "概览"
+        },
+        "chartGroupUUID": "group_overview_ed230f8a8ae8",
+        "name": "最大 VU",
+        "pos": {
+          "h": 6,
+          "w": 6,
+          "x": 18,
+          "y": 0
+        },
+        "type": "singlestat",
+        "queries": [
+          {
+            "name": "最大 VU",
+            "type": "sequence",
+            "unit": "",
+            "color": "",
+            "qtype": "dql",
+            "queryGroup": "A",
+            "query": {
+              "q": "M::`k6`:(LAST(`k6_vus_max`) AS `最大 VU`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
+              "code": "A",
+              "fill": null,
+              "type": "simple",
+              "alias": "最大 VU",
+              "field": "k6_vus_max",
+              "filters": [
+                {
+                  "id": "filter_824da2cf25ff",
+                  "op": "=",
+                  "name": "benchmark_id",
+                  "type": "",
+                  "logic": "and",
+                  "value": "#{benchmark_id}"
+                },
+                {
+                  "id": "filter_086252b24515",
+                  "op": "=",
+                  "name": "testid",
+                  "type": "",
+                  "logic": "and",
+                  "value": "#{testid}"
+                }
+              ],
+              "groupBy": [],
+              "funcList": [],
+              "fieldFunc": "last",
+              "fieldType": "float",
+              "namespace": "metric",
+              "dataSource": "k6",
+              "queryFuncs": [],
+              "groupByTime": ""
+            },
+            "datasource": "dataflux"
+          }
+        ],
+        "prevGroupName": null,
+        "uuid": "chart_9c4419962f2b"
+      },
+      {
+        "extend": {
+          "settings": {
+            "alias": [],
+            "units": [
+              {
+                "key": "累计请求数",
+                "name": "累计请求数",
+                "unit": "",
+                "units": [
+                  "custom",
+                  ""
+                ]
+              }
+            ],
+            "colors": [],
+            "levels": [],
+            "density": "medium",
+            "showTitle": true,
+            "titleDesc": "按所选 testid 回放累计请求数",
+            "showLegend": true,
+            "legendPostion": "bottom",
+            "currentChartType": "area",
+            "chartType": "areaLine",
+            "showFieldMapping": false,
+            "scientificNotation": true
+          },
+          "fixedTime": "",
+          "isRefresh": true,
+          "globalUnit": [],
+          "isSampling": true,
+          "timeInterval": "auto",
+          "isCombineChart": false,
+          "isTimeInterval": true,
+          "changeWorkspace": false,
+          "scientificNotation": true,
+          "enablePreflightEstimate": false
+        },
+        "group": {
+          "name": "趋势"
+        },
+        "chartGroupUUID": "group_trend_46456835a9d0",
+        "name": "请求量趋势",
+        "pos": {
+          "h": 10,
+          "w": 12,
+          "x": 0,
+          "y": 0
+        },
+        "type": "sequence",
+        "queries": [
+          {
+            "name": "累计请求数",
+            "type": "sequence",
+            "unit": "",
+            "color": "",
+            "qtype": "dql",
+            "queryGroup": "A",
+            "query": {
+              "q": "M::`k6`:(LAST(`k6_http_reqs_total`) AS `累计请求数`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
+              "code": "A",
+              "fill": null,
+              "type": "simple",
+              "alias": "累计请求数",
+              "field": "k6_http_reqs_total",
+              "filters": [
+                {
+                  "id": "filter_e02a5fe6e4cd",
+                  "op": "=",
+                  "name": "benchmark_id",
+                  "type": "",
+                  "logic": "and",
+                  "value": "#{benchmark_id}"
+                },
+                {
+                  "id": "filter_ba31e6b6c589",
+                  "op": "=",
+                  "name": "testid",
+                  "type": "",
+                  "logic": "and",
+                  "value": "#{testid}"
+                }
+              ],
+              "groupBy": [],
+              "funcList": [],
+              "fieldFunc": "last",
+              "fieldType": "float",
+              "namespace": "metric",
+              "dataSource": "k6",
+              "queryFuncs": [],
+              "groupByTime": ""
+            },
+            "datasource": "dataflux"
+          }
+        ],
+        "prevGroupName": null,
+        "uuid": "chart_25d715cc7a41"
+      },
+      {
+        "extend": {
+          "settings": {
+            "alias": [],
+            "units": [
+              {
+                "key": "失败率",
+                "name": "失败率",
+                "unit": "ratio",
+                "units": [
+                  "custom",
+                  "ratio"
+                ]
+              }
+            ],
+            "colors": [],
+            "levels": [],
+            "density": "medium",
+            "showTitle": true,
+            "titleDesc": "HTTP 请求失败比例",
+            "showLegend": true,
+            "legendPostion": "bottom",
+            "currentChartType": "area",
+            "chartType": "areaLine",
+            "showFieldMapping": false,
+            "scientificNotation": true
+          },
+          "fixedTime": "",
+          "isRefresh": true,
+          "globalUnit": [],
+          "isSampling": true,
+          "timeInterval": "auto",
+          "isCombineChart": false,
+          "isTimeInterval": true,
+          "changeWorkspace": false,
+          "scientificNotation": true,
+          "enablePreflightEstimate": false
+        },
+        "group": {
+          "name": "趋势"
+        },
+        "chartGroupUUID": "group_trend_46456835a9d0",
+        "name": "失败率趋势",
+        "pos": {
+          "h": 10,
+          "w": 12,
+          "x": 12,
+          "y": 0
+        },
+        "type": "sequence",
+        "queries": [
+          {
+            "name": "失败率",
+            "type": "sequence",
+            "unit": "",
+            "color": "",
+            "qtype": "dql",
+            "queryGroup": "A",
+            "query": {
+              "q": "M::`k6`:(LAST(`k6_http_req_failed_rate`) AS `失败率`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
+              "code": "A",
+              "fill": null,
+              "type": "simple",
+              "alias": "失败率",
+              "field": "k6_http_req_failed_rate",
+              "filters": [
+                {
+                  "id": "filter_ba4796dc00dd",
+                  "op": "=",
+                  "name": "benchmark_id",
+                  "type": "",
+                  "logic": "and",
+                  "value": "#{benchmark_id}"
+                },
+                {
+                  "id": "filter_764cedf32fd3",
+                  "op": "=",
+                  "name": "testid",
+                  "type": "",
+                  "logic": "and",
+                  "value": "#{testid}"
+                }
+              ],
+              "groupBy": [],
+              "funcList": [],
+              "fieldFunc": "last",
+              "fieldType": "float",
+              "namespace": "metric",
+              "dataSource": "k6",
+              "queryFuncs": [],
+              "groupByTime": ""
+            },
+            "datasource": "dataflux"
+          }
+        ],
+        "prevGroupName": null,
+        "uuid": "chart_cf188bfffaf9"
+      },
+      {
+        "extend": {
+          "settings": {
+            "alias": [],
+            "units": [
+              {
+                "key": "平均耗时",
+                "name": "平均耗时",
+                "unit": "s",
+                "units": [
+                  "time",
+                  "s"
+                ]
+              }
+            ],
+            "colors": [],
+            "levels": [],
+            "density": "medium",
+            "showTitle": true,
+            "titleDesc": "K6 平均请求耗时",
+            "showLegend": true,
+            "legendPostion": "bottom",
+            "currentChartType": "area",
+            "chartType": "areaLine",
+            "showFieldMapping": false,
+            "scientificNotation": true
+          },
+          "fixedTime": "",
+          "isRefresh": true,
+          "globalUnit": [],
+          "isSampling": true,
+          "timeInterval": "auto",
+          "isCombineChart": false,
+          "isTimeInterval": true,
+          "changeWorkspace": false,
+          "scientificNotation": true,
+          "enablePreflightEstimate": false
+        },
+        "group": {
+          "name": "趋势"
+        },
+        "chartGroupUUID": "group_trend_46456835a9d0",
+        "name": "平均耗时",
+        "pos": {
+          "h": 10,
+          "w": 8,
+          "x": 0,
+          "y": 10
+        },
+        "type": "sequence",
+        "queries": [
+          {
+            "name": "平均耗时",
+            "type": "sequence",
+            "unit": "",
+            "color": "",
+            "qtype": "dql",
+            "queryGroup": "A",
+            "query": {
+              "q": "M::`k6`:(LAST(`k6_http_req_duration_avg`) AS `平均耗时`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
+              "code": "A",
+              "fill": null,
+              "type": "simple",
+              "alias": "平均耗时",
+              "field": "k6_http_req_duration_avg",
+              "filters": [
+                {
+                  "id": "filter_77986d0363b0",
+                  "op": "=",
+                  "name": "benchmark_id",
+                  "type": "",
+                  "logic": "and",
+                  "value": "#{benchmark_id}"
+                },
+                {
+                  "id": "filter_a1eb2de240cb",
+                  "op": "=",
+                  "name": "testid",
+                  "type": "",
+                  "logic": "and",
+                  "value": "#{testid}"
+                }
+              ],
+              "groupBy": [],
+              "funcList": [],
+              "fieldFunc": "last",
+              "fieldType": "float",
+              "namespace": "metric",
+              "dataSource": "k6",
+              "queryFuncs": [],
+              "groupByTime": ""
+            },
+            "datasource": "dataflux"
+          }
+        ],
+        "prevGroupName": null,
+        "uuid": "chart_b234a61fba40"
+      },
+      {
+        "extend": {
+          "settings": {
+            "alias": [],
+            "units": [
+              {
+                "key": "P95 耗时",
+                "name": "P95 耗时",
+                "unit": "s",
+                "units": [
+                  "time",
+                  "s"
+                ]
+              }
+            ],
+            "colors": [],
+            "levels": [],
+            "density": "medium",
+            "showTitle": true,
+            "titleDesc": "K6 请求耗时 P95",
+            "showLegend": true,
+            "legendPostion": "bottom",
+            "currentChartType": "area",
+            "chartType": "areaLine",
+            "showFieldMapping": false,
+            "scientificNotation": true
+          },
+          "fixedTime": "",
+          "isRefresh": true,
+          "globalUnit": [],
+          "isSampling": true,
+          "timeInterval": "auto",
+          "isCombineChart": false,
+          "isTimeInterval": true,
+          "changeWorkspace": false,
+          "scientificNotation": true,
+          "enablePreflightEstimate": false
+        },
+        "group": {
+          "name": "趋势"
+        },
+        "chartGroupUUID": "group_trend_46456835a9d0",
+        "name": "P95 耗时",
+        "pos": {
+          "h": 10,
+          "w": 8,
+          "x": 8,
+          "y": 10
+        },
+        "type": "sequence",
+        "queries": [
+          {
+            "name": "P95 耗时",
+            "type": "sequence",
+            "unit": "",
+            "color": "",
+            "qtype": "dql",
+            "queryGroup": "A",
+            "query": {
+              "q": "M::`k6`:(LAST(`k6_http_req_duration_p95`) AS `P95 耗时`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
+              "code": "A",
+              "fill": null,
+              "type": "simple",
+              "alias": "P95 耗时",
+              "field": "k6_http_req_duration_p95",
+              "filters": [
+                {
+                  "id": "filter_f937ad7b1677",
+                  "op": "=",
+                  "name": "benchmark_id",
+                  "type": "",
+                  "logic": "and",
+                  "value": "#{benchmark_id}"
+                },
+                {
+                  "id": "filter_35c9b2c40a55",
+                  "op": "=",
+                  "name": "testid",
+                  "type": "",
+                  "logic": "and",
+                  "value": "#{testid}"
+                }
+              ],
+              "groupBy": [],
+              "funcList": [],
+              "fieldFunc": "last",
+              "fieldType": "float",
+              "namespace": "metric",
+              "dataSource": "k6",
+              "queryFuncs": [],
+              "groupByTime": ""
+            },
+            "datasource": "dataflux"
+          }
+        ],
+        "prevGroupName": null,
+        "uuid": "chart_140df8b6f5d0"
+      },
+      {
+        "extend": {
+          "settings": {
+            "alias": [],
+            "units": [
+              {
+                "key": "P99 耗时",
+                "name": "P99 耗时",
+                "unit": "s",
+                "units": [
+                  "time",
+                  "s"
+                ]
+              }
+            ],
+            "colors": [],
+            "levels": [],
+            "density": "medium",
+            "showTitle": true,
+            "titleDesc": "K6 请求耗时 P99",
+            "showLegend": true,
+            "legendPostion": "bottom",
+            "currentChartType": "area",
+            "chartType": "areaLine",
+            "showFieldMapping": false,
+            "scientificNotation": true
+          },
+          "fixedTime": "",
+          "isRefresh": true,
+          "globalUnit": [],
+          "isSampling": true,
+          "timeInterval": "auto",
+          "isCombineChart": false,
+          "isTimeInterval": true,
+          "changeWorkspace": false,
+          "scientificNotation": true,
+          "enablePreflightEstimate": false
+        },
+        "group": {
+          "name": "趋势"
+        },
+        "chartGroupUUID": "group_trend_46456835a9d0",
+        "name": "P99 耗时",
+        "pos": {
+          "h": 10,
+          "w": 8,
+          "x": 16,
+          "y": 10
+        },
+        "type": "sequence",
+        "queries": [
+          {
+            "name": "P99 耗时",
+            "type": "sequence",
+            "unit": "",
+            "color": "",
+            "qtype": "dql",
+            "queryGroup": "A",
+            "query": {
+              "q": "M::`k6`:(LAST(`k6_http_req_duration_p99`) AS `P99 耗时`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
+              "code": "A",
+              "fill": null,
+              "type": "simple",
+              "alias": "P99 耗时",
+              "field": "k6_http_req_duration_p99",
+              "filters": [
+                {
+                  "id": "filter_ed37defd9772",
+                  "op": "=",
+                  "name": "benchmark_id",
+                  "type": "",
+                  "logic": "and",
+                  "value": "#{benchmark_id}"
+                },
+                {
+                  "id": "filter_11c650212e1a",
+                  "op": "=",
+                  "name": "testid",
+                  "type": "",
+                  "logic": "and",
+                  "value": "#{testid}"
+                }
+              ],
+              "groupBy": [],
+              "funcList": [],
+              "fieldFunc": "last",
+              "fieldType": "float",
+              "namespace": "metric",
+              "dataSource": "k6",
+              "queryFuncs": [],
+              "groupByTime": ""
+            },
+            "datasource": "dataflux"
+          }
+        ],
+        "prevGroupName": null,
+        "uuid": "chart_fd6ec2190923"
+      }
+    ],
+    "groups": [
+      {
+        "name": "概览",
+        "uuid": "group_overview_ed230f8a8ae8",
+        "extend": {
+          "isExpanded": true,
+          "bgColor": "#60A5FA"
+        }
+      },
+      {
+        "name": "趋势",
+        "uuid": "group_trend_46456835a9d0",
+        "extend": {
+          "isExpanded": true,
+          "bgColor": "#2DD4BF"
+        }
+      }
+    ]
+  }
+}

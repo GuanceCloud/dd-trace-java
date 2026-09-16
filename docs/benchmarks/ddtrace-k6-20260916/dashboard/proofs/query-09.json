@@ -1,0 +1,1 @@
+{"data":{"items":[{"P99 耗时":0.152560609,"time":1789537946454}],"page_info":{"has_more":false},"sample":1,"sampling_required":false},"data_state":"present","meta":{"path":"/api/v1/data/query","tool":"owl.data.query","trace_id":"6aaa356d00000000e862711e99806188","upstream_path":"/api/v1/df/query_data_v1"},"success":true}
