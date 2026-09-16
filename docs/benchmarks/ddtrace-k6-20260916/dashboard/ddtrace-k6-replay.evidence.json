@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-16T14:19:15.054462+08:00",
+  "generated_at": "2026-09-16T23:40:33.693082+08:00",
   "workspace": {
     "id": "current-owl-workspace"
   },
@@ -90,12 +90,12 @@
         {
           "key": "benchmark_id",
           "observed_values": 1,
-          "representative_value": "ddtrace-20260916"
+          "representative_value": "ddtrace-20260916-10m"
         },
         {
           "key": "testid",
           "observed_values": 45,
-          "representative_value": "all-normal-r300-rep3"
+          "representative_value": "all-long10m-r300-rep3"
         }
       ]
     }
@@ -105,7 +105,7 @@
     {
       "purpose": "dashboard final query",
       "final_dql": "M::`k6`:(LAST(`k6_http_reqs_total`) AS `请求总数`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
-      "proof_dql": "M::`k6`:(LAST(`k6_http_reqs_total`) AS `请求总数`) { `benchmark_id` = 'ddtrace-20260916' AND `testid` = 'all-normal-r300-rep3' } [6h]",
+      "proof_dql": "M::`k6`:(LAST(`k6_http_reqs_total`) AS `请求总数`) { `benchmark_id` = 'ddtrace-20260916-10m' AND `testid` = 'all-long10m-r300-rep3' } [6h]",
       "local_dql_valid": true,
       "owl_dql_valid": true,
       "execution_success": true,
@@ -115,7 +115,7 @@
     {
       "purpose": "dashboard final query",
       "final_dql": "M::`k6`:(LAST(`k6_http_req_failed_rate`) AS `请求失败率`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
-      "proof_dql": "M::`k6`:(LAST(`k6_http_req_failed_rate`) AS `请求失败率`) { `benchmark_id` = 'ddtrace-20260916' AND `testid` = 'all-normal-r300-rep3' } [6h]",
+      "proof_dql": "M::`k6`:(LAST(`k6_http_req_failed_rate`) AS `请求失败率`) { `benchmark_id` = 'ddtrace-20260916-10m' AND `testid` = 'all-long10m-r300-rep3' } [6h]",
       "local_dql_valid": true,
       "owl_dql_valid": true,
       "execution_success": true,
@@ -125,7 +125,7 @@
     {
       "purpose": "dashboard final query",
       "final_dql": "M::`k6`:(LAST(`k6_http_req_duration_p95`) AS `请求耗时 P95`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
-      "proof_dql": "M::`k6`:(LAST(`k6_http_req_duration_p95`) AS `请求耗时 P95`) { `benchmark_id` = 'ddtrace-20260916' AND `testid` = 'all-normal-r300-rep3' } [6h]",
+      "proof_dql": "M::`k6`:(LAST(`k6_http_req_duration_p95`) AS `请求耗时 P95`) { `benchmark_id` = 'ddtrace-20260916-10m' AND `testid` = 'all-long10m-r300-rep3' } [6h]",
       "local_dql_valid": true,
       "owl_dql_valid": true,
       "execution_success": true,
@@ -135,7 +135,7 @@
     {
       "purpose": "dashboard final query",
       "final_dql": "M::`k6`:(LAST(`k6_vus_max`) AS `最大 VU`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
-      "proof_dql": "M::`k6`:(LAST(`k6_vus_max`) AS `最大 VU`) { `benchmark_id` = 'ddtrace-20260916' AND `testid` = 'all-normal-r300-rep3' } [6h]",
+      "proof_dql": "M::`k6`:(LAST(`k6_vus_max`) AS `最大 VU`) { `benchmark_id` = 'ddtrace-20260916-10m' AND `testid` = 'all-long10m-r300-rep3' } [6h]",
       "local_dql_valid": true,
       "owl_dql_valid": true,
       "execution_success": true,
@@ -145,7 +145,7 @@
     {
       "purpose": "dashboard final query",
       "final_dql": "M::`k6`:(LAST(`k6_http_reqs_total`) AS `累计请求数`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
-      "proof_dql": "M::`k6`:(LAST(`k6_http_reqs_total`) AS `累计请求数`) { `benchmark_id` = 'ddtrace-20260916' AND `testid` = 'all-normal-r300-rep3' } [6h]",
+      "proof_dql": "M::`k6`:(LAST(`k6_http_reqs_total`) AS `累计请求数`) { `benchmark_id` = 'ddtrace-20260916-10m' AND `testid` = 'all-long10m-r300-rep3' } [6h]",
       "local_dql_valid": true,
       "owl_dql_valid": true,
       "execution_success": true,
@@ -155,7 +155,7 @@
     {
       "purpose": "dashboard final query",
       "final_dql": "M::`k6`:(LAST(`k6_http_req_failed_rate`) AS `失败率`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
-      "proof_dql": "M::`k6`:(LAST(`k6_http_req_failed_rate`) AS `失败率`) { `benchmark_id` = 'ddtrace-20260916' AND `testid` = 'all-normal-r300-rep3' } [6h]",
+      "proof_dql": "M::`k6`:(LAST(`k6_http_req_failed_rate`) AS `失败率`) { `benchmark_id` = 'ddtrace-20260916-10m' AND `testid` = 'all-long10m-r300-rep3' } [6h]",
       "local_dql_valid": true,
       "owl_dql_valid": true,
       "execution_success": true,
@@ -165,7 +165,7 @@
     {
       "purpose": "dashboard final query",
       "final_dql": "M::`k6`:(LAST(`k6_http_req_duration_avg`) AS `平均耗时`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
-      "proof_dql": "M::`k6`:(LAST(`k6_http_req_duration_avg`) AS `平均耗时`) { `benchmark_id` = 'ddtrace-20260916' AND `testid` = 'all-normal-r300-rep3' } [6h]",
+      "proof_dql": "M::`k6`:(LAST(`k6_http_req_duration_avg`) AS `平均耗时`) { `benchmark_id` = 'ddtrace-20260916-10m' AND `testid` = 'all-long10m-r300-rep3' } [6h]",
       "local_dql_valid": true,
       "owl_dql_valid": true,
       "execution_success": true,
@@ -175,7 +175,7 @@
     {
       "purpose": "dashboard final query",
       "final_dql": "M::`k6`:(LAST(`k6_http_req_duration_p95`) AS `P95 耗时`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
-      "proof_dql": "M::`k6`:(LAST(`k6_http_req_duration_p95`) AS `P95 耗时`) { `benchmark_id` = 'ddtrace-20260916' AND `testid` = 'all-normal-r300-rep3' } [6h]",
+      "proof_dql": "M::`k6`:(LAST(`k6_http_req_duration_p95`) AS `P95 耗时`) { `benchmark_id` = 'ddtrace-20260916-10m' AND `testid` = 'all-long10m-r300-rep3' } [6h]",
       "local_dql_valid": true,
       "owl_dql_valid": true,
       "execution_success": true,
@@ -185,7 +185,7 @@
     {
       "purpose": "dashboard final query",
       "final_dql": "M::`k6`:(LAST(`k6_http_req_duration_p99`) AS `P99 耗时`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
-      "proof_dql": "M::`k6`:(LAST(`k6_http_req_duration_p99`) AS `P99 耗时`) { `benchmark_id` = 'ddtrace-20260916' AND `testid` = 'all-normal-r300-rep3' } [6h]",
+      "proof_dql": "M::`k6`:(LAST(`k6_http_req_duration_p99`) AS `P99 耗时`) { `benchmark_id` = 'ddtrace-20260916-10m' AND `testid` = 'all-long10m-r300-rep3' } [6h]",
       "local_dql_valid": true,
       "owl_dql_valid": true,
       "execution_success": true,
