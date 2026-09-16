@@ -1,0 +1,65 @@
+{
+  "skywalking-normal-r100-rep1": {
+    "trace_count": 4501,
+    "span_count": 247555,
+    "pages": 11,
+    "raw_trace_rows": 5426,
+    "service_id": "Y2FydGJlbmNo.1"
+  },
+  "skywalking-normal-r300-rep1": {
+    "trace_count": 13501,
+    "span_count": 742555,
+    "pages": 28,
+    "raw_trace_rows": 13501,
+    "service_id": "Y2FydGJlbmNo.1"
+  },
+  "skywalking-normal-r500-rep1": {
+    "trace_count": 16758,
+    "span_count": 921690,
+    "pages": 35,
+    "raw_trace_rows": 17259,
+    "service_id": "Y2FydGJlbmNo.1"
+  },
+  "skywalking-normal-r500-rep2": {
+    "trace_count": 16758,
+    "span_count": 921690,
+    "pages": 34,
+    "raw_trace_rows": 16855,
+    "service_id": "Y2FydGJlbmNo.1"
+  },
+  "skywalking-normal-r300-rep2": {
+    "trace_count": 13501,
+    "span_count": 742555,
+    "pages": 29,
+    "raw_trace_rows": 14421,
+    "service_id": "Y2FydGJlbmNo.1"
+  },
+  "skywalking-normal-r100-rep2": {
+    "trace_count": 4500,
+    "span_count": 247500,
+    "pages": 11,
+    "raw_trace_rows": 5453,
+    "service_id": "Y2FydGJlbmNo.1"
+  },
+  "skywalking-normal-r300-rep3": {
+    "trace_count": 13501,
+    "span_count": 742555,
+    "pages": 29,
+    "raw_trace_rows": 14001,
+    "service_id": "Y2FydGJlbmNo.1"
+  },
+  "skywalking-normal-r100-rep3": {
+    "trace_count": 4501,
+    "span_count": 247555,
+    "pages": 11,
+    "raw_trace_rows": 5469,
+    "service_id": "Y2FydGJlbmNo.1"
+  },
+  "skywalking-normal-r500-rep3": {
+    "trace_count": 16757,
+    "span_count": 921635,
+    "pages": 34,
+    "raw_trace_rows": 16790,
+    "service_id": "Y2FydGJlbmNo.1"
+  }
+}

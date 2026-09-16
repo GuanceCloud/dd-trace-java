@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="600" viewBox="0 0 1180 600">
+<style>text{font-family:"Noto Sans CJK SC","Microsoft YaHei",sans-serif;fill:#17324d}.title{font-size:22px;font-weight:700}.sub{font-size:13px;fill:#5b7083}.kpi{font-size:25px;font-weight:700}.label{font-size:13px;font-weight:700}.value{font-size:12px;font-weight:700}.grid{stroke:#dbe4ec;stroke-width:1}.panel{fill:#fff;stroke:#d7e1ea}</style>
+<rect width="100%" height="100%" rx="18" fill="#f6f9fc"/>
+<text x="30" y="38" class="title">K6 压测仪表板 · 300 RPS 有效档</text>
+<text x="30" y="61" class="sub">45 秒 × 3 轮；数值为三轮中位数；四种配置均通过业务与链路完整性验收</text>
+<rect x="30" y="82" width="206" height="82" rx="10" fill="#fff" stroke="#d7e1ea"/>
+<text x="46" y="108" class="sub">目标吞吐</text>
+<text x="46" y="143" class="kpi">300 RPS</text>
+<rect x="256" y="82" width="206" height="82" rx="10" fill="#fff" stroke="#d7e1ea"/>
+<text x="272" y="108" class="sub">单轮请求</text>
+<text x="272" y="143" class="kpi">约 13,500</text>
+<rect x="482" y="82" width="206" height="82" rx="10" fill="#fff" stroke="#d7e1ea"/>
+<text x="498" y="108" class="sub">HTTP 失败</text>
+<text x="498" y="143" class="kpi">0</text>
+<rect x="708" y="82" width="206" height="82" rx="10" fill="#fff" stroke="#d7e1ea"/>
+<text x="724" y="108" class="sub">K6 漏发</text>
+<text x="724" y="143" class="kpi">0</text>
+<rect x="934" y="82" width="206" height="82" rx="10" fill="#fff" stroke="#d7e1ea"/>
+<text x="950" y="108" class="sub">综合通过</text>
+<text x="950" y="143" class="kpi">4 / 4</text>
+<rect x="30" y="186" width="545" height="270" rx="12" class="panel"/>
+<text x="50" y="218" class="label">成功吞吐（RPS）</text>
+<line x1="510" y1="232" x2="510" y2="425" stroke="#e5484d" stroke-width="2" stroke-dasharray="6 5"/>
+<text x="510" y="445" class="sub" text-anchor="middle">目标 300</text>
+<text x="50" y="267" class="sub">无探针</text>
+<rect x="175" y="252" width="393.5" height="20" rx="4" fill="#64748b"/>
+<text x="525.0" y="267" class="value">299.81</text>
+<text x="50" y="313" class="sub">Datadog ddtrace</text>
+<rect x="175" y="298" width="393.5" height="20" rx="4" fill="#7357c6"/>
+<text x="525.0" y="313" class="value">299.81</text>
+<text x="50" y="359" class="sub">观测云 ddtrace</text>
+<rect x="175" y="344" width="393.5" height="20" rx="4" fill="#ee762d"/>
+<text x="525.0" y="359" class="value">299.80</text>
+<text x="50" y="405" class="sub">SkyWalking</text>
+<rect x="175" y="390" width="393.5" height="20" rx="4" fill="#0f9d96"/>
+<text x="525.0" y="405" class="value">299.81</text>
+<rect x="597" y="186" width="553" height="270" rx="12" class="panel"/>
+<text x="617" y="218" class="label">请求延迟 P95（ms，越低越好）</text>
+<text x="617" y="267" class="sub">无探针</text>
+<rect x="742" y="252" width="287.9" height="20" rx="4" fill="#64748b"/>
+<text x="1037.9" y="267" class="value">85.67</text>
+<text x="617" y="313" class="sub">Datadog ddtrace</text>
+<rect x="742" y="298" width="335.8" height="20" rx="4" fill="#7357c6"/>
+<text x="1085.8" y="313" class="value">99.92</text>
+<text x="617" y="359" class="sub">观测云 ddtrace</text>
+<rect x="742" y="344" width="357.1" height="20" rx="4" fill="#ee762d"/>
+<text x="1100.0" y="359" class="value">106.28</text>
+<text x="617" y="405" class="sub">SkyWalking</text>
+<rect x="742" y="390" width="319.5" height="20" rx="4" fill="#0f9d96"/>
+<text x="1069.5" y="405" class="value">95.07</text>
+<rect x="30" y="478" width="1120" height="88" rx="12" fill="#eef9f7" stroke="#9bd5c7"/>
+<text x="50" y="508" class="label">K6 结论</text>
+<text x="50" y="534" class="sub">300 RPS：四组成功吞吐均约 299.8 RPS，HTTP 失败与 dropped_iterations 均为 0。</text>
+<text x="50" y="556" class="sub">500 RPS：仅用于压力探测；ddtrace 出现 Agent 队列丢弃，SkyWalking 吞吐与延迟不达标，因此不纳入有效排名。</text>
+</svg>

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="430" viewBox="0 0 820 430"><style>text{font-family:"Noto Sans CJK SC","Microsoft YaHei",sans-serif;fill:#25334a}</style><rect width="100%" height="100%" fill="#fff" rx="14"/><text x="75" y="36" font-size="22" font-weight="700">应用启动至健康检查就绪</text>
+<line x1="75" y1="360.0" x2="790" y2="360.0" stroke="#dfe6ee"/>
+<text x="65" y="364.0" font-size="12" text-anchor="end">0.0s</text>
+<line x1="75" y1="286.2" x2="790" y2="286.2" stroke="#dfe6ee"/>
+<text x="65" y="290.2" font-size="12" text-anchor="end">3.7s</text>
+<line x1="75" y1="212.5" x2="790" y2="212.5" stroke="#dfe6ee"/>
+<text x="65" y="216.5" font-size="12" text-anchor="end">7.4s</text>
+<line x1="75" y1="138.8" x2="790" y2="138.8" stroke="#dfe6ee"/>
+<text x="65" y="142.8" font-size="12" text-anchor="end">11.1s</text>
+<line x1="75" y1="65.0" x2="790" y2="65.0" stroke="#dfe6ee"/>
+<text x="65" y="69.0" font-size="12" text-anchor="end">14.8s</text>
+<rect x="120" y="297.5" width="120" height="62.5" rx="7" fill="#64748b"/>
+<text x="180.0" y="287.5" font-size="14" font-weight="700" text-anchor="middle">3.13s</text>
+<text x="180.0" y="387" font-size="12" text-anchor="middle">无探针</text>
+<rect x="295" y="255.7" width="120" height="104.3" rx="7" fill="#7357c6"/>
+<text x="355.0" y="245.7" font-size="14" font-weight="700" text-anchor="middle">5.22s</text>
+<text x="355.0" y="387" font-size="12" text-anchor="middle">Datadog ddtrace</text>
+<rect x="470" y="255.7" width="120" height="104.3" rx="7" fill="#ee762d"/>
+<text x="530.0" y="245.7" font-size="14" font-weight="700" text-anchor="middle">5.22s</text>
+<text x="530.0" y="387" font-size="12" text-anchor="middle">观测云 ddtrace</text>
+<rect x="645" y="114.2" width="120" height="245.8" rx="7" fill="#0f9d96"/>
+<text x="705.0" y="104.2" font-size="14" font-weight="700" text-anchor="middle">12.30s</text>
+<text x="705.0" y="387" font-size="12" text-anchor="middle">SkyWalking Java Agent 9.7.0</text>
+</svg>

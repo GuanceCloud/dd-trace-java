@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="360" viewBox="0 0 1180 360">
+<defs>
+  <marker id="flow-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#49657d"/></marker>
+  <style>
+    text{font-family:"Noto Sans CJK SC","Microsoft YaHei",sans-serif;fill:#17324d}.title{font-size:20px;font-weight:700}.lane{font-size:16px;font-weight:700}.box{font-size:14px;font-weight:700}.sub{font-size:12px;fill:#5b7083}.arrow{stroke:#49657d;stroke-width:2.4;fill:none;marker-end:url(#flow-arrow)}
+  </style>
+</defs>
+<rect width="1180" height="360" rx="18" fill="#f8fafc"/>
+<text x="32" y="38" class="title">遥测数据对账路径</text>
+
+<text x="32" y="104" class="lane">ddtrace</text>
+<g><rect x="130" y="72" width="135" height="64" rx="10" fill="#fff4df" stroke="#d8a34d"/><text x="197" y="100" text-anchor="middle" class="box">业务请求</text><text x="197" y="121" text-anchor="middle" class="sub">生成 Trace / Span</text></g>
+<path class="arrow" d="M265 104H302"/>
+<g><rect x="303" y="72" width="150" height="64" rx="10" fill="#f1ecfb" stroke="#8d73bc"/><text x="378" y="100" text-anchor="middle" class="box">Agent 本地入队</text><text x="378" y="121" text-anchor="middle" class="sub">检查明确丢弃</text></g>
+<path class="arrow" d="M453 104H490"/>
+<g><rect x="491" y="72" width="130" height="64" rx="10" fill="#e8f0fe" stroke="#7699c9"/><text x="556" y="100" text-anchor="middle" class="box">批量 flush</text><text x="556" y="121" text-anchor="middle" class="sub">检查 HTTP 返回</text></g>
+<path class="arrow" d="M621 104H658"/>
+<g><rect x="659" y="72" width="140" height="64" rx="10" fill="#e7f8f3" stroke="#27a684"/><text x="729" y="100" text-anchor="middle" class="box">DataKit 接收</text><text x="729" y="121" text-anchor="middle" class="sub">Span 数量对账</text></g>
+<path class="arrow" d="M799 104H836"/>
+<g><rect x="837" y="72" width="130" height="64" rx="10" fill="#e7f8f3" stroke="#27a684"/><text x="902" y="100" text-anchor="middle" class="box">DataKit feed</text><text x="902" y="121" text-anchor="middle" class="sub">转发点数</text></g>
+<path class="arrow" d="M967 104H1004"/>
+<g><rect x="1005" y="72" width="140" height="64" rx="10" fill="#e7f8f3" stroke="#27a684"/><text x="1075" y="100" text-anchor="middle" class="box">DataWay OK</text><text x="1075" y="121" text-anchor="middle" class="sub">接收端确认</text></g>
+
+<text x="32" y="238" class="lane">SkyWalking</text>
+<g><rect x="130" y="206" width="135" height="64" rx="10" fill="#fff4df" stroke="#d8a34d"/><text x="197" y="234" text-anchor="middle" class="box">业务请求</text><text x="197" y="255" text-anchor="middle" class="sub">生成 Trace / Span</text></g>
+<path class="arrow" d="M265 238H342"/>
+<g><rect x="343" y="206" width="160" height="64" rx="10" fill="#e9f7fa" stroke="#2f91a5"/><text x="423" y="234" text-anchor="middle" class="box">SkyWalking Agent</text><text x="423" y="255" text-anchor="middle" class="sub">上报遥测数据</text></g>
+<path class="arrow" d="M503 238H580"/>
+<g><rect x="581" y="206" width="140" height="64" rx="10" fill="#e9f7fa" stroke="#2f91a5"/><text x="651" y="234" text-anchor="middle" class="box">OAP</text><text x="651" y="255" text-anchor="middle" class="sub">接收与处理</text></g>
+<path class="arrow" d="M721 238H798"/>
+<g><rect x="799" y="206" width="140" height="64" rx="10" fill="#e9f7fa" stroke="#2f91a5"/><text x="869" y="234" text-anchor="middle" class="box">BanyanDB</text><text x="869" y="255" text-anchor="middle" class="sub">持久化存储</text></g>
+<path class="arrow" d="M939 238H986"/>
+<g><rect x="987" y="206" width="158" height="64" rx="10" fill="#e9f7fa" stroke="#2f91a5"/><text x="1066" y="234" text-anchor="middle" class="box">GraphQL 查询</text><text x="1066" y="255" text-anchor="middle" class="sub">验证 Trace 可用</text></g>
+
+<text x="130" y="319" class="sub">判定原则：每一层单独对账；队列在等待期内尚未清空不直接等同于数据丢失。</text>
+</svg>
