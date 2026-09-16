@@ -1,0 +1,32 @@
+{
+  "region": "华东2（上海）/ cn-shanghai-a",
+  "instance_type": "ecs.c4i.xlarge",
+  "per_node": "4 vCPU / 8 GiB / 100 GB ESSD PL0",
+  "nodes": [
+    {
+      "role": "K6发压",
+      "count": 1
+    },
+    {
+      "role": "应用SUT",
+      "count": 1
+    },
+    {
+      "role": "MySQL+Redis依赖",
+      "count": 1
+    },
+    {
+      "role": "DataKit/OAP采集计算",
+      "count": 1
+    },
+    {
+      "role": "BanyanDB存储",
+      "count": 1
+    },
+    {
+      "role": "监控与Agent健康指标",
+      "count": 1
+    }
+  ],
+  "total": "24 vCPU / 48 GiB / 600 GB系统盘"
+}
