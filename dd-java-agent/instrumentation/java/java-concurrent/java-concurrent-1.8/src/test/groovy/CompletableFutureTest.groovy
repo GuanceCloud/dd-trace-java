@@ -1,4 +1,5 @@
 import datadog.trace.agent.test.InstrumentationSpecification
+import datadog.trace.api.DDTags
 import datadog.trace.api.Trace
 import datadog.trace.core.DDSpan
 
@@ -92,12 +93,14 @@ class CompletableFutureTest extends InstrumentationSpecification {
     completableFuture.get() == "done"
 
     and:
-    assertTraces(1) {
-      trace(2) {
-        basicSpan(it, "parent")
-        basicSpan(it, "child", span(0))
-      }
-    }
+    TEST_WRITER.waitForTraces(1)
+    List<DDSpan> trace = TEST_WRITER.get(0)
+    trace.size() == 2
+    trace.get(0).operationName == "parent"
+    trace.get(1).operationName == "child"
+    trace.get(1).parentId == trace.get(0).spanId
+    trace.get(0).getTag(DDTags.ASYNC_ENTRY) == null
+    trace.get(1).getTag(DDTags.ASYNC_ENTRY) == true
   }
 
   def "test thenApply"() {

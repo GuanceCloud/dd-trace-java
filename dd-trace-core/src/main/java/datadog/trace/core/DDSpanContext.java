@@ -1122,6 +1122,10 @@ public class DDSpanContext
     }
   }
 
+  long getThreadId() {
+    return threadId;
+  }
+
   /**
    * This is not thread-safe and must only be used when it can be guaranteed that the context will
    * not be mutated. This is internal API and must not be exposed to users.

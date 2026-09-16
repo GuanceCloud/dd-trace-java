@@ -1,6 +1,7 @@
 package datadog.trace.bootstrap.instrumentation.java.concurrent;
 
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.isAsyncPropagationEnabled;
+import static datadog.trace.bootstrap.instrumentation.api.AsyncTaskContext.activate;
 
 import datadog.context.Context;
 import datadog.context.ContextContinuation;
@@ -35,7 +36,7 @@ public class AdviceUtils {
         // important - stop timing after the scope has been activated so the time in the queue can
         // be attributed to the correct context without duplicating the propagated information
         state.stopTiming();
-        return scope;
+        return activate(state.getSubmittingThreadId(), scope);
       }
     }
     return null;
@@ -79,7 +80,7 @@ public class AdviceUtils {
         state = State.FACTORY.create();
         contextStore.put(task, state);
       }
-      state.captureAndSetContinuation(context);
+      state.captureAndSetAsyncTaskContinuation(context);
     }
   }
 }

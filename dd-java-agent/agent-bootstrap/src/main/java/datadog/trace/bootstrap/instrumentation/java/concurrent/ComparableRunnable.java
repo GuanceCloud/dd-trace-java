@@ -9,6 +9,10 @@ public final class ComparableRunnable<T extends Runnable & Comparable<T>> extend
     super(delegate, continuation);
   }
 
+  public ComparableRunnable(T delegate, ContextContinuation continuation, long submittingThreadId) {
+    super(delegate, continuation, submittingThreadId);
+  }
+
   @Override
   public int compareTo(ComparableRunnable<T> o) {
     return delegate.compareTo(o.delegate);
