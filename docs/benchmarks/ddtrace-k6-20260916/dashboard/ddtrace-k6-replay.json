@@ -3,7 +3,7 @@
   "dashboardType": "CUSTOM",
   "dashboardExtend": {
     "groupUnfoldStatus": {
-      "概览": true,
+      "核心结果": true,
       "趋势": true
     }
   },
@@ -23,7 +23,7 @@
       "name": "APM压测"
     }
   ],
-  "summary": "按 benchmark_id 和 testid 回溯 ddtrace K6 压测请求、失败率与延迟。",
+  "summary": "按 benchmark_id 和 testid 回溯 K6 压测的请求量、成功率、响应时间和 VU 负载。",
   "main": {
     "vars": [
       {
@@ -82,8 +82,8 @@
             "alias": [],
             "units": [
               {
-                "key": "请求总数",
-                "name": "请求总数",
+                "key": "总请求数",
+                "name": "总请求数",
                 "unit": "",
                 "units": [
                   "custom",
@@ -93,8 +93,8 @@
             ],
             "colors": [
               {
-                "key": "请求总数",
-                "name": "请求总数",
+                "key": "总请求数",
+                "name": "总请求数",
                 "color": "#2563EB"
               }
             ],
@@ -124,35 +124,35 @@
           "enablePreflightEstimate": false
         },
         "group": {
-          "name": "概览"
+          "name": "核心结果"
         },
-        "chartGroupUUID": "group_overview_8a839926945d",
-        "name": "请求总数",
+        "chartGroupUUID": "group_overview_39dec71564ad",
+        "name": "总请求数",
         "pos": {
           "h": 6,
-          "w": 6,
+          "w": 4,
           "x": 0,
           "y": 0
         },
         "type": "singlestat",
         "queries": [
           {
-            "name": "请求总数",
+            "name": "总请求数",
             "type": "singlestat",
             "unit": "",
             "color": "",
             "qtype": "dql",
             "queryGroup": "A",
             "query": {
-              "q": "M::`k6`:(LAST(`k6_http_reqs_total`) AS `请求总数`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
+              "q": "M::`k6`:(LAST(`k6_http_reqs_total`) AS `总请求数`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
               "code": "A",
               "fill": null,
               "type": "simple",
-              "alias": "请求总数",
+              "alias": "总请求数",
               "field": "k6_http_reqs_total",
               "filters": [
                 {
-                  "id": "filter_4987d84dc65b",
+                  "id": "filter_2f05146525bb",
                   "op": "=",
                   "name": "benchmark_id",
                   "type": "",
@@ -160,7 +160,7 @@
                   "value": "#{benchmark_id}"
                 },
                 {
-                  "id": "filter_37c16f9ace30",
+                  "id": "filter_177dcbbff10c",
                   "op": "=",
                   "name": "testid",
                   "type": "",
@@ -181,7 +181,7 @@
           }
         ],
         "prevGroupName": null,
-        "uuid": "chart_e436cff6a607"
+        "uuid": "chart_b502acbf7b17"
       },
       {
         "extend": {
@@ -189,8 +189,8 @@
             "alias": [],
             "units": [
               {
-                "key": "请求失败率",
-                "name": "请求失败率",
+                "key": "成功率",
+                "name": "成功率",
                 "unit": "ratio",
                 "units": [
                   "custom",
@@ -200,23 +200,23 @@
             ],
             "colors": [
               {
-                "key": "请求失败率",
-                "name": "请求失败率",
-                "color": "#EF4444"
+                "key": "成功率",
+                "name": "成功率",
+                "color": "#16A34A"
               }
             ],
             "levels": [],
             "density": "medium",
             "showTitle": true,
-            "titleDesc": "0–1 比例；500 RPS 可按 error_code 继续下钻",
+            "titleDesc": "请求失败率为 0 时显示 100% 成功率",
             "showLegend": false,
             "legendPostion": "bottom",
             "currentChartType": "singlestat",
             "chartType": "",
             "showFieldMapping": false,
             "scientificNotation": true,
-            "valueColor": "#EF4444",
-            "bgColor": "#EF444418",
+            "valueColor": "#16A34A",
+            "bgColor": "#16A34A18",
             "borderColor": "#E5E7EB"
           },
           "fixedTime": "",
@@ -231,35 +231,35 @@
           "enablePreflightEstimate": false
         },
         "group": {
-          "name": "概览"
+          "name": "核心结果"
         },
-        "chartGroupUUID": "group_overview_8a839926945d",
-        "name": "请求失败率",
+        "chartGroupUUID": "group_overview_39dec71564ad",
+        "name": "成功率",
         "pos": {
           "h": 6,
-          "w": 6,
-          "x": 6,
+          "w": 4,
+          "x": 4,
           "y": 0
         },
         "type": "singlestat",
         "queries": [
           {
-            "name": "请求失败率",
+            "name": "成功率",
             "type": "singlestat",
             "unit": "",
             "color": "",
             "qtype": "dql",
             "queryGroup": "A",
             "query": {
-              "q": "M::`k6`:(LAST(`k6_http_req_failed_rate`) AS `请求失败率`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
+              "q": "M::`k6`:(LAST(`k6_http_req_failed_rate`) AS `成功率`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
               "code": "A",
               "fill": null,
               "type": "simple",
-              "alias": "请求失败率",
+              "alias": "成功率",
               "field": "k6_http_req_failed_rate",
               "filters": [
                 {
-                  "id": "filter_f9c77bc984b0",
+                  "id": "filter_951ab2ba9c4e",
                   "op": "=",
                   "name": "benchmark_id",
                   "type": "",
@@ -267,7 +267,7 @@
                   "value": "#{benchmark_id}"
                 },
                 {
-                  "id": "filter_c294fbe548d0",
+                  "id": "filter_ed1fbbe3a69a",
                   "op": "=",
                   "name": "testid",
                   "type": "",
@@ -288,7 +288,7 @@
           }
         ],
         "prevGroupName": null,
-        "uuid": "chart_18a5b88aebbb"
+        "uuid": "chart_385e23076b63"
       },
       {
         "extend": {
@@ -296,8 +296,8 @@
             "alias": [],
             "units": [
               {
-                "key": "请求耗时 P95",
-                "name": "请求耗时 P95",
+                "key": "平均响应时间",
+                "name": "平均响应时间",
                 "unit": "s",
                 "units": [
                   "time",
@@ -307,122 +307,15 @@
             ],
             "colors": [
               {
-                "key": "请求耗时 P95",
-                "name": "请求耗时 P95",
-                "color": "#7C3AED"
-              }
-            ],
-            "levels": [],
-            "density": "medium",
-            "showTitle": true,
-            "titleDesc": "K6 Prometheus Remote Write 的 P95，单位秒",
-            "showLegend": false,
-            "legendPostion": "bottom",
-            "currentChartType": "singlestat",
-            "chartType": "",
-            "showFieldMapping": false,
-            "scientificNotation": true,
-            "valueColor": "#7C3AED",
-            "bgColor": "#7C3AED18",
-            "borderColor": "#E5E7EB"
-          },
-          "fixedTime": "",
-          "isRefresh": true,
-          "globalUnit": [],
-          "isSampling": true,
-          "timeInterval": "auto",
-          "isCombineChart": false,
-          "isTimeInterval": false,
-          "changeWorkspace": false,
-          "scientificNotation": true,
-          "enablePreflightEstimate": false
-        },
-        "group": {
-          "name": "概览"
-        },
-        "chartGroupUUID": "group_overview_8a839926945d",
-        "name": "请求耗时 P95",
-        "pos": {
-          "h": 6,
-          "w": 6,
-          "x": 12,
-          "y": 0
-        },
-        "type": "singlestat",
-        "queries": [
-          {
-            "name": "请求耗时 P95",
-            "type": "singlestat",
-            "unit": "",
-            "color": "",
-            "qtype": "dql",
-            "queryGroup": "A",
-            "query": {
-              "q": "M::`k6`:(LAST(`k6_http_req_duration_p95`) AS `请求耗时 P95`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
-              "code": "A",
-              "fill": null,
-              "type": "simple",
-              "alias": "请求耗时 P95",
-              "field": "k6_http_req_duration_p95",
-              "filters": [
-                {
-                  "id": "filter_5e3478e602e5",
-                  "op": "=",
-                  "name": "benchmark_id",
-                  "type": "",
-                  "logic": "and",
-                  "value": "#{benchmark_id}"
-                },
-                {
-                  "id": "filter_3361c330d9c5",
-                  "op": "=",
-                  "name": "testid",
-                  "type": "",
-                  "logic": "and",
-                  "value": "#{testid}"
-                }
-              ],
-              "groupBy": [],
-              "funcList": [],
-              "fieldFunc": "last",
-              "fieldType": "float",
-              "namespace": "metric",
-              "dataSource": "k6",
-              "queryFuncs": [],
-              "groupByTime": ""
-            },
-            "datasource": "dataflux"
-          }
-        ],
-        "prevGroupName": null,
-        "uuid": "chart_872877370ee4"
-      },
-      {
-        "extend": {
-          "settings": {
-            "alias": [],
-            "units": [
-              {
-                "key": "最大 VU",
-                "name": "最大 VU",
-                "unit": "",
-                "units": [
-                  "custom",
-                  ""
-                ]
-              }
-            ],
-            "colors": [
-              {
-                "key": "最大 VU",
-                "name": "最大 VU",
+                "key": "平均响应时间",
+                "name": "平均响应时间",
                 "color": "#0D9488"
               }
             ],
             "levels": [],
             "density": "medium",
             "showTitle": true,
-            "titleDesc": "本窗口 K6 VU 上限",
+            "titleDesc": "K6 平均请求耗时",
             "showLegend": false,
             "legendPostion": "bottom",
             "currentChartType": "singlestat",
@@ -445,35 +338,35 @@
           "enablePreflightEstimate": false
         },
         "group": {
-          "name": "概览"
+          "name": "核心结果"
         },
-        "chartGroupUUID": "group_overview_8a839926945d",
-        "name": "最大 VU",
+        "chartGroupUUID": "group_overview_39dec71564ad",
+        "name": "平均响应时间",
         "pos": {
           "h": 6,
-          "w": 6,
-          "x": 18,
+          "w": 4,
+          "x": 8,
           "y": 0
         },
         "type": "singlestat",
         "queries": [
           {
-            "name": "最大 VU",
+            "name": "平均响应时间",
             "type": "singlestat",
             "unit": "",
             "color": "",
             "qtype": "dql",
             "queryGroup": "A",
             "query": {
-              "q": "M::`k6`:(LAST(`k6_vus_max`) AS `最大 VU`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
+              "q": "M::`k6`:(LAST(`k6_http_req_duration_avg`) AS `平均响应时间`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
               "code": "A",
               "fill": null,
               "type": "simple",
-              "alias": "最大 VU",
-              "field": "k6_vus_max",
+              "alias": "平均响应时间",
+              "field": "k6_http_req_duration_avg",
               "filters": [
                 {
-                  "id": "filter_c1b75e7bf615",
+                  "id": "filter_be13dba15b5d",
                   "op": "=",
                   "name": "benchmark_id",
                   "type": "",
@@ -481,7 +374,7 @@
                   "value": "#{benchmark_id}"
                 },
                 {
-                  "id": "filter_1e49d40e940f",
+                  "id": "filter_c09ba6091dc3",
                   "op": "=",
                   "name": "testid",
                   "type": "",
@@ -502,7 +395,328 @@
           }
         ],
         "prevGroupName": null,
-        "uuid": "chart_9b0d05316f8e"
+        "uuid": "chart_b1e55a3ec093"
+      },
+      {
+        "extend": {
+          "settings": {
+            "alias": [],
+            "units": [
+              {
+                "key": "P95 响应时间",
+                "name": "P95 响应时间",
+                "unit": "s",
+                "units": [
+                  "time",
+                  "s"
+                ]
+              }
+            ],
+            "colors": [
+              {
+                "key": "P95 响应时间",
+                "name": "P95 响应时间",
+                "color": "#7C3AED"
+              }
+            ],
+            "levels": [],
+            "density": "medium",
+            "showTitle": true,
+            "titleDesc": "K6 请求耗时 P95",
+            "showLegend": false,
+            "legendPostion": "bottom",
+            "currentChartType": "singlestat",
+            "chartType": "",
+            "showFieldMapping": false,
+            "scientificNotation": true,
+            "valueColor": "#7C3AED",
+            "bgColor": "#7C3AED18",
+            "borderColor": "#E5E7EB"
+          },
+          "fixedTime": "",
+          "isRefresh": true,
+          "globalUnit": [],
+          "isSampling": true,
+          "timeInterval": "auto",
+          "isCombineChart": false,
+          "isTimeInterval": false,
+          "changeWorkspace": false,
+          "scientificNotation": true,
+          "enablePreflightEstimate": false
+        },
+        "group": {
+          "name": "核心结果"
+        },
+        "chartGroupUUID": "group_overview_39dec71564ad",
+        "name": "P95 响应时间",
+        "pos": {
+          "h": 6,
+          "w": 4,
+          "x": 12,
+          "y": 0
+        },
+        "type": "singlestat",
+        "queries": [
+          {
+            "name": "P95 响应时间",
+            "type": "singlestat",
+            "unit": "",
+            "color": "",
+            "qtype": "dql",
+            "queryGroup": "A",
+            "query": {
+              "q": "M::`k6`:(LAST(`k6_http_req_duration_p95`) AS `P95 响应时间`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
+              "code": "A",
+              "fill": null,
+              "type": "simple",
+              "alias": "P95 响应时间",
+              "field": "k6_http_req_duration_p95",
+              "filters": [
+                {
+                  "id": "filter_8fc7c46948f4",
+                  "op": "=",
+                  "name": "benchmark_id",
+                  "type": "",
+                  "logic": "and",
+                  "value": "#{benchmark_id}"
+                },
+                {
+                  "id": "filter_033fa39987a0",
+                  "op": "=",
+                  "name": "testid",
+                  "type": "",
+                  "logic": "and",
+                  "value": "#{testid}"
+                }
+              ],
+              "groupBy": [],
+              "funcList": [],
+              "fieldFunc": "last",
+              "fieldType": "float",
+              "namespace": "metric",
+              "dataSource": "k6",
+              "queryFuncs": [],
+              "groupByTime": ""
+            },
+            "datasource": "dataflux"
+          }
+        ],
+        "prevGroupName": null,
+        "uuid": "chart_6c425071defd"
+      },
+      {
+        "extend": {
+          "settings": {
+            "alias": [],
+            "units": [
+              {
+                "key": "P99 响应时间",
+                "name": "P99 响应时间",
+                "unit": "s",
+                "units": [
+                  "time",
+                  "s"
+                ]
+              }
+            ],
+            "colors": [
+              {
+                "key": "P99 响应时间",
+                "name": "P99 响应时间",
+                "color": "#EA580C"
+              }
+            ],
+            "levels": [],
+            "density": "medium",
+            "showTitle": true,
+            "titleDesc": "K6 请求耗时 P99",
+            "showLegend": false,
+            "legendPostion": "bottom",
+            "currentChartType": "singlestat",
+            "chartType": "",
+            "showFieldMapping": false,
+            "scientificNotation": true,
+            "valueColor": "#EA580C",
+            "bgColor": "#EA580C18",
+            "borderColor": "#E5E7EB"
+          },
+          "fixedTime": "",
+          "isRefresh": true,
+          "globalUnit": [],
+          "isSampling": true,
+          "timeInterval": "auto",
+          "isCombineChart": false,
+          "isTimeInterval": false,
+          "changeWorkspace": false,
+          "scientificNotation": true,
+          "enablePreflightEstimate": false
+        },
+        "group": {
+          "name": "核心结果"
+        },
+        "chartGroupUUID": "group_overview_39dec71564ad",
+        "name": "P99 响应时间",
+        "pos": {
+          "h": 6,
+          "w": 4,
+          "x": 16,
+          "y": 0
+        },
+        "type": "singlestat",
+        "queries": [
+          {
+            "name": "P99 响应时间",
+            "type": "singlestat",
+            "unit": "",
+            "color": "",
+            "qtype": "dql",
+            "queryGroup": "A",
+            "query": {
+              "q": "M::`k6`:(LAST(`k6_http_req_duration_p99`) AS `P99 响应时间`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
+              "code": "A",
+              "fill": null,
+              "type": "simple",
+              "alias": "P99 响应时间",
+              "field": "k6_http_req_duration_p99",
+              "filters": [
+                {
+                  "id": "filter_32423b808fd3",
+                  "op": "=",
+                  "name": "benchmark_id",
+                  "type": "",
+                  "logic": "and",
+                  "value": "#{benchmark_id}"
+                },
+                {
+                  "id": "filter_a5e39c87b6a8",
+                  "op": "=",
+                  "name": "testid",
+                  "type": "",
+                  "logic": "and",
+                  "value": "#{testid}"
+                }
+              ],
+              "groupBy": [],
+              "funcList": [],
+              "fieldFunc": "last",
+              "fieldType": "float",
+              "namespace": "metric",
+              "dataSource": "k6",
+              "queryFuncs": [],
+              "groupByTime": ""
+            },
+            "datasource": "dataflux"
+          }
+        ],
+        "prevGroupName": null,
+        "uuid": "chart_53cca99c978f"
+      },
+      {
+        "extend": {
+          "settings": {
+            "alias": [],
+            "units": [
+              {
+                "key": "最大 VU",
+                "name": "最大 VU",
+                "unit": "",
+                "units": [
+                  "custom",
+                  ""
+                ]
+              }
+            ],
+            "colors": [
+              {
+                "key": "最大 VU",
+                "name": "最大 VU",
+                "color": "#64748B"
+              }
+            ],
+            "levels": [],
+            "density": "medium",
+            "showTitle": true,
+            "titleDesc": "本窗口 K6 VU 上限，仅用于确认负载是否达到预期",
+            "showLegend": false,
+            "legendPostion": "bottom",
+            "currentChartType": "singlestat",
+            "chartType": "",
+            "showFieldMapping": false,
+            "scientificNotation": true,
+            "valueColor": "#64748B",
+            "bgColor": "#64748B18",
+            "borderColor": "#E5E7EB"
+          },
+          "fixedTime": "",
+          "isRefresh": true,
+          "globalUnit": [],
+          "isSampling": true,
+          "timeInterval": "auto",
+          "isCombineChart": false,
+          "isTimeInterval": false,
+          "changeWorkspace": false,
+          "scientificNotation": true,
+          "enablePreflightEstimate": false
+        },
+        "group": {
+          "name": "核心结果"
+        },
+        "chartGroupUUID": "group_overview_39dec71564ad",
+        "name": "最大 VU",
+        "pos": {
+          "h": 6,
+          "w": 4,
+          "x": 20,
+          "y": 0
+        },
+        "type": "singlestat",
+        "queries": [
+          {
+            "name": "最大 VU",
+            "type": "singlestat",
+            "unit": "",
+            "color": "",
+            "qtype": "dql",
+            "queryGroup": "A",
+            "query": {
+              "q": "M::`k6`:(LAST(`k6_vus_max`) AS `最大 VU`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
+              "code": "A",
+              "fill": null,
+              "type": "simple",
+              "alias": "最大 VU",
+              "field": "k6_vus_max",
+              "filters": [
+                {
+                  "id": "filter_1b8700da08b0",
+                  "op": "=",
+                  "name": "benchmark_id",
+                  "type": "",
+                  "logic": "and",
+                  "value": "#{benchmark_id}"
+                },
+                {
+                  "id": "filter_12ee9466ca72",
+                  "op": "=",
+                  "name": "testid",
+                  "type": "",
+                  "logic": "and",
+                  "value": "#{testid}"
+                }
+              ],
+              "groupBy": [],
+              "funcList": [],
+              "fieldFunc": "last",
+              "fieldType": "float",
+              "namespace": "metric",
+              "dataSource": "k6",
+              "queryFuncs": [],
+              "groupByTime": ""
+            },
+            "datasource": "dataflux"
+          }
+        ],
+        "prevGroupName": null,
+        "uuid": "chart_f54bf3fae98d"
       },
       {
         "extend": {
@@ -545,7 +759,7 @@
         "group": {
           "name": "趋势"
         },
-        "chartGroupUUID": "group_trend_8f04346887b8",
+        "chartGroupUUID": "group_trend_216d24faa4d8",
         "name": "请求量趋势",
         "pos": {
           "h": 10,
@@ -571,7 +785,7 @@
               "field": "k6_http_reqs_total",
               "filters": [
                 {
-                  "id": "filter_649e3b666b53",
+                  "id": "filter_9390f4b4a8d6",
                   "op": "=",
                   "name": "benchmark_id",
                   "type": "",
@@ -579,7 +793,7 @@
                   "value": "#{benchmark_id}"
                 },
                 {
-                  "id": "filter_3430c5e171ff",
+                  "id": "filter_54ef61bad5fb",
                   "op": "=",
                   "name": "testid",
                   "type": "",
@@ -600,7 +814,7 @@
           }
         ],
         "prevGroupName": null,
-        "uuid": "chart_1ceae330402e"
+        "uuid": "chart_673dd1a51a45"
       },
       {
         "extend": {
@@ -643,7 +857,7 @@
         "group": {
           "name": "趋势"
         },
-        "chartGroupUUID": "group_trend_8f04346887b8",
+        "chartGroupUUID": "group_trend_216d24faa4d8",
         "name": "失败率趋势",
         "pos": {
           "h": 10,
@@ -669,7 +883,7 @@
               "field": "k6_http_req_failed_rate",
               "filters": [
                 {
-                  "id": "filter_c3bb06b344fe",
+                  "id": "filter_933ef0ad08c5",
                   "op": "=",
                   "name": "benchmark_id",
                   "type": "",
@@ -677,7 +891,7 @@
                   "value": "#{benchmark_id}"
                 },
                 {
-                  "id": "filter_e20f0c5cb39f",
+                  "id": "filter_732f75125584",
                   "op": "=",
                   "name": "testid",
                   "type": "",
@@ -698,7 +912,7 @@
           }
         ],
         "prevGroupName": null,
-        "uuid": "chart_46006d9abc14"
+        "uuid": "chart_3fd8782c4906"
       },
       {
         "extend": {
@@ -706,8 +920,8 @@
             "alias": [],
             "units": [
               {
-                "key": "平均耗时",
-                "name": "平均耗时",
+                "key": "平均响应时间",
+                "name": "平均响应时间",
                 "unit": "s",
                 "units": [
                   "time",
@@ -741,8 +955,8 @@
         "group": {
           "name": "趋势"
         },
-        "chartGroupUUID": "group_trend_8f04346887b8",
-        "name": "平均耗时",
+        "chartGroupUUID": "group_trend_216d24faa4d8",
+        "name": "平均响应时间趋势",
         "pos": {
           "h": 10,
           "w": 8,
@@ -752,22 +966,22 @@
         "type": "sequence",
         "queries": [
           {
-            "name": "平均耗时",
+            "name": "平均响应时间",
             "type": "sequence",
             "unit": "",
             "color": "",
             "qtype": "dql",
             "queryGroup": "A",
             "query": {
-              "q": "M::`k6`:(LAST(`k6_http_req_duration_avg`) AS `平均耗时`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
+              "q": "M::`k6`:(LAST(`k6_http_req_duration_avg`) AS `平均响应时间`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
               "code": "A",
               "fill": null,
               "type": "simple",
-              "alias": "平均耗时",
+              "alias": "平均响应时间",
               "field": "k6_http_req_duration_avg",
               "filters": [
                 {
-                  "id": "filter_4a4929d66d7c",
+                  "id": "filter_85c3ae7f5bc4",
                   "op": "=",
                   "name": "benchmark_id",
                   "type": "",
@@ -775,7 +989,7 @@
                   "value": "#{benchmark_id}"
                 },
                 {
-                  "id": "filter_6851c778f590",
+                  "id": "filter_184ff69f0575",
                   "op": "=",
                   "name": "testid",
                   "type": "",
@@ -796,7 +1010,7 @@
           }
         ],
         "prevGroupName": null,
-        "uuid": "chart_a60ac752d5e6"
+        "uuid": "chart_9c9edf5b4513"
       },
       {
         "extend": {
@@ -804,8 +1018,8 @@
             "alias": [],
             "units": [
               {
-                "key": "P95 耗时",
-                "name": "P95 耗时",
+                "key": "P95 响应时间",
+                "name": "P95 响应时间",
                 "unit": "s",
                 "units": [
                   "time",
@@ -839,8 +1053,8 @@
         "group": {
           "name": "趋势"
         },
-        "chartGroupUUID": "group_trend_8f04346887b8",
-        "name": "P95 耗时",
+        "chartGroupUUID": "group_trend_216d24faa4d8",
+        "name": "P95 响应时间趋势",
         "pos": {
           "h": 10,
           "w": 8,
@@ -850,22 +1064,22 @@
         "type": "sequence",
         "queries": [
           {
-            "name": "P95 耗时",
+            "name": "P95 响应时间",
             "type": "sequence",
             "unit": "",
             "color": "",
             "qtype": "dql",
             "queryGroup": "A",
             "query": {
-              "q": "M::`k6`:(LAST(`k6_http_req_duration_p95`) AS `P95 耗时`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
+              "q": "M::`k6`:(LAST(`k6_http_req_duration_p95`) AS `P95 响应时间`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
               "code": "A",
               "fill": null,
               "type": "simple",
-              "alias": "P95 耗时",
+              "alias": "P95 响应时间",
               "field": "k6_http_req_duration_p95",
               "filters": [
                 {
-                  "id": "filter_91dff6e5113c",
+                  "id": "filter_c8e929ebd398",
                   "op": "=",
                   "name": "benchmark_id",
                   "type": "",
@@ -873,7 +1087,7 @@
                   "value": "#{benchmark_id}"
                 },
                 {
-                  "id": "filter_847ad79ae526",
+                  "id": "filter_7557917fe964",
                   "op": "=",
                   "name": "testid",
                   "type": "",
@@ -894,7 +1108,7 @@
           }
         ],
         "prevGroupName": null,
-        "uuid": "chart_1e436306cc0e"
+        "uuid": "chart_4c1fcee43cdd"
       },
       {
         "extend": {
@@ -902,8 +1116,8 @@
             "alias": [],
             "units": [
               {
-                "key": "P99 耗时",
-                "name": "P99 耗时",
+                "key": "P99 响应时间",
+                "name": "P99 响应时间",
                 "unit": "s",
                 "units": [
                   "time",
@@ -937,8 +1151,8 @@
         "group": {
           "name": "趋势"
         },
-        "chartGroupUUID": "group_trend_8f04346887b8",
-        "name": "P99 耗时",
+        "chartGroupUUID": "group_trend_216d24faa4d8",
+        "name": "P99 响应时间趋势",
         "pos": {
           "h": 10,
           "w": 8,
@@ -948,22 +1162,22 @@
         "type": "sequence",
         "queries": [
           {
-            "name": "P99 耗时",
+            "name": "P99 响应时间",
             "type": "sequence",
             "unit": "",
             "color": "",
             "qtype": "dql",
             "queryGroup": "A",
             "query": {
-              "q": "M::`k6`:(LAST(`k6_http_req_duration_p99`) AS `P99 耗时`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
+              "q": "M::`k6`:(LAST(`k6_http_req_duration_p99`) AS `P99 响应时间`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
               "code": "A",
               "fill": null,
               "type": "simple",
-              "alias": "P99 耗时",
+              "alias": "P99 响应时间",
               "field": "k6_http_req_duration_p99",
               "filters": [
                 {
-                  "id": "filter_90c243480d46",
+                  "id": "filter_178d89cb103a",
                   "op": "=",
                   "name": "benchmark_id",
                   "type": "",
@@ -971,7 +1185,7 @@
                   "value": "#{benchmark_id}"
                 },
                 {
-                  "id": "filter_63d08f3a06b2",
+                  "id": "filter_c3f505237b2f",
                   "op": "=",
                   "name": "testid",
                   "type": "",
@@ -992,13 +1206,13 @@
           }
         ],
         "prevGroupName": null,
-        "uuid": "chart_9c341a6bde10"
+        "uuid": "chart_47fbb7fbfe36"
       }
     ],
     "groups": [
       {
-        "name": "概览",
-        "uuid": "group_overview_8a839926945d",
+        "name": "核心结果",
+        "uuid": "group_overview_39dec71564ad",
         "extend": {
           "isExpanded": true,
           "bgColor": "#60A5FA"
@@ -1006,7 +1220,7 @@
       },
       {
         "name": "趋势",
-        "uuid": "group_trend_8f04346887b8",
+        "uuid": "group_trend_216d24faa4d8",
         "extend": {
           "isExpanded": true,
           "bgColor": "#2DD4BF"
