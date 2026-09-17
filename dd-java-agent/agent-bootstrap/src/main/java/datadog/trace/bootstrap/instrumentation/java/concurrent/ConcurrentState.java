@@ -1,5 +1,7 @@
 package datadog.trace.bootstrap.instrumentation.java.concurrent;
 
+import static datadog.trace.bootstrap.instrumentation.api.AsyncTaskContext.NOT_ASYNC_TASK;
+import static datadog.trace.bootstrap.instrumentation.api.AsyncTaskContext.activate;
 import static datadog.trace.bootstrap.instrumentation.java.concurrent.AdviceUtils.shouldCapture;
 import static datadog.trace.bootstrap.instrumentation.java.concurrent.ContinuationClaim.CLAIMED;
 
@@ -24,6 +26,8 @@ public final class ConcurrentState {
   public static ContextStore.Factory<ConcurrentState> FACTORY = ConcurrentState::new;
 
   private volatile ContextContinuation continuation = null;
+
+  private long submittingThreadId = NOT_ASYNC_TASK;
 
   private static final AtomicReferenceFieldUpdater<ConcurrentState, ContextContinuation>
       CONTINUATION =
@@ -91,6 +95,7 @@ public final class ConcurrentState {
   private boolean captureAndSetContinuation(final Context context) {
     if (CONTINUATION.compareAndSet(this, null, CLAIMED)) {
       // lazy write is guaranteed to be seen by getAndSet
+      submittingThreadId = Thread.currentThread().getId();
       CONTINUATION.lazySet(this, context.capture().hold());
       return true;
     }
@@ -100,7 +105,7 @@ public final class ConcurrentState {
   private ContextScope activateAndContinueContinuation() {
     final ContextContinuation continuation = CONTINUATION.get(this);
     if (continuation != null && continuation != CLAIMED) {
-      return continuation.resume();
+      return activate(submittingThreadId, continuation.resume());
     }
     return null;
   }

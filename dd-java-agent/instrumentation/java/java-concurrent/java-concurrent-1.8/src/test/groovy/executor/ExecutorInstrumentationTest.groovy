@@ -2,6 +2,7 @@ package executor
 
 import com.google.common.util.concurrent.MoreExecutors
 import datadog.trace.agent.test.InstrumentationSpecification
+import datadog.trace.api.DDTags
 import datadog.trace.api.Trace
 import datadog.trace.bootstrap.instrumentation.api.Tags
 import datadog.trace.bootstrap.instrumentation.java.concurrent.RunnableWrapper
@@ -98,6 +99,9 @@ abstract class ExecutorInstrumentationTest extends InstrumentationSpecification 
     trace.get(0).operationName == "parent"
     trace.get(1).operationName == "asyncChild"
     trace.get(1).parentId == trace.get(0).spanId
+    trace.get(0).getTag(DDTags.ASYNC_ENTRY) == null
+    trace.get(1).getTag(DDTags.ASYNC_ENTRY) ==
+      (trace.get(1).getTag(DDTags.THREAD_ID) != trace.get(0).getTag(DDTags.THREAD_ID) ? true : null)
 
     cleanup:
     if (pool?.hasProperty("shutdown")) {

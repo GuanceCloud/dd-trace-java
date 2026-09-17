@@ -1,12 +1,14 @@
 package datadog.trace.bootstrap.instrumentation.java.concurrent;
 
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.captureActiveSpan;
+import static datadog.trace.bootstrap.instrumentation.api.AsyncTaskContext.NOT_ASYNC_TASK;
 import static datadog.trace.bootstrap.instrumentation.java.concurrent.ExcludeFilter.ExcludeType.RUNNABLE;
 import static datadog.trace.bootstrap.instrumentation.java.concurrent.ExcludeFilter.exclude;
 
 import datadog.context.Context;
 import datadog.context.ContextContinuation;
 import datadog.context.ContextScope;
+import datadog.trace.bootstrap.instrumentation.api.AsyncTaskContext;
 import java.util.concurrent.RunnableFuture;
 
 public class Wrapper<T extends Runnable> implements Runnable, AutoCloseable {
@@ -19,12 +21,14 @@ public class Wrapper<T extends Runnable> implements Runnable, AutoCloseable {
         || exclude(RUNNABLE, task)) {
       return task;
     }
-    ContextContinuation continuation = captureActiveSpan();
-    if (continuation.context() != Context.root()) {
+    final ContextContinuation activeContinuation = captureActiveSpan();
+    final Context context = activeContinuation.context();
+    if (context != Context.root()) {
+      final long submittingThreadId = Thread.currentThread().getId();
       if (task instanceof Comparable) {
-        return new ComparableRunnable(task, continuation);
+        return new ComparableRunnable(task, activeContinuation, submittingThreadId);
       }
-      return new Wrapper<>(task, continuation);
+      return new Wrapper<>(task, activeContinuation, submittingThreadId);
     }
     // don't wrap unless there is scope to propagate
     return task;
@@ -36,10 +40,16 @@ public class Wrapper<T extends Runnable> implements Runnable, AutoCloseable {
 
   protected final T delegate;
   private final ContextContinuation continuation;
+  private final long submittingThreadId;
 
   public Wrapper(T delegate, ContextContinuation continuation) {
+    this(delegate, continuation, NOT_ASYNC_TASK);
+  }
+
+  public Wrapper(T delegate, ContextContinuation continuation, long submittingThreadId) {
     this.delegate = delegate;
     this.continuation = continuation;
+    this.submittingThreadId = submittingThreadId;
   }
 
   @Override
@@ -60,7 +70,8 @@ public class Wrapper<T extends Runnable> implements Runnable, AutoCloseable {
   }
 
   private ContextScope activate() {
-    return null == continuation ? null : continuation.resume();
+    return AsyncTaskContext.activate(
+        submittingThreadId, null == continuation ? null : continuation.resume());
   }
 
   @Override

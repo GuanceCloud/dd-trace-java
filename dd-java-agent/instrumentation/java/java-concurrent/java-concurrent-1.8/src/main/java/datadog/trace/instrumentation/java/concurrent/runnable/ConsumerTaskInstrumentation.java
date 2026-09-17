@@ -55,7 +55,7 @@ public class ConsumerTaskInstrumentation extends InstrumenterModule.ContextTrack
       Context context = currentContext();
       if (shouldCapture(context)) {
         State state = State.FACTORY.create();
-        state.captureAndSetContinuation(context);
+        state.captureAndSetAsyncTaskContinuation(context);
         InstrumentationContext.get(ForkJoinTask.class, State.class).put(task, state);
       }
     }

@@ -1,5 +1,6 @@
 package datadog.trace.bootstrap.instrumentation.java.concurrent;
 
+import static datadog.trace.bootstrap.instrumentation.api.AsyncTaskContext.NOT_ASYNC_TASK;
 import static datadog.trace.bootstrap.instrumentation.java.concurrent.ContinuationClaim.CLAIMED;
 
 import datadog.context.Context;
@@ -19,6 +20,8 @@ public final class State {
 
   private volatile ContextContinuation continuation = null;
 
+  private long submittingThreadId = NOT_ASYNC_TASK;
+
   private static final AtomicReferenceFieldUpdater<State, Timing> TIMING =
       AtomicReferenceFieldUpdater.newUpdater(State.class, Timing.class, "timing");
 
@@ -27,6 +30,14 @@ public final class State {
   private State() {}
 
   public boolean captureAndSetContinuation(final Context context) {
+    return captureAndSetContinuation(context, false);
+  }
+
+  public boolean captureAndSetAsyncTaskContinuation(final Context context) {
+    return captureAndSetContinuation(context, true);
+  }
+
+  private boolean captureAndSetContinuation(final Context context, final boolean asyncTask) {
     if (CONTINUATION.compareAndSet(this, null, CLAIMED)) {
       // it's a real pain to do this twice, and this can actually
       // happen systematically - WITHOUT RACES - because of broken
@@ -34,6 +45,7 @@ public final class State {
       // "double instruments" calls to ScheduledExecutorService.submit/schedule
       //
       // lazy write is guaranteed to be seen by getAndSet
+      submittingThreadId = asyncTask ? Thread.currentThread().getId() : NOT_ASYNC_TASK;
       CONTINUATION.lazySet(this, context.capture());
       return true;
     }
@@ -64,6 +76,10 @@ public final class State {
       return Context.root();
     }
     return continuation.context();
+  }
+
+  public long getSubmittingThreadId() {
+    return submittingThreadId;
   }
 
   @Nullable

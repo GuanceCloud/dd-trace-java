@@ -1,6 +1,7 @@
 package datadog.trace.core;
 
 import static datadog.trace.api.DDTags.APM_ENABLED;
+import static datadog.trace.api.DDTags.ASYNC_ENTRY;
 import static datadog.trace.api.DDTags.DJM_ENABLED;
 import static datadog.trace.api.DDTags.DSM_ENABLED;
 import static datadog.trace.api.DDTags.PROFILING_CONTEXT_ENGINE;
@@ -71,6 +72,7 @@ import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpanContext;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpanLink;
 import datadog.trace.bootstrap.instrumentation.api.AgentTracer;
+import datadog.trace.bootstrap.instrumentation.api.AsyncTaskContext;
 import datadog.trace.bootstrap.instrumentation.api.Baggage;
 import datadog.trace.bootstrap.instrumentation.api.BlackHoleSpan;
 import datadog.trace.bootstrap.instrumentation.api.ProfilingContextIntegration;
@@ -1842,6 +1844,18 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
             links = addTerminatedSpanAsLinks(links, specifiedParentSpanContext);
             break;
         }
+      }
+
+      final long submittingThreadId = AsyncTaskContext.submittingThreadId();
+      final long currentThreadId = Thread.currentThread().getId();
+      if (submittingThreadId != AsyncTaskContext.NOT_ASYNC_TASK
+          && submittingThreadId != currentThreadId
+          && (!(parentSpanContext instanceof DDSpanContext)
+              || ((DDSpanContext) parentSpanContext).getThreadId() != currentThreadId)) {
+        if (tagLedger == null) {
+          tagLedger = TagMap.ledger();
+        }
+        tagLedger.set(ASYNC_ENTRY, true);
       }
 
       return buildSpan(
