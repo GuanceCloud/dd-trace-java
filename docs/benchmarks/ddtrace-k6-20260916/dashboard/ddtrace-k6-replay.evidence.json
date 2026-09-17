@@ -1,0 +1,111 @@
+{
+  "generated_at": "2026-09-17T16:29:46.805070+08:00",
+  "workspace": {
+    "id": "current-owl-workspace"
+  },
+  "window": {
+    "start_ms": 1789530269532,
+    "end_ms": 1789538609826,
+    "timezone": "Asia/Shanghai"
+  },
+  "tools": [
+    "owl.data.show_dql_namespace",
+    "owl.metric.list",
+    "owl.data.check_dql",
+    "owl.data.query"
+  ],
+  "sources": [
+    {
+      "namespace": "M",
+      "measurement": "k6",
+      "fields": [
+        {
+          "name": "k6_http_reqs_total",
+          "data_type": "float",
+          "unit": [
+            "custom",
+            ""
+          ],
+          "unit_status": "VERIFIED",
+          "classification": "raw_counter",
+          "non_null_samples": 45
+        },
+        {
+          "name": "k6_http_req_failed_rate",
+          "data_type": "float",
+          "unit": [
+            "custom",
+            "ratio"
+          ],
+          "unit_status": "VERIFIED",
+          "classification": "ratio",
+          "non_null_samples": 45
+        },
+        {
+          "name": "k6_http_req_duration_avg",
+          "data_type": "float",
+          "unit": [
+            "time",
+            "s"
+          ],
+          "unit_status": "VERIFIED",
+          "classification": "raw_gauge",
+          "non_null_samples": 45
+        },
+        {
+          "name": "k6_http_req_duration_p95",
+          "data_type": "float",
+          "unit": [
+            "time",
+            "s"
+          ],
+          "unit_status": "VERIFIED",
+          "classification": "raw_gauge",
+          "non_null_samples": 45
+        },
+        {
+          "name": "k6_http_req_duration_p99",
+          "data_type": "float",
+          "unit": [
+            "time",
+            "s"
+          ],
+          "unit_status": "VERIFIED",
+          "classification": "raw_gauge",
+          "non_null_samples": 45
+        },
+        {
+          "name": "k6_vus_max",
+          "data_type": "float",
+          "unit": [
+            "custom",
+            ""
+          ],
+          "unit_status": "VERIFIED",
+          "classification": "raw_gauge",
+          "non_null_samples": 45
+        }
+      ],
+      "tags": [
+        {
+          "key": "benchmark_id",
+          "observed_values": 1,
+          "representative_value": "ddtrace-20260916-10m"
+        },
+        {
+          "key": "testid",
+          "observed_values": 45,
+          "representative_value": "all-long10m-r300-rep3"
+        }
+      ]
+    }
+  ],
+  "objects": [],
+  "probes": [],
+  "excluded": [
+    "status/error_code 全局变量：只用于 500 RPS 故障分组，不作为全局筛选器"
+  ],
+  "gaps": [
+    "未在本轮通过 UI 执行导入后的 renderer round-trip；已完成 JSON、DQL 和实时数据校验"
+  ]
+}
