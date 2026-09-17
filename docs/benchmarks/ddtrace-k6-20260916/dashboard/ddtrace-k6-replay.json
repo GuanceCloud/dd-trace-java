@@ -126,7 +126,7 @@
         "group": {
           "name": "核心结果"
         },
-        "chartGroupUUID": "group_overview_53131f994a9d",
+        "chartGroupUUID": "group_overview_a1c9c5d59de8",
         "name": "总请求数",
         "pos": {
           "h": 6,
@@ -152,7 +152,7 @@
               "field": "k6_http_reqs_total",
               "filters": [
                 {
-                  "id": "filter_4b8f7c87c803",
+                  "id": "filter_4cc354aeeaab",
                   "op": "=",
                   "name": "benchmark_id",
                   "type": "",
@@ -160,7 +160,7 @@
                   "value": "#{benchmark_id}"
                 },
                 {
-                  "id": "filter_88b0d802e550",
+                  "id": "filter_af8d6f3c7c04",
                   "op": "=",
                   "name": "testid",
                   "type": "",
@@ -181,7 +181,7 @@
           }
         ],
         "prevGroupName": null,
-        "uuid": "chart_4db225a076c6"
+        "uuid": "chart_607755f73fd4"
       },
       {
         "extend": {
@@ -233,7 +233,7 @@
         "group": {
           "name": "核心结果"
         },
-        "chartGroupUUID": "group_overview_53131f994a9d",
+        "chartGroupUUID": "group_overview_a1c9c5d59de8",
         "name": "失败率",
         "pos": {
           "h": 6,
@@ -259,7 +259,7 @@
               "field": "k6_http_req_failed_rate",
               "filters": [
                 {
-                  "id": "filter_aedb574d7707",
+                  "id": "filter_ad3961ae85d9",
                   "op": "=",
                   "name": "benchmark_id",
                   "type": "",
@@ -267,7 +267,7 @@
                   "value": "#{benchmark_id}"
                 },
                 {
-                  "id": "filter_6e693e4c6de6",
+                  "id": "filter_201650c4b62e",
                   "op": "=",
                   "name": "testid",
                   "type": "",
@@ -288,7 +288,7 @@
           }
         ],
         "prevGroupName": null,
-        "uuid": "chart_a9977079b3ad"
+        "uuid": "chart_1019fb602b5c"
       },
       {
         "extend": {
@@ -340,7 +340,7 @@
         "group": {
           "name": "核心结果"
         },
-        "chartGroupUUID": "group_overview_53131f994a9d",
+        "chartGroupUUID": "group_overview_a1c9c5d59de8",
         "name": "平均响应时间",
         "pos": {
           "h": 6,
@@ -366,7 +366,7 @@
               "field": "k6_http_req_duration_avg",
               "filters": [
                 {
-                  "id": "filter_c9738fae18ff",
+                  "id": "filter_8ed29b6f6b67",
                   "op": "=",
                   "name": "benchmark_id",
                   "type": "",
@@ -374,7 +374,7 @@
                   "value": "#{benchmark_id}"
                 },
                 {
-                  "id": "filter_deb0633f7ea2",
+                  "id": "filter_e6d5067c6975",
                   "op": "=",
                   "name": "testid",
                   "type": "",
@@ -395,7 +395,7 @@
           }
         ],
         "prevGroupName": null,
-        "uuid": "chart_64695f7ced3d"
+        "uuid": "chart_291658c9d621"
       },
       {
         "extend": {
@@ -447,7 +447,7 @@
         "group": {
           "name": "核心结果"
         },
-        "chartGroupUUID": "group_overview_53131f994a9d",
+        "chartGroupUUID": "group_overview_a1c9c5d59de8",
         "name": "P95 响应时间",
         "pos": {
           "h": 6,
@@ -473,7 +473,7 @@
               "field": "k6_http_req_duration_p95",
               "filters": [
                 {
-                  "id": "filter_10e0e2d11bc4",
+                  "id": "filter_8828612ff37a",
                   "op": "=",
                   "name": "benchmark_id",
                   "type": "",
@@ -481,7 +481,7 @@
                   "value": "#{benchmark_id}"
                 },
                 {
-                  "id": "filter_b56c7dd223a1",
+                  "id": "filter_b702afae7885",
                   "op": "=",
                   "name": "testid",
                   "type": "",
@@ -502,7 +502,7 @@
           }
         ],
         "prevGroupName": null,
-        "uuid": "chart_2c9fa86f4fab"
+        "uuid": "chart_394eb517349e"
       },
       {
         "extend": {
@@ -554,7 +554,7 @@
         "group": {
           "name": "核心结果"
         },
-        "chartGroupUUID": "group_overview_53131f994a9d",
+        "chartGroupUUID": "group_overview_a1c9c5d59de8",
         "name": "P99 响应时间",
         "pos": {
           "h": 6,
@@ -580,7 +580,7 @@
               "field": "k6_http_req_duration_p99",
               "filters": [
                 {
-                  "id": "filter_fadc77f9fbbd",
+                  "id": "filter_d6f157b32593",
                   "op": "=",
                   "name": "benchmark_id",
                   "type": "",
@@ -588,7 +588,7 @@
                   "value": "#{benchmark_id}"
                 },
                 {
-                  "id": "filter_8c9fe2d2ee54",
+                  "id": "filter_b6b37f9ad831",
                   "op": "=",
                   "name": "testid",
                   "type": "",
@@ -609,7 +609,7 @@
           }
         ],
         "prevGroupName": null,
-        "uuid": "chart_389a8711de62"
+        "uuid": "chart_efcbbb9af775"
       },
       {
         "extend": {
@@ -661,7 +661,7 @@
         "group": {
           "name": "核心结果"
         },
-        "chartGroupUUID": "group_overview_53131f994a9d",
+        "chartGroupUUID": "group_overview_a1c9c5d59de8",
         "name": "最大 VU",
         "pos": {
           "h": 6,
@@ -687,7 +687,7 @@
               "field": "k6_vus_max",
               "filters": [
                 {
-                  "id": "filter_db3a54f3fe91",
+                  "id": "filter_454d4c344823",
                   "op": "=",
                   "name": "benchmark_id",
                   "type": "",
@@ -695,7 +695,7 @@
                   "value": "#{benchmark_id}"
                 },
                 {
-                  "id": "filter_4f4fb8a76369",
+                  "id": "filter_99440f6f0f90",
                   "op": "=",
                   "name": "testid",
                   "type": "",
@@ -716,7 +716,7 @@
           }
         ],
         "prevGroupName": null,
-        "uuid": "chart_f797c0d93fe6"
+        "uuid": "chart_50bc46c50797"
       },
       {
         "extend": {
@@ -724,12 +724,12 @@
             "alias": [],
             "units": [
               {
-                "key": "累计请求数",
-                "name": "累计请求数",
-                "unit": "",
+                "key": "请求速率",
+                "name": "请求速率",
+                "unit": "ops",
                 "units": [
-                  "custom",
-                  ""
+                  "throughput",
+                  "ops"
                 ]
               }
             ],
@@ -737,7 +737,7 @@
             "levels": [],
             "density": "medium",
             "showTitle": true,
-            "titleDesc": "按所选 testid 回放累计请求数",
+            "titleDesc": "累计请求计数器的非负变化率，单位请求/秒",
             "showLegend": true,
             "legendPostion": "bottom",
             "currentChartType": "area",
@@ -759,8 +759,8 @@
         "group": {
           "name": "趋势"
         },
-        "chartGroupUUID": "group_trend_79feef48df7d",
-        "name": "请求量趋势",
+        "chartGroupUUID": "group_trend_ad04d62aaca0",
+        "name": "请求速率趋势",
         "pos": {
           "h": 10,
           "w": 12,
@@ -770,22 +770,22 @@
         "type": "sequence",
         "queries": [
           {
-            "name": "累计请求数",
+            "name": "请求速率",
             "type": "sequence",
             "unit": "",
             "color": "",
             "qtype": "dql",
             "queryGroup": "A",
             "query": {
-              "q": "M::`k6`:(LAST(`k6_http_reqs_total`) AS `累计请求数`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
+              "q": "M::`k6`:(RATE(`k6_http_reqs_total`) AS `请求速率`) { `benchmark_id` = '#{benchmark_id}' AND `testid` = '#{testid}' }",
               "code": "A",
               "fill": null,
               "type": "simple",
-              "alias": "累计请求数",
+              "alias": "请求速率",
               "field": "k6_http_reqs_total",
               "filters": [
                 {
-                  "id": "filter_9544c51e037d",
+                  "id": "filter_089eb85850d6",
                   "op": "=",
                   "name": "benchmark_id",
                   "type": "",
@@ -793,7 +793,7 @@
                   "value": "#{benchmark_id}"
                 },
                 {
-                  "id": "filter_a60319789fa9",
+                  "id": "filter_9d67ca51cd90",
                   "op": "=",
                   "name": "testid",
                   "type": "",
@@ -803,7 +803,7 @@
               ],
               "groupBy": [],
               "funcList": [],
-              "fieldFunc": "last",
+              "fieldFunc": "rate",
               "fieldType": "float",
               "namespace": "metric",
               "dataSource": "k6",
@@ -814,7 +814,7 @@
           }
         ],
         "prevGroupName": null,
-        "uuid": "chart_46fa2cbd6dd4"
+        "uuid": "chart_b7d46d6039bb"
       },
       {
         "extend": {
@@ -857,7 +857,7 @@
         "group": {
           "name": "趋势"
         },
-        "chartGroupUUID": "group_trend_79feef48df7d",
+        "chartGroupUUID": "group_trend_ad04d62aaca0",
         "name": "失败率趋势",
         "pos": {
           "h": 10,
@@ -883,7 +883,7 @@
               "field": "k6_http_req_failed_rate",
               "filters": [
                 {
-                  "id": "filter_f8b25d4eb5e7",
+                  "id": "filter_b69bf2b072c9",
                   "op": "=",
                   "name": "benchmark_id",
                   "type": "",
@@ -891,7 +891,7 @@
                   "value": "#{benchmark_id}"
                 },
                 {
-                  "id": "filter_0cad416026ef",
+                  "id": "filter_24f1eba7261e",
                   "op": "=",
                   "name": "testid",
                   "type": "",
@@ -912,7 +912,7 @@
           }
         ],
         "prevGroupName": null,
-        "uuid": "chart_84b782e767a8"
+        "uuid": "chart_3b265dd1c11a"
       },
       {
         "extend": {
@@ -955,7 +955,7 @@
         "group": {
           "name": "趋势"
         },
-        "chartGroupUUID": "group_trend_79feef48df7d",
+        "chartGroupUUID": "group_trend_ad04d62aaca0",
         "name": "平均响应时间趋势",
         "pos": {
           "h": 10,
@@ -981,7 +981,7 @@
               "field": "k6_http_req_duration_avg",
               "filters": [
                 {
-                  "id": "filter_5ded560a50b0",
+                  "id": "filter_77bf7052d0f3",
                   "op": "=",
                   "name": "benchmark_id",
                   "type": "",
@@ -989,7 +989,7 @@
                   "value": "#{benchmark_id}"
                 },
                 {
-                  "id": "filter_c68ba81ecf89",
+                  "id": "filter_8ee59d421465",
                   "op": "=",
                   "name": "testid",
                   "type": "",
@@ -1010,7 +1010,7 @@
           }
         ],
         "prevGroupName": null,
-        "uuid": "chart_1e8834fb44e8"
+        "uuid": "chart_cd597d780fa8"
       },
       {
         "extend": {
@@ -1053,7 +1053,7 @@
         "group": {
           "name": "趋势"
         },
-        "chartGroupUUID": "group_trend_79feef48df7d",
+        "chartGroupUUID": "group_trend_ad04d62aaca0",
         "name": "P95 响应时间趋势",
         "pos": {
           "h": 10,
@@ -1079,7 +1079,7 @@
               "field": "k6_http_req_duration_p95",
               "filters": [
                 {
-                  "id": "filter_6795a2e652dd",
+                  "id": "filter_89aed52bf74c",
                   "op": "=",
                   "name": "benchmark_id",
                   "type": "",
@@ -1087,7 +1087,7 @@
                   "value": "#{benchmark_id}"
                 },
                 {
-                  "id": "filter_7a5674bd88a3",
+                  "id": "filter_3dfc6f43a0fe",
                   "op": "=",
                   "name": "testid",
                   "type": "",
@@ -1108,7 +1108,7 @@
           }
         ],
         "prevGroupName": null,
-        "uuid": "chart_62dfac87b10b"
+        "uuid": "chart_4579609d281f"
       },
       {
         "extend": {
@@ -1151,7 +1151,7 @@
         "group": {
           "name": "趋势"
         },
-        "chartGroupUUID": "group_trend_79feef48df7d",
+        "chartGroupUUID": "group_trend_ad04d62aaca0",
         "name": "P99 响应时间趋势",
         "pos": {
           "h": 10,
@@ -1177,7 +1177,7 @@
               "field": "k6_http_req_duration_p99",
               "filters": [
                 {
-                  "id": "filter_5b11666dca9d",
+                  "id": "filter_33d059eda856",
                   "op": "=",
                   "name": "benchmark_id",
                   "type": "",
@@ -1185,7 +1185,7 @@
                   "value": "#{benchmark_id}"
                 },
                 {
-                  "id": "filter_710b0a2709d6",
+                  "id": "filter_78a848d3f1b9",
                   "op": "=",
                   "name": "testid",
                   "type": "",
@@ -1206,13 +1206,13 @@
           }
         ],
         "prevGroupName": null,
-        "uuid": "chart_77c229ba518a"
+        "uuid": "chart_3321f258d931"
       }
     ],
     "groups": [
       {
         "name": "核心结果",
-        "uuid": "group_overview_53131f994a9d",
+        "uuid": "group_overview_a1c9c5d59de8",
         "extend": {
           "isExpanded": true,
           "bgColor": "#60A5FA"
@@ -1220,7 +1220,7 @@
       },
       {
         "name": "趋势",
-        "uuid": "group_trend_79feef48df7d",
+        "uuid": "group_trend_ad04d62aaca0",
         "extend": {
           "isExpanded": true,
           "bgColor": "#2DD4BF"
