@@ -20,14 +20,12 @@ class TagsAssert {
   static final Map<Long, String> INSTRUMENTATION_NAMES = new ConcurrentHashMap<>()
 
   private final long spanParentId
-  private final String traceIdHex
   private final long spanId
   private final Map<String, Object> tags
   private final String serviceName
   private final Set<String> assertedTags = new TreeSet<>()
 
   private TagsAssert(DDSpan span) {
-    this.traceIdHex = span.traceId.toHexString()
     this.spanParentId = span.parentId
     this.spanId = span.spanId
     this.tags = span.tags
@@ -95,7 +93,6 @@ class TagsAssert {
    */
   def defaultTags(boolean distributedRootSpan = false, boolean checkPeerService = true) {
     tag("dd_ext_version", { it == null || it == DDTraceCoreInfo.VERSION })
-    tag("trace_128_bit_id", { it == null || it == traceIdHex })
     assertedTags.add("thread.name")
     assertedTags.add("thread.id")
     assertedTags.add(DDTags.RUNTIME_ID_TAG)
