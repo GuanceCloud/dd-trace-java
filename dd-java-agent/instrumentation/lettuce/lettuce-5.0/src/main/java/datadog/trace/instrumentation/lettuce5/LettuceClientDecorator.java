@@ -19,6 +19,7 @@ public class LettuceClientDecorator extends DBTypeProcessingDatabaseClientDecora
       SpanNaming.instance().namingSchema().cache().service("redis");
 
   public boolean RedisCommandRaw = Config.get().getRedisCommandArgs();
+
   @Override
   protected String[] instrumentationNames() {
     return new String[] {"lettuce"};
@@ -70,12 +71,11 @@ public class LettuceClientDecorator extends DBTypeProcessingDatabaseClientDecora
   }
 
   public void onCommand(final AgentSpan span, final RedisCommand command) {
-    if (command.getArgs()!=null && RedisCommandRaw){
+    if (command.getArgs() != null && RedisCommandRaw) {
       CommandArgs args = command.getArgs();
-      span.setTag("redis.command.args",args.toString());
+      span.setTag("redis.command.args", args.toString());
     }
-    final String commandName = LettuceInstrumentationUtil.getCommandName(command);
-    span.setResourceName(LettuceInstrumentationUtil.getCommandResourceName(commandName));
+    span.setResourceName(LettuceInstrumentationUtil.getCommandResourceName(command));
   }
 
   public String resourceNameForConnection(final RedisURI redisURI) {
