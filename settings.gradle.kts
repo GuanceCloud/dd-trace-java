@@ -15,7 +15,10 @@ pluginManagement {
       }
     }
     gradlePluginPortal()
-    mavenCentral()
+    // TODO: temporary fix for Maven Central rate limiting
+    if (!settings.extra.has("mavenRepositoryProxy")) {
+      mavenCentral()
+    }
     // Hosts gradle-tooling-api, a transitive dep of the build-logic:smoke-test plugin used
     // to run nested Gradle builds for smoke-test applications pinned to older Gradle versions.
     maven {
@@ -322,6 +325,7 @@ include(
   ":dd-java-agent:instrumentation:axis2-1.3",
   ":dd-java-agent:instrumentation:axway-api-7.5",
   ":dd-java-agent:instrumentation:azure-functions-1.2.2",
+  ":dd-java-agent:instrumentation:beanshell-2.0",
   ":dd-java-agent:instrumentation:bes:bes-11.0",
   ":dd-java-agent:instrumentation:caffeine-1.0",
   ":dd-java-agent:instrumentation:cdi-1.2",
@@ -381,6 +385,7 @@ include(
   ":dd-java-agent:instrumentation:grpc-1.5",
   ":dd-java-agent:instrumentation:gson-1.6",
   ":dd-java-agent:instrumentation:guava-10.0",
+  ":dd-java-agent:instrumentation:guidewire-10.0",
   ":dd-java-agent:instrumentation:hazelcast:hazelcast-3.6",
   ":dd-java-agent:instrumentation:hazelcast:hazelcast-3.9",
   ":dd-java-agent:instrumentation:hazelcast:hazelcast-4.0",

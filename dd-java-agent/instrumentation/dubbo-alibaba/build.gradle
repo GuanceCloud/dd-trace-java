@@ -1,4 +1,6 @@
-apply from: "$rootDir/gradle/java.gradle"
+plugins {
+  id 'dd-trace-java.module.instrumentation'
+}
 
 muzzle {
   pass {
@@ -13,4 +15,3 @@ muzzle {
 dependencies {
   compileOnly group: 'com.alibaba', name: 'dubbo', version: '2.6.9'
 }
-

@@ -1,4 +1,6 @@
-apply from: "$rootDir/gradle/java.gradle"
+plugins {
+  id 'dd-trace-java.module.instrumentation'
+}
 
 dependencies {
   compileOnly group: 'com.bes.enterprise', name: 'bes-lite-spring-boot-starter', version: '11.5.0'

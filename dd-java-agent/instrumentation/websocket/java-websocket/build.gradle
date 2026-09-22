@@ -1,3 +1,7 @@
+plugins {
+  id 'dd-trace-java.module.instrumentation'
+}
+
 muzzle {
   pass {
     name = "Java-WebSocket"
@@ -6,10 +10,7 @@ muzzle {
   }
 }
 
-apply from: "$rootDir/gradle/java.gradle"
-
 
 dependencies {
   compileOnly group: 'org.java-websocket', name: 'Java-WebSocket', version: '1.5.3'
 }
-
