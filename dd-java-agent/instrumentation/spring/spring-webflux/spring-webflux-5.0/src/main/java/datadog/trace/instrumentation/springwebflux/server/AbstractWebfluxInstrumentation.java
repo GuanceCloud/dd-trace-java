@@ -14,6 +14,8 @@ public abstract class AbstractWebfluxInstrumentation extends InstrumenterModule.
       packageName + ".SpringWebfluxHttpServerDecorator",
       packageName + ".AdviceUtils",
       packageName + ".AdviceUtils$MonoSpanFinisher",
+      packageName + ".SpringCloudGatewayRouteResolver",
+      packageName + ".SpringCloudGatewayRouteResolver$RouteIdAccessor",
       packageName + ".RouteOnSuccessOrError"
     };
   }

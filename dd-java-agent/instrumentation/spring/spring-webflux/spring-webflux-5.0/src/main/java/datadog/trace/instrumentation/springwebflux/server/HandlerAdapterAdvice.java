@@ -49,14 +49,21 @@ public class HandlerAdapterAdvice {
     }
 
     final AgentSpan parentSpan = exchange.getAttribute(AdviceUtils.PARENT_SPAN_ATTRIBUTE);
-    final PathPattern bestPattern =
-        exchange.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
-    if (parentSpan != null
-        && bestPattern != null
-        && !bestPattern.getPatternString().equals("/**")) {
-      final HttpMethod method = exchange.getRequest().getMethod();
-      HTTP_RESOURCE_DECORATOR.withRoute(
-          parentSpan, method != null ? method.name() : null, bestPattern.getPatternString());
+    if (parentSpan != null) {
+      final PathPattern bestPattern =
+          exchange.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+      String route = bestPattern == null ? null : bestPattern.getPatternString();
+      if (route == null || "/**".equals(route)) {
+        final String gatewayRoute = SpringCloudGatewayRouteResolver.resolve(exchange);
+        if (gatewayRoute != null) {
+          route = gatewayRoute;
+        }
+      }
+
+      if (route != null && !"/**".equals(route)) {
+        final HttpMethod method = exchange.getRequest().getMethod();
+        HTTP_RESOURCE_DECORATOR.withRoute(parentSpan, method != null ? method.name() : null, route);
+      }
     }
 
     return scope;
