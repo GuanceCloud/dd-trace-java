@@ -1,13 +1,13 @@
 package datadog.trace.instrumentation.rocketmq;
 
+import static datadog.trace.instrumentation.rocketmq.RocketMqDecorator.PRODUCER_DECORATE;
+
 import datadog.trace.bootstrap.ContextStore;
 import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import org.apache.rocketmq.client.hook.SendMessageContext;
 import org.apache.rocketmq.client.hook.SendMessageHook;
-import org.slf4j.LoggerFactory;
 import org.slf4j.Logger;
-
-import static datadog.trace.instrumentation.rocketmq.RocketMqDecorator.PRODUCER_DECORATE;
+import org.slf4j.LoggerFactory;
 
 public final class TracingSendMessageHookImpl implements SendMessageHook {
 
@@ -31,9 +31,9 @@ public final class TracingSendMessageHookImpl implements SendMessageHook {
       return;
     }
     AgentScope scope = store.get(context);
-    if (scope == null){
+    if (scope == null) {
       scope = rocketMqDecorator.start(context);
-      store.putIfAbsent(context, scope);
+      store.getOrPut(context, scope);
     }
   }
 

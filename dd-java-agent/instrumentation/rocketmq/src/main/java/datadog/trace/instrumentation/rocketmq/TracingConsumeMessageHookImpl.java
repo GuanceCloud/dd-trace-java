@@ -1,11 +1,11 @@
 package datadog.trace.instrumentation.rocketmq;
 
+import static datadog.trace.instrumentation.rocketmq.RocketMqDecorator.CONSUMER_DECORATE;
+
 import datadog.trace.bootstrap.ContextStore;
 import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import org.apache.rocketmq.client.hook.ConsumeMessageContext;
 import org.apache.rocketmq.client.hook.ConsumeMessageHook;
-
-import static datadog.trace.instrumentation.rocketmq.RocketMqDecorator.CONSUMER_DECORATE;
 
 public final class TracingConsumeMessageHookImpl implements ConsumeMessageHook {
   private final RocketMqDecorator rocketMqDecorator;
@@ -30,7 +30,7 @@ public final class TracingConsumeMessageHookImpl implements ConsumeMessageHook {
     AgentScope scope = store.get(context);
     if (scope == null) {
       scope = rocketMqDecorator.start(context);
-      store.putIfAbsent(context, scope);
+      store.getOrPut(context, scope);
     }
   }
 
