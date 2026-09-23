@@ -30,7 +30,7 @@ public final class TracingConsumeMessageHookImpl implements ConsumeMessageHook {
     AgentScope scope = store.get(context);
     if (scope == null) {
       scope = rocketMqDecorator.start(context);
-      store.putIfAbsent(context, scope);
+      store.getOrPut(context, scope);
     }
   }
 
