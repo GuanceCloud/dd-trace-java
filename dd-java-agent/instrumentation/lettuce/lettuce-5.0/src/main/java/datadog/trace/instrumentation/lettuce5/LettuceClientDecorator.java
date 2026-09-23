@@ -81,8 +81,7 @@ public class LettuceClientDecorator extends DBTypeProcessingDatabaseClientDecora
       CommandArgs args = command.getArgs();
       span.setTag("redis.command.args", args.toString());
     }
-    final String commandName = LettuceInstrumentationUtil.getCommandName(command);
-    span.setResourceName(LettuceInstrumentationUtil.getCommandResourceName(commandName));
+    span.setResourceName(LettuceInstrumentationUtil.getCommandResourceName(command));
   }
 
   public AgentSpan onConnection(final AgentSpan span, final LettuceConnectionInfo connectionInfo) {

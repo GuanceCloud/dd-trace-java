@@ -2,11 +2,11 @@ package datadog.trace.api;
 
 import static datadog.trace.api.config.TracerConfig.SERVICE_MAPPING;
 import static datadog.trace.api.config.TracerConfig.SERVICE_MAPPING_FILE;
-import static datadog.trace.junit.utils.config.WithConfigExtension.injectSysConfig;
+import static datadog.trace.test.junit.utils.config.WithConfigExtension.injectSysConfig;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import datadog.trace.junit.utils.config.WithConfigExtension;
+import datadog.trace.test.junit.utils.config.WithConfigExtension;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

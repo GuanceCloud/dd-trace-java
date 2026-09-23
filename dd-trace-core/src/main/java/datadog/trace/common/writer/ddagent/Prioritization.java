@@ -7,8 +7,8 @@ import datadog.communication.ddagent.DroppingPolicy;
 import datadog.trace.api.Config;
 import datadog.trace.core.CoreSpan;
 import java.util.List;
-import java.util.concurrent.BlockingQueue;
 import java.util.Queue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
@@ -45,12 +45,17 @@ public enum Prioritization {
   private static final Logger log = LoggerFactory.getLogger(Prioritization.class);
 
   private static <T extends CoreSpan<T>> PrioritizationStrategy.PublishResult offerOrLogOverflow(
-      String queueName, Queue<Object> queue, T root, int priority, List<T> trace) {
+      String queueName,
+      Queue<Object> queue,
+      T root,
+      int priority,
+      List<T> trace,
+      PrioritizationStrategy.PublishResult overflowResult) {
     if (queue.offer(trace)) {
       return PrioritizationStrategy.PublishResult.ENQUEUED_FOR_SERIALIZATION;
     }
     logBufferOverflow(queueName, queue, root, priority, trace);
-    return PrioritizationStrategy.PublishResult.DROPPED_BUFFER_OVERFLOW;
+    return overflowResult;
   }
 
   private static <T extends CoreSpan<T>> PrioritizationStrategy.PublishResult offerOrLogSpanSamplingOverflow(
@@ -59,7 +64,7 @@ public enum Prioritization {
       return PrioritizationStrategy.PublishResult.ENQUEUED_FOR_SINGLE_SPAN_SAMPLING;
     }
     logBufferOverflow("spanSampling", queue, root, priority, trace);
-    return PrioritizationStrategy.PublishResult.DROPPED_BUFFER_OVERFLOW;
+    return PrioritizationStrategy.PublishResult.DROPPED_BUFFER_OVERFLOW_SINGLE_SPAN;
   }
 
   private static <T extends CoreSpan<T>> void logBufferOverflow(
@@ -130,6 +135,10 @@ public enum Prioritization {
     @Override
     public <T extends CoreSpan<T>> PublishResult publish(
         T root, int priority, final List<T> trace) {
+      if (root.isForceKeep()) {
+        blockingOffer(primary, trace);
+        return PublishResult.ENQUEUED_FOR_SERIALIZATION;
+      }
       switch (priority) {
         case SAMPLER_DROP:
         case USER_DROP:
@@ -137,7 +146,13 @@ public enum Prioritization {
             // send dropped traces for single span sampling
             return offerOrLogSpanSamplingOverflow(spanSampling, root, priority, trace);
           }
-          return offerOrLogOverflow("secondary", secondary, root, priority, trace);
+          return offerOrLogOverflow(
+              "secondary",
+              secondary,
+              root,
+              priority,
+              trace,
+              PublishResult.DROPPED_BUFFER_OVERFLOW_SAMPLED_OUT);
         default:
           blockingOffer(primary, trace);
           return PublishResult.ENQUEUED_FOR_SERIALIZATION;
@@ -165,7 +180,13 @@ public enum Prioritization {
     @Override
     public <T extends CoreSpan<T>> PublishResult publish(T root, int priority, List<T> trace) {
       if (root.isForceKeep()) {
-        return offerOrLogOverflow("primary", primary, root, priority, trace);
+        return offerOrLogOverflow(
+            "primary",
+            primary,
+            root,
+            priority,
+            trace,
+            PublishResult.DROPPED_BUFFER_OVERFLOW);
       }
       switch (priority) {
         case SAMPLER_DROP:
@@ -177,9 +198,21 @@ public enum Prioritization {
           if (droppingPolicy.active()) {
             return PublishResult.DROPPED_BY_POLICY;
           }
-          return offerOrLogOverflow("secondary", secondary, root, priority, trace);
+          return offerOrLogOverflow(
+              "secondary",
+              secondary,
+              root,
+              priority,
+              trace,
+              PublishResult.DROPPED_BUFFER_OVERFLOW_SAMPLED_OUT);
         default:
-          return offerOrLogOverflow("primary", primary, root, priority, trace);
+          return offerOrLogOverflow(
+              "primary",
+              primary,
+              root,
+              priority,
+              trace,
+              PublishResult.DROPPED_BUFFER_OVERFLOW);
       }
     }
   }
