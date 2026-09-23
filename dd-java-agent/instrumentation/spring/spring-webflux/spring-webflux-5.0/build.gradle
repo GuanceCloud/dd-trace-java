@@ -61,6 +61,7 @@ muzzle {
 apply from: "$rootDir/gradle/java.gradle"
 
 addTestSuiteForDir('latestDepTest', 'test')
+addTestSuite('springCloudGatewayTest')
 addTestSuiteForDir('latestBoot20Test', 'bootTest')
 addTestSuiteForDir('latestBoot24Test', 'bootTest')
 addTestSuiteForDir('latestBoot2LatestTest', 'bootTest')
@@ -97,6 +98,8 @@ dependencies {
   latestDepTestImplementation group: 'io.projectreactor.netty', name: 'reactor-netty', version: '0.+'
   latestDepTestImplementation group: 'org.springframework', name: 'spring-test', version: '5.+'
 
+  springCloudGatewayTestImplementation group: 'org.springframework.cloud', name: 'spring-cloud-starter-gateway', version: '3.1.5'
+  springCloudGatewayTestImplementation group: 'org.springframework.boot', name: 'spring-boot-starter-test', version: '2.7.8'
 
   latestBoot20TestImplementation group: 'org.springframework.boot', name: 'spring-boot-starter-webflux', version: '2.0.+'
   latestBoot20TestImplementation group: 'org.springframework.boot', name: 'spring-boot-starter-test', version: '2.0.+'
