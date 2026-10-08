@@ -30,9 +30,23 @@ import net.bytebuddy.matcher.ElementMatcher;
 
 @AutoService(InstrumenterModule.class)
 public class LoggingEventInstrumentation extends InstrumenterModule.Tracing
-    implements Instrumenter.ForTypeHierarchy, Instrumenter.HasMethodAdvice {
+    implements Instrumenter.CanShortcutTypeMatching,
+        Instrumenter.ForBootstrap,
+        Instrumenter.HasMethodAdvice {
   public LoggingEventInstrumentation() {
     super("logback");
+  }
+
+  @Override
+  public String[] knownMatchingTypes() {
+    return new String[] {
+      "ch.qos.logback.classic.spi.LoggingEvent", "ch.qos.logback.classic.spi.LoggingEventVO"
+    };
+  }
+
+  @Override
+  public boolean onlyMatchKnownTypes() {
+    return false;
   }
 
   @Override
@@ -79,6 +93,13 @@ public class LoggingEventInstrumentation extends InstrumenterModule.Tracing
 
       Map<String, String> correlationValues = new HashMap<>(8);
 
+      if (context == null) {
+        AgentSpan span = activeSpan();
+        if (span != null) {
+          context = span.spanContext();
+        }
+      }
+
       if (context != null) {
         DDTraceId traceId = context.getTraceId();
         String traceIdValue =
@@ -88,13 +109,13 @@ public class LoggingEventInstrumentation extends InstrumenterModule.Tracing
         correlationValues.put(CorrelationIdentifier.getTraceIdKey(), traceIdValue);
         correlationValues.put(
             CorrelationIdentifier.getSpanIdKey(), DDSpanId.toString(context.getSpanId()));
-      }else{
-        AgentSpan span = activeSpan();
-        if (span!=null){
-          correlationValues.put(
-              CorrelationIdentifier.getTraceIdKey(), span.getTraceId().toString());
-          correlationValues.put(
-              CorrelationIdentifier.getSpanIdKey(), DDSpanId.toString(span.getSpanId()));
+        if (mdc != null
+            && ("0".equals(mdc.get(CorrelationIdentifier.getTraceIdKey()))
+                || "0".equals(mdc.get(CorrelationIdentifier.getSpanIdKey())))) {
+          // Replace both IDs together without changing the application's MDC snapshot.
+          mdc = new HashMap<>(mdc);
+          mdc.remove(CorrelationIdentifier.getTraceIdKey());
+          mdc.remove(CorrelationIdentifier.getSpanIdKey());
         }
       }
 
