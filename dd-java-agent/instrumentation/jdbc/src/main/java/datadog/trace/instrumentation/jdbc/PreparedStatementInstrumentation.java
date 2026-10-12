@@ -35,6 +35,8 @@ public final class PreparedStatementInstrumentation extends AbstractPreparedStat
     "com.mysql.cj.jdbc.CallableStatement",
     "oracle.jdbc.driver.OracleCallableStatementWrapper",
     "oracle.jdbc.driver.OraclePreparedStatementWrapper",
+    // Oracle prepared/callable wrappers inherit executeBatch() from this superclass.
+    "oracle.jdbc.driver.OracleStatementWrapper",
     // covers hsqldb
     "org.hsqldb.jdbc.JDBCPreparedStatement",
     "org.hsqldb.jdbc.jdbcPreparedStatement",
