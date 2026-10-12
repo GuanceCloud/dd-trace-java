@@ -29,6 +29,7 @@ class TestConnection implements Connection {
   }
 
   private DatabaseMetaData metadata
+  PreparedStatement preparedStatement
 
   @Override
   Statement createStatement() throws SQLException {
@@ -37,7 +38,7 @@ class TestConnection implements Connection {
 
   @Override
   PreparedStatement prepareStatement(String sql) throws SQLException {
-    return new TestPreparedStatement(this, sql)
+    return preparedStatement ?: new TestPreparedStatement(this, sql)
   }
 
   @Override
