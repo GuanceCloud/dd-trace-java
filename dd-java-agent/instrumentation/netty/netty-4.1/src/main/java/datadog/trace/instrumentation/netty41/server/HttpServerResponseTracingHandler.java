@@ -6,6 +6,7 @@ import static datadog.trace.instrumentation.netty41.AttributeKeys.RESPONSE_BODY_
 import static datadog.trace.instrumentation.netty41.AttributeKeys.RESPONSE_BODY_ENCODING_ATTRIBUTE_KEY;
 import static datadog.trace.instrumentation.netty41.AttributeKeys.RESPONSE_BODY_REMAINING_BYTES_ATTRIBUTE_KEY;
 import static datadog.trace.instrumentation.netty41.AttributeKeys.WEBSOCKET_SENDER_HANDLER_CONTEXT;
+import static datadog.trace.instrumentation.netty41.server.HttpServerRequestTracingHandler.append;
 import static datadog.trace.instrumentation.netty41.server.NettyHttpServerDecorator.DECORATE;
 
 import datadog.context.Context;
@@ -90,6 +91,9 @@ public class HttpServerResponseTracingHandler extends ChannelOutboundHandlerAdap
         if (response != null && !informationalResponse) {
           onResponse(ctx, span, serverContext, response, websocketUpgrade);
         }
+        if (!informationalResponse && msg instanceof HttpContent) {
+          captureResponseBody(ctx.channel(), ((HttpContent) msg).content());
+        }
         if (finishResponseOnWrite) {
           removeServerContext(ctx, serverContext);
           writePromise.addListener(
@@ -123,9 +127,7 @@ public class HttpServerResponseTracingHandler extends ChannelOutboundHandlerAdap
       AgentSpan span,
       HttpContent content) {
     try (final ContextScope scope = storedContext.attach()) {
-      HttpServerRequestTracingHandler.append(
-          ctx.channel().attr(RESPONSE_BODY_BUFFER_ATTRIBUTE_KEY).get(), content.content());
-      isResponseBodyComplete(ctx.channel(), content.content().readableBytes());
+      captureResponseBody(ctx.channel(), content.content());
       try {
         ctx.write(msg, prm);
       } catch (final Throwable throwable) {
@@ -144,9 +146,7 @@ public class HttpServerResponseTracingHandler extends ChannelOutboundHandlerAdap
       AgentSpan span,
       ByteBuf content) {
     try (final ContextScope scope = storedContext.attach()) {
-      HttpServerRequestTracingHandler.append(
-          ctx.channel().attr(RESPONSE_BODY_BUFFER_ATTRIBUTE_KEY).get(), content);
-      isResponseBodyComplete(ctx.channel(), content.readableBytes());
+      captureResponseBody(ctx.channel(), content);
       try {
         ctx.write(msg, prm);
       } catch (final Throwable throwable) {
@@ -154,6 +154,15 @@ public class HttpServerResponseTracingHandler extends ChannelOutboundHandlerAdap
         span.setHttpStatusCode(500);
         throw throwable;
       }
+    }
+  }
+
+  private static void captureResponseBody(Channel channel, ByteBuf content) {
+    final ByteArrayOutputStream responseBodyBuffer =
+        channel.attr(RESPONSE_BODY_BUFFER_ATTRIBUTE_KEY).get();
+    if (responseBodyBuffer != null) {
+      append(responseBodyBuffer, content);
+      isResponseBodyComplete(channel, content.readableBytes());
     }
   }
 
@@ -198,7 +207,8 @@ public class HttpServerResponseTracingHandler extends ChannelOutboundHandlerAdap
     }
     String normalizedContentType = contentType.toLowerCase(Locale.ROOT);
     return normalizedContentType.contains("application/json")
-        || normalizedContentType.contains("text/plain");
+        || normalizedContentType.contains("text/plain")
+        || normalizedContentType.contains("text/event-stream");
   }
 
   private static boolean isResponseBodyAllowed(String uri) {
