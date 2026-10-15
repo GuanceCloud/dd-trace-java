@@ -7,6 +7,7 @@ import static datadog.trace.agent.test.base.HttpServerTest.websocketCloseSpan
 import static datadog.trace.agent.test.base.HttpServerTest.websocketReceiveSpan
 import static datadog.trace.agent.test.base.HttpServerTest.websocketSendSpan
 import static datadog.trace.api.config.TraceInstrumentationConfig.TRACE_ANNOTATION_ASYNC
+import static datadog.trace.api.config.TracerConfig.TRACE_RESPONSE_BODY_ENABLED
 
 import datadog.trace.agent.test.InstrumentationSpecification
 import datadog.trace.agent.test.asserts.TraceAssert
@@ -55,6 +56,69 @@ class SpringWebfluxHttp11Test extends InstrumentationSpecification {
   protected void configurePreAgent() {
     super.configurePreAgent()
     injectSysConfig(TRACE_ANNOTATION_ASYNC, "true")
+  }
+
+  def "captures response body for Mono JSON response"() {
+    setup:
+    injectSysConfig(TRACE_RESPONSE_BODY_ENABLED, "true")
+    String urlPath = "/foo"
+    String url = "http://localhost:$port$urlPath"
+    String expectedResponseBody = new FooModel(0L, "DEFAULT").toString()
+
+    when:
+    def response = client.get().uri(url).exchange().block()
+
+    then:
+    response.statusCode().value() == 200
+    response.body(BodyExtractors.toMono(String)).block() == expectedResponseBody
+    assertTraces(2) {
+      def traceParent
+      sortSpansByStart()
+      trace(2) {
+        clientSpan(it, null, "http.request", "spring-webflux-client", "GET", URI.create(url))
+        traceParent = clientSpan(it, span(0), "netty.client.request", "netty-client", "GET", URI.create(url))
+      }
+      trace(2) {
+        span {
+          resourceName "GET $urlPath"
+          operationName "netty.request"
+          spanType DDSpanTypes.HTTP_SERVER
+          childOf(traceParent)
+          tags {
+            "$Tags.COMPONENT" "netty"
+            "$Tags.SPAN_KIND" Tags.SPAN_KIND_SERVER
+            "$Tags.PEER_HOST_IPV4" "127.0.0.1"
+            "$Tags.PEER_PORT" Integer
+            "$Tags.HTTP_URL" url
+            "$Tags.HTTP_HOSTNAME" "localhost"
+            "$Tags.HTTP_METHOD" "GET"
+            "$Tags.HTTP_STATUS" 200
+            "$Tags.HTTP_USER_AGENT" String
+            "$Tags.HTTP_CLIENT_IP" "127.0.0.1"
+            "$Tags.NETWORK_CLIENT_IP" "127.0.0.1"
+            "$Tags.HTTP_ROUTE" urlPath
+            "ext_trace_id" String
+            "response_body" expectedResponseBody
+            defaultTags(true)
+          }
+        }
+        span {
+          resourceName TestController.getSimpleName() + ".getFooModel"
+          operationName TestController.getSimpleName() + ".getFooModel"
+          spanType DDSpanTypes.HTTP_SERVER
+          childOf(span(0))
+          tags {
+            "$Tags.COMPONENT" "spring-webflux-controller"
+            "$Tags.SPAN_KIND" Tags.SPAN_KIND_SERVER
+            "handler.type" TestController.getName()
+            defaultTags()
+          }
+        }
+      }
+    }
+
+    cleanup:
+    removeSysConfig(TRACE_RESPONSE_BODY_ENABLED)
   }
 
   def "Basic GET test #testName"() {
