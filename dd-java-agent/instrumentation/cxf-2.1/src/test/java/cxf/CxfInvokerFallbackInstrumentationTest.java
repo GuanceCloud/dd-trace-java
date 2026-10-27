@@ -8,9 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
+import datadog.context.ContextScope;
 import datadog.trace.agent.test.AbstractInstrumentationTest;
 import datadog.trace.api.DDTraceId;
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.core.DDSpan;
 import datadog.trace.junit.utils.config.WithConfig;
@@ -70,7 +70,7 @@ class CxfInvokerFallbackInstrumentationTest extends AbstractInstrumentationTest 
   @Test
   void doesNotCreateAnotherSpanWhenOneIsAlreadyActive() throws Exception {
     AgentSpan parent = startSpan("test", "existing.request");
-    try (AgentScope ignored = activateSpan(parent)) {
+    try (ContextScope ignored = activateSpan(parent)) {
       assertEquals("ok", new TestInvoker().invoke(newHttpExchange(), null));
       assertSame(parent, activeSpan());
     } finally {

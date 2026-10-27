@@ -1,21 +1,21 @@
 package datadog.trace.instrumentation.rocketmq;
 
+import static datadog.trace.instrumentation.rocketmq.RocketMqDecorator.PRODUCER_DECORATE;
+
+import datadog.context.ContextScope;
 import datadog.trace.bootstrap.ContextStore;
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import org.apache.rocketmq.client.hook.SendMessageContext;
 import org.apache.rocketmq.client.hook.SendMessageHook;
-import org.slf4j.LoggerFactory;
 import org.slf4j.Logger;
-
-import static datadog.trace.instrumentation.rocketmq.RocketMqDecorator.PRODUCER_DECORATE;
+import org.slf4j.LoggerFactory;
 
 public final class TracingSendMessageHookImpl implements SendMessageHook {
 
   private final RocketMqDecorator rocketMqDecorator;
   private static final Logger log = LoggerFactory.getLogger(TracingSendMessageHookImpl.class);
-  private final ContextStore<SendMessageContext, AgentScope> store;
+  private final ContextStore<SendMessageContext, ContextScope> store;
 
-  TracingSendMessageHookImpl(ContextStore<SendMessageContext, AgentScope> store) {
+  TracingSendMessageHookImpl(ContextStore<SendMessageContext, ContextScope> store) {
     this.rocketMqDecorator = PRODUCER_DECORATE;
     this.store = store;
   }
@@ -30,8 +30,8 @@ public final class TracingSendMessageHookImpl implements SendMessageHook {
     if (context == null) {
       return;
     }
-    AgentScope scope = store.get(context);
-    if (scope == null){
+    ContextScope scope = store.get(context);
+    if (scope == null) {
       scope = rocketMqDecorator.start(context);
       store.getOrPut(context, scope);
     }
@@ -39,7 +39,7 @@ public final class TracingSendMessageHookImpl implements SendMessageHook {
 
   @Override
   public void sendMessageAfter(SendMessageContext context) {
-    AgentScope scope = store.get(context);
+    ContextScope scope = store.get(context);
     if (scope == null) {
       return;
     }

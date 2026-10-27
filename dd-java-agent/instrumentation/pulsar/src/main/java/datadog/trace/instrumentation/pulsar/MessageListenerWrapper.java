@@ -3,9 +3,10 @@ package datadog.trace.instrumentation.pulsar;
 import static datadog.trace.bootstrap.instrumentation.api.AgentPropagation.extractContextAndGetSpanContext;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSpan;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.startSpan;
+import static datadog.trace.bootstrap.instrumentation.api.Java8BytecodeBridge.spanFromScope;
 import static datadog.trace.instrumentation.pulsar.MessageTextMapGetter.GETTER;
 
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;
+import datadog.context.ContextScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpanContext;
 import datadog.trace.bootstrap.instrumentation.api.UTF8BytesString;
@@ -30,7 +31,7 @@ public class MessageListenerWrapper<T> implements MessageListener<T> {
     // process message
     PulsarRequest request = PulsarRequest.create(message);
     AgentSpanContext parentContext = extractContextAndGetSpanContext(request, GETTER);
-    // AgentScope extractScope = MessageStore.extract(message);
+    // ContextScope extractScope = MessageStore.extract(message);
     if (parentContext == null) {
       log.debug("MessageListenerWrapper extract scope is null");
       this.delegate.received(consumer, message);
@@ -38,7 +39,7 @@ public class MessageListenerWrapper<T> implements MessageListener<T> {
     }
 
     try {
-      AgentScope scope = start(parentContext, message);
+      ContextScope scope = start(parentContext, message);
       this.delegate.received(consumer, message);
       end(scope, null);
     } catch (Throwable t) {
@@ -46,14 +47,14 @@ public class MessageListenerWrapper<T> implements MessageListener<T> {
     }
   }
 
-  public AgentScope start(AgentSpanContext parentContext, Message<T> message) {
-    if (log.isDebugEnabled()){
+  public ContextScope start(AgentSpanContext parentContext, Message<T> message) {
+    if (log.isDebugEnabled()) {
       log.debug("MessageListenerWrapper start");
     }
 
     String topicName = message.getTopicName();
     UTF8BytesString spanName = UTF8BytesString.create(topicName + " process");
-    AgentSpan span = startSpan("pulsar",spanName, parentContext);
+    AgentSpan span = startSpan("pulsar", spanName, parentContext);
     span.setResourceName(spanName);
     span.setTag("topic", message.getTopicName());
     span.setTag("destination", message.getTopicName());
@@ -65,14 +66,14 @@ public class MessageListenerWrapper<T> implements MessageListener<T> {
     return activateSpan(span);
   }
 
-  public void end(AgentScope scope, Throwable throwable) {
+  public void end(ContextScope scope, Throwable throwable) {
     // todo error
     if (throwable != null) {
-      scope.span().setError(true);
-      scope.span().setErrorMessage(throwable.getMessage());
+      spanFromScope(scope).setError(true);
+      spanFromScope(scope).setErrorMessage(throwable.getMessage());
     }
 
-    scope.span().finish();
+    spanFromScope(scope).finish();
     scope.close();
   }
 

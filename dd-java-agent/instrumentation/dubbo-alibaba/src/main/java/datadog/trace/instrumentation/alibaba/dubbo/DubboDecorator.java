@@ -12,7 +12,7 @@ import com.alibaba.dubbo.common.utils.StringUtils;
 import com.alibaba.dubbo.rpc.Invocation;
 import com.alibaba.dubbo.rpc.Invoker;
 import com.alibaba.dubbo.rpc.RpcContext;
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;
+import datadog.context.ContextScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpanContext;
 import datadog.trace.bootstrap.instrumentation.api.UTF8BytesString;
@@ -30,7 +30,7 @@ public class DubboDecorator extends BaseDecorator {
 
   @Override
   protected String[] instrumentationNames() {
-    return new String[]{"apache-dubbo"};
+    return new String[] {"apache-dubbo"};
   }
 
   @Override
@@ -48,37 +48,37 @@ public class DubboDecorator extends BaseDecorator {
     boolean isConsumer = isConsumerSide(url);
 
     String methodName = invocation.getMethodName();
-    String resourceName = generateOperationName(url,invocation);
-    String shortUrl = generateRequestURL(url,invocation);
+    String resourceName = generateOperationName(url, invocation);
+    String shortUrl = generateRequestURL(url, invocation);
     if (log.isDebugEnabled()) {
-      log.debug("isConsumer:{},method:{},resourceName:{},shortUrl:{},longUrl:{},version:{}",
+      log.debug(
+          "isConsumer:{},method:{},resourceName:{},shortUrl:{},longUrl:{},version:{}",
           isConsumer,
           methodName,
           resourceName,
           shortUrl,
           url.toString(),
-          getVersion(url)
-      );
+          getVersion(url));
     }
     AgentSpan span;
     RpcContext rpcContext = RpcContext.getContext();
-    if (isConsumer){
+    if (isConsumer) {
       // this is consumer
-      span = startSpan("alibaba-dubbo",DUBBO_REQUEST);
-    }else{
+      span = startSpan("alibaba-dubbo", DUBBO_REQUEST);
+    } else {
       // this is provider
       AgentSpanContext parentContext = extractContextAndGetSpanContext(rpcContext, GETTER);
-      span = startSpan("alibaba-dubbo",DUBBO_REQUEST,parentContext);
+      span = startSpan("alibaba-dubbo", DUBBO_REQUEST, parentContext);
     }
     span.setTag(TAG_URL, url.toString());
     span.setTag(TAG_SHORT_URL, shortUrl);
     span.setTag(TAG_METHOD, methodName);
-    span.setTag(TAG_VERSION,getVersion(url));
-    span.setTag(TAG_SIDE,isConsumer?CONSUMER_SIDE:PROVIDER_SIDE);
+    span.setTag(TAG_VERSION, getVersion(url));
+    span.setTag(TAG_SIDE, isConsumer ? CONSUMER_SIDE : PROVIDER_SIDE);
     afterStart(span);
 
     withMethod(span, resourceName);
-    //propagate().inject(span, rpcContext, SETTER);
+    // propagate().inject(span, rpcContext, SETTER);
     defaultPropagator().inject(span, rpcContext, SETTER);
 
     return span;
@@ -87,7 +87,6 @@ public class DubboDecorator extends BaseDecorator {
   public void withMethod(final AgentSpan span, final String methodName) {
     span.setResourceName(methodName);
   }
-
 
   private String generateOperationName(URL requestURL, Invocation invocation) {
     StringBuilder operationName = new StringBuilder();
@@ -119,13 +118,13 @@ public class DubboDecorator extends BaseDecorator {
     return url.getParameter(SIDE_KEY, PROVIDER_SIDE).equals(CONSUMER_SIDE);
   }
 
-  public AgentScope buildSpan(Invoker invoker, Invocation invocation) {
-    AgentSpan span = startDubboSpan(invoker,invocation);
-    AgentScope agentScope = activateSpan(span);
+  public ContextScope buildSpan(Invoker invoker, Invocation invocation) {
+    AgentSpan span = startDubboSpan(invoker, invocation);
+    ContextScope agentScope = activateSpan(span);
     return agentScope;
   }
 
-  private String getVersion(URL url){
+  private String getVersion(URL url) {
     return url.getParameter(VERSION);
   }
 }

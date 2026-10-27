@@ -3,6 +3,7 @@ package datadog.trace.instrumentation.valkey;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSpan;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.startSpan;
+import static datadog.trace.bootstrap.instrumentation.api.Java8BytecodeBridge.spanFromScope;
 import static io.valkey.ValkeyClientDecorator.DECORATE;
 import static java.util.Collections.singletonMap;
 import static net.bytebuddy.matcher.ElementMatchers.isConstructor;
@@ -11,10 +12,10 @@ import static net.bytebuddy.matcher.ElementMatchers.isPublic;
 import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
 
 import com.google.auto.service.AutoService;
+import datadog.context.ContextScope;
 import datadog.trace.agent.tooling.Instrumenter;
 import datadog.trace.agent.tooling.InstrumenterModule;
 import datadog.trace.bootstrap.InstrumentationContext;
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import io.valkey.CommandObject;
 import io.valkey.Connection;
@@ -43,13 +44,6 @@ public final class ValkeyInstrumentation extends InstrumenterModule.Tracing
   @Override
   public Map<String, String> contextStore() {
     return singletonMap("io.valkey.Connection", String.class.getName());
-  }
-
-  @Override
-  public String[] helperClassNames() {
-    return new String[] {
-      "io.valkey.ValkeyClientDecorator",
-    };
   }
 
   @Override
@@ -92,7 +86,7 @@ public final class ValkeyInstrumentation extends InstrumenterModule.Tracing
   public static class ValkeyAdvice {
 
     @Advice.OnMethodEnter(suppress = Throwable.class)
-    public static AgentScope onEnter(
+    public static ContextScope onEnter(
         @Advice.Argument(0) final CommandObject<?> commandObject,
         @Advice.This final Connection thiz) {
       final AgentSpan span = startSpan("valkey-command", ValkeyClientDecorator.OPERATION_NAME);
@@ -111,11 +105,12 @@ public final class ValkeyInstrumentation extends InstrumenterModule.Tracing
 
     @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
     public static void stopSpan(
-        @Advice.Enter final AgentScope scope, @Advice.Thrown final Throwable throwable) {
-      DECORATE.onError(scope.span(), throwable);
-      DECORATE.beforeFinish(scope.span());
+        @Advice.Enter final ContextScope scope, @Advice.Thrown final Throwable throwable) {
+      AgentSpan span = spanFromScope(scope);
+      DECORATE.onError(span, throwable);
+      DECORATE.beforeFinish(span);
       scope.close();
-      scope.span().finish();
+      span.finish();
     }
   }
 }

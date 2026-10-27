@@ -3,6 +3,7 @@ package datadog.trace.instrumentation.springamqp;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSpan;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.startSpan;
+import static datadog.trace.bootstrap.instrumentation.api.Java8BytecodeBridge.spanFromScope;
 import static datadog.trace.bootstrap.instrumentation.java.concurrent.ExcludeFilter.ExcludeType.RUNNABLE;
 import static datadog.trace.instrumentation.springamqp.RabbitListenerDecorator.AMQP_CONSUME;
 import static datadog.trace.instrumentation.springamqp.RabbitListenerDecorator.DECORATE;
@@ -18,7 +19,6 @@ import datadog.trace.agent.tooling.Instrumenter;
 import datadog.trace.agent.tooling.InstrumenterModule;
 import datadog.trace.bootstrap.ContextStore;
 import datadog.trace.bootstrap.InstrumentationContext;
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpanContext;
 import datadog.trace.bootstrap.instrumentation.java.concurrent.ExcludeFilter;
@@ -43,13 +43,6 @@ public class AbstractMessageListenerContainerInstrumentation extends Instrumente
   @Override
   public String instrumentedType() {
     return "org.springframework.amqp.rabbit.listener.AbstractMessageListenerContainer";
-  }
-
-  @Override
-  public String[] helperClassNames() {
-    return new String[] {
-      packageName + ".RabbitListenerDecorator", packageName + ".SpringRabbitMessageContextHelper"
-    };
   }
 
   @Override
@@ -78,7 +71,7 @@ public class AbstractMessageListenerContainerInstrumentation extends Instrumente
 
   public static class ActivateContinuation {
     @Advice.OnMethodEnter(suppress = Throwable.class)
-    public static AgentScope activate(@Advice.Argument(1) Object data) {
+    public static ContextScope activate(@Advice.Argument(1) Object data) {
       Message message = null;
       ContextStore<Message, State> messageStateStore =
           InstrumentationContext.get(Message.class, State.class);
@@ -109,8 +102,9 @@ public class AbstractMessageListenerContainerInstrumentation extends Instrumente
       if (null != state) {
         ContextContinuation continuation = state.getAndResetContinuation();
         if (null != continuation) {
+          AgentSpan span;
           try (ContextScope scope = continuation.resume()) {
-            AgentSpan span = startSpan("rabbitmq-amqp", AMQP_CONSUME);
+            span = startSpan("rabbitmq-amqp", AMQP_CONSUME);
             span.setMeasured(true);
             DECORATE.afterStart(span);
             MessageProperties properties = message.getMessageProperties();
@@ -123,8 +117,8 @@ public class AbstractMessageListenerContainerInstrumentation extends Instrumente
               }
             }
             DECORATE.onConsume(span, message.getMessageProperties().getConsumerQueue());
-            return activateSpan(span);
           }
+          return activateSpan(span);
         }
       }
       AgentSpanContext parentContext = SpringRabbitMessageContextHelper.extractParent(message);
@@ -150,9 +144,9 @@ public class AbstractMessageListenerContainerInstrumentation extends Instrumente
     }
 
     @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
-    public static void close(@Advice.Enter AgentScope scope, @Advice.Thrown Throwable error) {
+    public static void close(@Advice.Enter ContextScope scope, @Advice.Thrown Throwable error) {
       if (null != scope) {
-        AgentSpan span = scope.span();
+        AgentSpan span = spanFromScope(scope);
         if (null != error) {
           DECORATE.onError(span, error);
         }

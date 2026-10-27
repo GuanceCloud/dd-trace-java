@@ -67,7 +67,6 @@ import datadog.trace.api.sampling.PrioritySampling;
 import datadog.trace.api.scopemanager.ScopeListener;
 import datadog.trace.api.time.SystemTimeSource;
 import datadog.trace.api.time.TimeSource;
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpanContext;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpanLink;
@@ -78,6 +77,7 @@ import datadog.trace.bootstrap.instrumentation.api.BlackHoleSpan;
 import datadog.trace.bootstrap.instrumentation.api.ProfilingContextIntegration;
 import datadog.trace.bootstrap.instrumentation.api.SpanAttributes;
 import datadog.trace.bootstrap.instrumentation.api.SpanLink;
+import datadog.trace.bootstrap.instrumentation.api.SpanPrototype;
 import datadog.trace.bootstrap.instrumentation.api.TagContext;
 import datadog.trace.bootstrap.instrumentation.api.Tags;
 import datadog.trace.civisibility.interceptor.CiVisibilityApmProtocolInterceptor;
@@ -86,6 +86,7 @@ import datadog.trace.civisibility.interceptor.CiVisibilityTraceInterceptor;
 import datadog.trace.common.GitMetadataTraceInterceptor;
 import datadog.trace.common.metrics.MetricsAggregator;
 import datadog.trace.common.metrics.NoOpMetricsAggregator;
+import datadog.trace.common.sampling.RateByServiceTraceSampler;
 import datadog.trace.common.sampling.Sampler;
 import datadog.trace.common.sampling.SingleSpanSampler;
 import datadog.trace.common.sampling.SpanSamplingRules;
@@ -135,6 +136,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.zip.ZipOutputStream;
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -181,6 +184,12 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
   /** Sampler defines the sampling policy in order to reduce the number of traces for instance */
   final Sampler initialSampler;
 
+  /**
+   * The sampler registered to receive agent published rates, reused across sampler rebuilds so
+   * learned rates survive.
+   */
+  @Nullable final RateByServiceTraceSampler agentSampler;
+
   /** Scope manager is in charge of managing the scopes from which spans are created */
   final ContinuableScopeManager scopeManager;
 
@@ -192,10 +201,21 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
   /** Maintains dynamic configuration associated with the tracer */
   private final DynamicConfig<ConfigSnapshot> dynamicConfig;
 
-  /** A set of tags that are added only to the application's root span */
-  private final TagMap localRootSpanTags;
+  /**
+   * Tags added only to the application's root span, paired with whether they need interception;
+   * replaced as one immutable holder so a concurrent root span creation never sees a torn read.
+   */
+  private static final class LocalRootSpanTags {
+    final TagMap tags;
+    final boolean needsIntercept;
 
-  private final boolean localRootSpanTagsNeedIntercept;
+    LocalRootSpanTags(final TagMap tags, final boolean needsIntercept) {
+      this.tags = tags;
+      this.needsIntercept = needsIntercept;
+    }
+  }
+
+  private volatile LocalRootSpanTags localRootSpanTags;
 
   /**
    * When {@code false}, every exported span is stamped with the {@code _dd.apm.enabled:0} billing
@@ -203,10 +223,12 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
    */
   private final boolean apmTracingEnabled;
 
-  /** A set of tags that are added to every span */
+  /**
+   * Span defaults added to every span: {@code DD_TRACE_SPAN_TAGS}, or the tags given to the
+   * builder. A remote config {@code tracing_tags} override replaces these along with the global
+   * tags while it's active.
+   */
   private final TagMap defaultSpanTags;
-
-  private final boolean defaultSpanTagsNeedsIntercept;
 
   /** number of spans in a pending trace before they get flushed */
   private final int partialFlushMinSpans;
@@ -254,6 +276,11 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
   // the other branch in singleSpanBuilder
   private static final boolean SPAN_BUILDER_REUSE_ENABLED =
       Config.get().isSpanBuilderReuseEnabled();
+
+  // Instance field (not static final) so it honors per-tracer config, e.g. an embedded tracer
+  // built via CoreTracerBuilder#withProperties/#config rather than the global Config.get()
+  // singleton. See the tag-ordering block in buildSpanContext.
+  private final boolean builderTagsPrecedence;
 
   // Cache used by buildSpan - instance so it can capture the CoreTracer
   private final ReusableSingleSpanBuilderThreadLocalCache spanBuilderThreadLocalCache =
@@ -520,7 +547,7 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
               invertMap(config.getBaggageMapping())));
       // Explicitly skip setting scope manager because it depends on statsDClient
       localRootSpanTags(config.getLocalRootSpanTags());
-      defaultSpanTags(withTracerTags(config.getMergedSpanTags(), config, null));
+      defaultSpanTags(config.getSpanTags());
       serviceNameMappings(config.getServiceMapping());
       taggedHeaders(config.getRequestHeaderTags());
       baggageMapping(config.getBaggageMapping());
@@ -679,6 +706,7 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
     this.initialConfig = config;
     this.apmTracingEnabled = config.isApmTracingEnabled();
     this.initialSampler = sampler;
+    this.agentSampler = sampler.agentSampler();
 
     // Get initial Trace Sampling Rules from config
     String traceSamplingRulesJson = config.getTraceSamplingRules();
@@ -713,7 +741,6 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
         null == tagInterceptor ? new TagInterceptor(new RuleFlags(config)) : tagInterceptor;
 
     this.defaultSpanTags = defaultSpanTags;
-    this.defaultSpanTagsNeedsIntercept = this.tagInterceptor.needsIntercept(this.defaultSpanTags);
 
     this.dynamicConfig =
         DynamicConfig.create(ConfigSnapshot::new)
@@ -727,7 +754,7 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
             .setTraceSampleRate(config.getTraceSampleRate())
             .setSpanSamplingRules(spanSamplingRules.getRules())
             .setTraceSamplingRules(traceSamplingRules.getRules(), traceSamplingRulesJson)
-            .setTracingTags(config.getMergedSpanTags())
+            .setTracingTags(config.getGlobalTags())
             .setDataStreamsTransactionExtractors(dataStreamsTransactionExtractors.getExtractors())
             .apply();
 
@@ -840,6 +867,8 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
 
     propagationTagsFactory = PropagationTags.factory(config);
 
+    builderTagsPrecedence = config.isTraceBuilderTagsPrecedenceEnabled();
+
     // Register context propagators
     HttpCodec.Extractor baseExtractor =
         extractor == null ? HttpCodec.createExtractor(config, this::captureTraceConfig) : extractor;
@@ -915,16 +944,14 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
     this.injectLinksAsTags = injectLinksAsTags;
     this.flushOnClose = flushOnClose;
     this.allowInferredServices = SpanNaming.instance().namingSchema().allowInferredServices();
+    final TagMap frozenLocalRootSpanTags = TagMap.fromMapImmutable(localRootSpanTags);
+    this.localRootSpanTags =
+        new LocalRootSpanTags(
+            frozenLocalRootSpanTags, this.tagInterceptor.needsIntercept(frozenLocalRootSpanTags));
     if (profilingContextIntegration != ProfilingContextIntegration.NoOp.INSTANCE) {
-      TagMap tmp = TagMap.fromMap(localRootSpanTags);
-      tmp.set(PROFILING_CONTEXT_ENGINE, profilingContextIntegration.name());
-      this.localRootSpanTags = tmp.freeze();
-    } else {
-      this.localRootSpanTags = TagMap.fromMapImmutable(localRootSpanTags);
+      // Deferred integrations run this later (or never, if construction fails).
+      profilingContextIntegration.whenAvailable(this::stampProfilingContextEngine);
     }
-
-    this.localRootSpanTagsNeedIntercept =
-        this.tagInterceptor.needsIntercept(this.localRootSpanTags);
     if (serviceDiscoveryFactory != null) {
       AgentTaskScheduler.get()
           .schedule(
@@ -940,6 +967,18 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
               1,
               SECONDS);
     }
+  }
+
+  /**
+   * Adds the profiling context engine tag to {@link #localRootSpanTags}; runs at most once per
+   * tracer.
+   */
+  private void stampProfilingContextEngine() {
+    TagMap tags = TagMap.fromMap(this.localRootSpanTags.tags);
+    tags.set(PROFILING_CONTEXT_ENGINE, this.profilingContextIntegration.name());
+    TagMap frozenTags = tags.freeze();
+    this.localRootSpanTags =
+        new LocalRootSpanTags(frozenTags, this.tagInterceptor.needsIntercept(frozenTags));
   }
 
   private void startMetricsAggregation(Config config, SharedCommunicationObjects sco) {
@@ -1079,6 +1118,27 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
     return createMultiSpanBuilder(instrumentationName, operationName);
   }
 
+  /**
+   * Seeds identity (instrumentation name, operation, span type) and constant tags from a prototype.
+   * {@code operationName} overrides the prototype's when non-null — the explicit value wins, the
+   * prototype is the fallback. The prototype's tags are seeded during {@link CoreSpanBuilder}
+   * construction just before the builder's own tags, so explicit tags override prototype constants.
+   */
+  @Override
+  public CoreSpanBuilder buildSpan(
+      @Nonnull final SpanPrototype prototype, CharSequence operationName) {
+    if (operationName == null) {
+      operationName = prototype.operationName();
+    }
+    CoreSpanBuilder builder =
+        createMultiSpanBuilder(prototype.instrumentationName(), operationName);
+    builder.spanPrototype = prototype;
+    if (prototype.spanType() != null) {
+      builder.spanType = prototype.spanType();
+    }
+    return builder;
+  }
+
   MultiSpanBuilder createMultiSpanBuilder(
       final String instrumentationName, final CharSequence operationName) {
     return new MultiSpanBuilder(this, instrumentationName, operationName);
@@ -1185,12 +1245,23 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
   }
 
   @Override
-  public AgentScope activateSpan(AgentSpan span) {
+  public AgentSpan startSpan(
+      @Nonnull final SpanPrototype prototype, final CharSequence operationName) {
+    return CoreSpanBuilder.startSpan(
+        this,
+        prototype,
+        operationName != null ? operationName : prototype.operationName(),
+        CoreSpanBuilder.USE_SCOPE,
+        CoreSpanBuilder.AUTO_ASSIGN_TIMESTAMP);
+  }
+
+  @Override
+  public ContextScope activateSpan(AgentSpan span) {
     return scopeManager.activateSpan(span);
   }
 
   @Override
-  public AgentScope activateManualSpan(final AgentSpan span) {
+  public ContextScope activateManualSpan(final AgentSpan span) {
     return scopeManager.activateManualSpan(span);
   }
 
@@ -1198,17 +1269,6 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
   @SuppressWarnings("resource")
   public void activateSpanWithoutScope(AgentSpan span) {
     scopeManager.activateSpan(span);
-  }
-
-  @Override
-  @SuppressWarnings("deprecation")
-  public AgentScope.Continuation captureActiveSpan() {
-    return scopeManager.captureActiveSpan();
-  }
-
-  @Override
-  public ContextContinuation captureSpan(final AgentSpan span) {
-    return scopeManager.captureSpan(span);
   }
 
   @Override
@@ -1231,7 +1291,7 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
   }
 
   @Override
-  public AgentScope activateNext(AgentSpan span) {
+  public ContextScope activateNext(AgentSpan span) {
     if (!InstrumenterConfig.get().isLegacyContextManagerEnabled()) {
       throw new IllegalStateException(
           "activateNext must not be called when context swap based logic is enabled");
@@ -1272,7 +1332,7 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
 
   @Override
   public void closeActive() {
-    AgentScope activeScope = this.scopeManager.active();
+    ContextScope activeScope = this.scopeManager.active();
     if (activeScope != null) {
       activeScope.close();
     }
@@ -1300,8 +1360,11 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
 
   @Override
   public void notifyAppSecEnd(AgentSpan span, Object result) {
-    LambdaAppSecHandler.processResponseData(span, result);
-    LambdaAppSecHandler.processRequestEnd(span);
+    try {
+      LambdaAppSecHandler.processResponseData(span, result);
+    } finally {
+      LambdaAppSecHandler.processRequestEnd(span);
+    }
   }
 
   @Override
@@ -1472,7 +1535,7 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
 
   @Override
   public TraceScope muteTracing() {
-    return activateSpan(blackholeSpan());
+    return activateSpan(blackholeSpan())::close;
   }
 
   @Override
@@ -1635,6 +1698,7 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
     // Builder attributes
     // Make sure any fields added here are also reset properly in ReusableSingleSpanBuilder.reset
     protected TagMap.Ledger tagLedger;
+    protected SpanPrototype spanPrototype = SpanPrototype.NONE;
     protected long timestampMicro;
     protected AgentSpanContext parent;
     protected String serviceName;
@@ -1673,6 +1737,7 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
         boolean errorFlag,
         CharSequence spanType,
         TagMap.Ledger tagLedger,
+        SpanPrototype spanPrototype,
         List<AgentSpanLink> links,
         Object builderRequestContextDataAppSec,
         Object builderRequestContextDataIast,
@@ -1692,6 +1757,7 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
               errorFlag,
               spanType,
               tagLedger,
+              spanPrototype,
               links,
               builderRequestContextDataAppSec,
               builderRequestContextDataIast,
@@ -1780,6 +1846,7 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
           this.errorFlag,
           this.spanType,
           this.tagLedger,
+          this.spanPrototype,
           this.links,
           this.builderRequestContextDataAppSec,
           this.builderRequestContextDataIast,
@@ -1806,6 +1873,33 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
           false /* errorFlag */,
           null /* spanType */,
           null /* tagLedger */,
+          SpanPrototype.NONE /* spanPrototype */,
+          null /* links */,
+          null /* appSec */,
+          null /* iast */,
+          null /* ciViz */);
+    }
+
+    protected static final AgentSpan startSpan(
+        final CoreTracer tracer,
+        final SpanPrototype prototype,
+        final CharSequence operationName,
+        final boolean ignoreScope,
+        final long timestampMicros) {
+      return startSpan(
+          tracer,
+          AUTO_ASSIGN_SPAN_ID,
+          prototype.instrumentationName(),
+          timestampMicros,
+          null /* serviceName */,
+          operationName,
+          null /* resourceName */,
+          null /* specifiedParentSpanContext */,
+          ignoreScope,
+          false /* errorFlag */,
+          prototype.spanType(),
+          null /* tagLedger */,
+          prototype,
           null /* links */,
           null /* appSec */,
           null /* iast */,
@@ -1825,6 +1919,7 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
         boolean errorFlag,
         CharSequence spanType,
         TagMap.Ledger tagLedger,
+        SpanPrototype spanPrototype,
         List<AgentSpanLink> links,
         Object builderRequestContextDataAppSec,
         Object builderRequestContextDataIast,
@@ -1899,6 +1994,7 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
           errorFlag,
           spanType,
           tagLedger,
+          spanPrototype,
           links,
           builderRequestContextDataAppSec,
           builderRequestContextDataIast,
@@ -2037,6 +2133,7 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
         boolean errorFlag,
         CharSequence spanType,
         TagMap.Ledger tagLedger,
+        SpanPrototype spanPrototype,
         List<AgentSpanLink> links,
         Object builderRequestContextDataAppSec,
         Object builderRequestContextDataIast,
@@ -2153,8 +2250,9 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
           ciVisibilityContextData = null;
         }
 
-        rootSpanTags = tracer.localRootSpanTags;
-        rootSpanTagsNeedsIntercept = tracer.localRootSpanTagsNeedIntercept;
+        LocalRootSpanTags localRootSpanTags = tracer.localRootSpanTags;
+        rootSpanTags = localRootSpanTags.tags;
+        rootSpanTagsNeedsIntercept = localRootSpanTags.needsIntercept;
 
         parentTraceCollector = tracer.createTraceCollector(traceId, traceConfig);
 
@@ -2178,8 +2276,14 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
       if (!tracer.allowInferredServices) {
         final DDSpan rootSpan = parentTraceCollector.getRootSpan();
         if (rootSpan != null) {
-          serviceName = rootSpan.getServiceName();
-          serviceNameSource = rootSpan.getServiceNameSource();
+          // An inferred proxy represents the gateway, not the application service.
+          // Preserve the service and source already resolved for spans beneath it.
+          // Avoid the synchronized tag lookup when inferred proxies are disabled.
+          if (!tracer.initialConfig.isInferredProxyPropagationEnabled()
+              || rootSpan.getTag("_dd.inferred_span") == null) {
+            serviceName = rootSpan.getServiceName();
+            serviceNameSource = rootSpan.getServiceNameSource();
+          }
         } else {
           serviceName = null;
         }
@@ -2273,8 +2377,11 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
               mergedTracerTagsNeedsIntercept ? null : mergedTracerTags);
 
       // By setting the tags on the context we apply decorators to any tags that have been set via
-      // the builder. This is the order that the tags were added previously, but maybe the `tags`
-      // set in the builder should come last, so that they override other tags.
+      // the builder. The `mergedTracerTags` are always applied first (the precedence floor:
+      // everything overrides them). The remaining contributors are applied last-wins; with
+      // `builderTagsPrecedence` enabled, `tagLedger` (the explicit builder tags) moves to last so
+      // it wins collisions instead of being overridden by `coreTags`/`rootSpanTags`/
+      // `contextualTags` -- see the PR description for the historical context on this ordering.
       //
       // mergedTracerTags is trace-level shared state and the precedence floor (everything below
       // overrides it). When it carries no interceptable tags it is attached as a read-through
@@ -2284,16 +2391,29 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
       if (mergedTracerTagsNeedsIntercept) {
         context.setAllTags(mergedTracerTags, true);
       }
-      context.setAllTags(tagLedger);
-      context.setAllTags(coreTags, coreTagsNeedsIntercept);
-      context.setAllTags(rootSpanTags, rootSpanTagsNeedsIntercept);
-      context.setAllTags(contextualTags);
+      if (spanPrototype != SpanPrototype.NONE) {
+        // Seed the prototype's constant tags + integration name as fallback defaults (span type was
+        // already seeded onto the builder). apply never clobbers, so tags set below still win, and
+        // this is the same seam decorator afterStart uses.
+        context.apply(spanPrototype);
+      }
+      if (tracer.builderTagsPrecedence) {
+        context.setAllTags(coreTags, coreTagsNeedsIntercept);
+        context.setAllTags(rootSpanTags, rootSpanTagsNeedsIntercept);
+        context.setAllTags(contextualTags);
+        context.setAllTags(tagLedger);
+      } else {
+        context.setAllTags(tagLedger);
+        context.setAllTags(coreTags, coreTagsNeedsIntercept);
+        context.setAllTags(rootSpanTags, rootSpanTagsNeedsIntercept);
+        context.setAllTags(contextualTags);
+      }
       // Version is added later by the postProcessor (InternalTagsAdder), only if not already set
       // during the request. Config version is kept out of the trace-level bundle (see
       // withTracerTags), so this removal now only wipes a version set via the span builder —
-      // keeping
-      // the existing semantics where a builder-set version is replaced by the config version. Under
-      // read-through this is a cheap local removal (version isn't in the parent, so no tombstone).
+      // keeping the existing semantics where a builder-set version is replaced by the config
+      // version. Under read-through this is a cheap local removal (version isn't in the parent,
+      // so no tombstone).
       context.removeTag(Tags.VERSION);
       return context;
     }
@@ -2368,6 +2488,7 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
       this.operationName = operationName;
 
       if (this.tagLedger != null) this.tagLedger.reset();
+      this.spanPrototype = SpanPrototype.NONE;
       this.timestampMicro = 0L;
       this.parent = null;
       this.serviceName = null;
@@ -2487,7 +2608,27 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
   protected class ConfigSnapshot extends DynamicConfig.Snapshot {
     final Sampler sampler;
 
+    /**
+     * The global tags ({@code DD_TAGS}, or their remote-config override, which keeps the configured
+     * {@code env} and {@code version}). These are what an OTLP export carries as resource
+     * attributes.
+     */
+    final TagMap globalTags;
+
+    /**
+     * The span defaults with the tracer-defined tags ({@code env}, {@code _dd.dsm.enabled}, ...),
+     * but without the global tags. Only the tracer-defined tags while a remote config {@code
+     * tracing_tags} override is active.
+     */
+    final TagMap spanDefaultTags;
+
+    /**
+     * The tags every span starts with: the global tags merged with the span defaults (span defaults
+     * win), then given the tracer-defined tags. {@code version} is dropped here even when it's a
+     * global tag, unless it's a split-by tag.
+     */
     final TagMap mergedTracerTags;
+
     final boolean mergedTracerTagsNeedsIntercept;
 
     protected ConfigSnapshot(
@@ -2500,21 +2641,57 @@ public class CoreTracer implements AgentTracer.TracerAPI, TracerFlare.Reporter {
           && Objects.equals(getTraceSamplingRules(), oldSnapshot.getTraceSamplingRules())) {
         sampler = oldSnapshot.sampler;
       } else {
-        sampler = Sampler.Builder.forConfig(CoreTracer.this.initialConfig, this);
+        // Reuse the agent sampler: registration for agent rates happens once, at construction.
+        sampler = Sampler.Builder.forConfig(CoreTracer.this.initialConfig, this, agentSampler);
       }
 
-      if (null == oldSnapshot) {
-        mergedTracerTags = CoreTracer.this.defaultSpanTags.immutableCopy();
-        this.mergedTracerTagsNeedsIntercept = CoreTracer.this.defaultSpanTagsNeedsIntercept;
-      } else if (getTracingTags().equals(oldSnapshot.getTracingTags())) {
+      if (null != oldSnapshot
+          && isTracingTagsOverridden() == oldSnapshot.isTracingTagsOverridden()
+          && getTracingTags().equals(oldSnapshot.getTracingTags())
+          // withTracerTags also depends on whether Data Streams Monitoring is enabled
+          && isDataStreamsEnabled() == oldSnapshot.isDataStreamsEnabled()) {
+        globalTags = oldSnapshot.globalTags;
+        spanDefaultTags = oldSnapshot.spanDefaultTags;
         mergedTracerTags = oldSnapshot.mergedTracerTags;
         mergedTracerTagsNeedsIntercept = oldSnapshot.mergedTracerTagsNeedsIntercept;
       } else {
-        mergedTracerTags = withTracerTags(getTracingTags(), CoreTracer.this.initialConfig, this);
+        Config config = CoreTracer.this.initialConfig;
+        Map<String, String> tracingTags = getTracingTags();
+        boolean overridden = isTracingTagsOverridden();
+        // A remote config tracing_tags override stands in for all the user's tags, span defaults
+        // included, until it's removed. It doesn't change the service's env or version.
+        TagMap defaultSpanTags = overridden ? TagMap.EMPTY : CoreTracer.this.defaultSpanTags;
+        globalTags =
+            overridden
+                ? withIdentityTags(tracingTags, config.getGlobalTags())
+                : TagMap.fromMapImmutable(tracingTags);
+        spanDefaultTags = withTracerTags(defaultSpanTags, config, this);
+
+        // span defaults take precedence over global tags
+        TagMap userSpanTags = TagMap.create(globalTags.size() + defaultSpanTags.size());
+        userSpanTags.putAll(globalTags);
+        userSpanTags.putAll(defaultSpanTags);
+        mergedTracerTags = withTracerTags(userSpanTags, config, this);
         mergedTracerTagsNeedsIntercept =
             CoreTracer.this.tagInterceptor.needsIntercept(mergedTracerTags);
       }
     }
+  }
+
+  /** {@code overrideTags} with the {@code env} and {@code version} from {@code configTags}. */
+  private static TagMap withIdentityTags(
+      Map<String, String> overrideTags, Map<String, String> configTags) {
+    TagMap result = TagMap.create(overrideTags.size() + 2);
+    result.putAll(overrideTags);
+    String env = configTags.get(Tags.ENV);
+    if (env != null) {
+      result.set(Tags.ENV, env);
+    }
+    String version = configTags.get(Tags.VERSION);
+    if (version != null) {
+      result.set(Tags.VERSION, version);
+    }
+    return result.freeze();
   }
 
   /**

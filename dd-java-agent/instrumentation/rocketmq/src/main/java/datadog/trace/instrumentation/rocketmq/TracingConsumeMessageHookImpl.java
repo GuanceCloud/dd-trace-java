@@ -1,21 +1,21 @@
 package datadog.trace.instrumentation.rocketmq;
 
+import static datadog.trace.instrumentation.rocketmq.RocketMqDecorator.CONSUMER_DECORATE;
+
+import datadog.context.ContextScope;
 import datadog.trace.bootstrap.ContextStore;
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import org.apache.rocketmq.client.hook.ConsumeMessageContext;
 import org.apache.rocketmq.client.hook.ConsumeMessageHook;
-
-import static datadog.trace.instrumentation.rocketmq.RocketMqDecorator.CONSUMER_DECORATE;
 
 public final class TracingConsumeMessageHookImpl implements ConsumeMessageHook {
   private final RocketMqDecorator rocketMqDecorator;
 
-  TracingConsumeMessageHookImpl(ContextStore<ConsumeMessageContext, AgentScope> store) {
+  TracingConsumeMessageHookImpl(ContextStore<ConsumeMessageContext, ContextScope> store) {
     this.store = store;
     this.rocketMqDecorator = CONSUMER_DECORATE;
   }
 
-  private final ContextStore<ConsumeMessageContext, AgentScope> store;
+  private final ContextStore<ConsumeMessageContext, ContextScope> store;
 
   @Override
   public String hookName() {
@@ -27,7 +27,7 @@ public final class TracingConsumeMessageHookImpl implements ConsumeMessageHook {
     if (context == null || context.getMsgList() == null || context.getMsgList().isEmpty()) {
       return;
     }
-    AgentScope scope = store.get(context);
+    ContextScope scope = store.get(context);
     if (scope == null) {
       scope = rocketMqDecorator.start(context);
       store.getOrPut(context, scope);
@@ -36,7 +36,7 @@ public final class TracingConsumeMessageHookImpl implements ConsumeMessageHook {
 
   @Override
   public void consumeMessageAfter(ConsumeMessageContext context) {
-    AgentScope scope = store.get(context);
+    ContextScope scope = store.get(context);
 
     if (scope == null) {
       return;

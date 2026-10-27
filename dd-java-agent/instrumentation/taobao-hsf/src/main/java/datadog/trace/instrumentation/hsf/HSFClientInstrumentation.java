@@ -2,14 +2,15 @@ package datadog.trace.instrumentation.hsf;
 
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSpan;
+import static datadog.trace.bootstrap.instrumentation.api.Java8BytecodeBridge.spanFromScope;
 import static datadog.trace.instrumentation.hsf.HSFDecorator.DECORATE;
 import static net.bytebuddy.matcher.ElementMatchers.*;
 
 import com.google.auto.service.AutoService;
 import com.taobao.hsf.invocation.Invocation;
+import datadog.context.ContextScope;
 import datadog.trace.agent.tooling.Instrumenter;
 import datadog.trace.agent.tooling.InstrumenterModule;
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import net.bytebuddy.asm.Advice;
 
@@ -52,24 +53,24 @@ public class HSFClientInstrumentation extends InstrumenterModule.Tracing
   //  RPCFilter
   public static class ClientInvokeAdvice {
     @Advice.OnMethodEnter(suppress = Throwable.class)
-    public static AgentScope before(
+    public static ContextScope before(
         @Advice.This Object filter, @Advice.Argument(1) final Invocation invocation) {
       AgentSpan span = DECORATE.buildClientSpan(invocation);
-      AgentScope agentScope = activateSpan(span);
+      ContextScope agentScope = activateSpan(span);
       return agentScope;
     }
 
     @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
     public static void stopSpan(
-        @Advice.Enter final AgentScope scope, @Advice.Thrown final Throwable throwable) {
+        @Advice.Enter final ContextScope scope, @Advice.Thrown final Throwable throwable) {
       if (scope == null) {
         return;
       }
-      DECORATE.onError(scope.span(), throwable);
-      DECORATE.beforeFinish(scope.span());
+      DECORATE.onError(spanFromScope(scope), throwable);
+      DECORATE.beforeFinish(spanFromScope(scope));
 
       scope.close();
-      scope.span().finish();
+      spanFromScope(scope).finish();
     }
   }
 }

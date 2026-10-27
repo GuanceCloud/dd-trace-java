@@ -2,11 +2,12 @@ package datadog.trace.instrumentation.ons_client;
 
 import static datadog.context.propagation.Propagators.defaultPropagator;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.*;
+import static datadog.trace.bootstrap.instrumentation.api.Java8BytecodeBridge.spanFromScope;
 import static datadog.trace.instrumentation.ons_client.InjectAdapter.SETTER;
 
 import com.aliyun.openservices.ons.api.Message;
+import datadog.context.ContextScope;
 import datadog.trace.api.Config;
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.api.UTF8BytesString;
 import datadog.trace.bootstrap.instrumentation.decorator.BaseDecorator;
@@ -23,7 +24,7 @@ public class ProducerDecorator extends BaseDecorator {
 
   @Override
   protected String[] instrumentationNames() {
-    return new String[]{"ons-client","rocketmq"};
+    return new String[] {"ons-client", "rocketmq"};
   }
 
   @Override
@@ -36,32 +37,32 @@ public class ProducerDecorator extends BaseDecorator {
     return PRODUCER;
   }
 
-  public AgentScope OnStart(Message message){
+  public ContextScope OnStart(Message message) {
     String topic = message.getTopic();
-    AgentSpan span = startSpan("ons-client",topic+" send");
+    AgentSpan span = startSpan("ons-client", topic + " send");
     span.setResourceName(topic + " send");
     span.setServiceName("ons-client");
-    if (message.getTag() != null){
-      span.setTag(MESSAGE_TAG,message.getTag());
+    if (message.getTag() != null) {
+      span.setTag(MESSAGE_TAG, message.getTag());
     }
-    String brokerAddr =message.getBornHost();
+    String brokerAddr = message.getBornHost();
     if (brokerAddr != null) {
       span.setTag(MESSAGING_ROCKETMQ_BROKER_ADDRESS, brokerAddr);
     }
-    span.setTag("topic",topic);
-    //span.setTag(MESSAGE_ID,message.getMsgID());
-    defaultPropagator().inject(span,message,SETTER); // 传递链路信息
+    span.setTag("topic", topic);
+    // span.setTag(MESSAGE_ID,message.getMsgID());
+    defaultPropagator().inject(span, message, SETTER); // 传递链路信息
     afterStart(span);
     return activateSpan(span);
   }
 
-  public void OnEnd(AgentScope scope, Throwable throwable){
+  public void OnEnd(ContextScope scope, Throwable throwable) {
     if (scope == null) {
       return;
     }
-    onError(scope.span(),throwable);
-    beforeFinish(scope.span());
+    onError(spanFromScope(scope), throwable);
+    beforeFinish(spanFromScope(scope));
     scope.close();
-    scope.span().finish();
+    spanFromScope(scope).finish();
   }
 }

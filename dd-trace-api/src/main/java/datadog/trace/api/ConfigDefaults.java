@@ -16,6 +16,7 @@ public final class ConfigDefaults {
 
   static final BitSet DEFAULT_HTTP_SERVER_ERROR_STATUSES;
   static final BitSet DEFAULT_HTTP_CLIENT_ERROR_STATUSES;
+  static final BitSet DEFAULT_OTEL_HTTP_CLIENT_ERROR_STATUSES;
   static final BitSet DEFAULT_GRPC_SERVER_ERROR_STATUSES;
   static final BitSet DEFAULT_GRPC_CLIENT_ERROR_STATUSES;
 
@@ -26,6 +27,8 @@ public final class ConfigDefaults {
     DEFAULT_HTTP_SERVER_ERROR_STATUSES.set(500, 600);
     DEFAULT_HTTP_CLIENT_ERROR_STATUSES = new BitSet();
     DEFAULT_HTTP_CLIENT_ERROR_STATUSES.set(400, 500);
+    DEFAULT_OTEL_HTTP_CLIENT_ERROR_STATUSES = new BitSet();
+    DEFAULT_OTEL_HTTP_CLIENT_ERROR_STATUSES.set(400, 600);
     DEFAULT_GRPC_SERVER_ERROR_STATUSES = new BitSet();
     DEFAULT_GRPC_SERVER_ERROR_STATUSES.set(2, 17);
     DEFAULT_GRPC_CLIENT_ERROR_STATUSES = new BitSet();
@@ -74,6 +77,7 @@ public final class ConfigDefaults {
   static final boolean DEFAULT_DB_CLIENT_HOST_SPLIT_BY_INSTANCE_TYPE_SUFFIX = false;
   static final boolean DEFAULT_DB_CLIENT_HOST_SPLIT_BY_HOST = false;
   static final String DEFAULT_DB_DBM_PROPAGATION_MODE_MODE = "disabled";
+  static final boolean DEFAULT_DB_DBM_PROPAGATION_ORACLE_ACTION_ONLY_ENABLED = false;
   static final boolean DEFAULT_DB_DBM_TRACE_PREPARED_STATEMENTS = false;
   static final boolean DEFAULT_DB_DBM_ALWAYS_APPEND_SQL_COMMENT = false;
   // Default value is set to 0, it disables the latency trace interceptor
@@ -125,6 +129,7 @@ public final class ConfigDefaults {
 
   public static final boolean DEFAULT_METRICS_OTEL_EXPERIMENTAL_ENABLED = true;
 
+  static final boolean DEFAULT_TRACE_OTEL_SEMANTICS_ENABLED = false;
   public static final int DEFAULT_OTLP_TRACES_TIMEOUT = 10_000; // ms
 
   static final String DEFAULT_OTLP_HTTP_LOGS_ENDPOINT = "v1/logs";

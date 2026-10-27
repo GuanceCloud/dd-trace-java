@@ -3,13 +3,18 @@ package datadog.trace.instrumentation.rocketmq;
 import static datadog.context.propagation.Propagators.defaultPropagator;
 import static datadog.trace.bootstrap.instrumentation.api.AgentPropagation.extractContextAndGetSpanContext;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.*;
+import static datadog.trace.bootstrap.instrumentation.api.Java8BytecodeBridge.spanFromScope;
 import static datadog.trace.instrumentation.rocketmq.TextMapExtractAdapter.GETTER;
 import static datadog.trace.instrumentation.rocketmq.TextMapInjectAdapter.SETTER;
 
+import datadog.context.ContextScope;
 import datadog.trace.api.Config;
 import datadog.trace.api.naming.SpanNaming;
 import datadog.trace.bootstrap.instrumentation.api.*;
 import datadog.trace.bootstrap.instrumentation.decorator.ClientDecorator;
+import java.lang.reflect.Method;
+import java.net.SocketAddress;
+import java.util.function.Supplier;
 import org.apache.rocketmq.client.hook.ConsumeMessageContext;
 import org.apache.rocketmq.client.hook.SendMessageContext;
 import org.apache.rocketmq.client.producer.SendResult;
@@ -17,10 +22,6 @@ import org.apache.rocketmq.common.message.Message;
 import org.apache.rocketmq.common.message.MessageExt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.net.SocketAddress;
-import java.util.function.Supplier;
 
 public class RocketMqDecorator extends ClientDecorator {
   private static final Logger log = LoggerFactory.getLogger(RocketMqDecorator.class);
@@ -88,7 +89,7 @@ public class RocketMqDecorator extends ClientDecorator {
 
   private static final String LOCAL_SERVICE_NAME = "rocketmq";
 
-  public AgentScope start(ConsumeMessageContext context) {
+  public ContextScope start(ConsumeMessageContext context) {
     MessageExt ext = context.getMsgList().get(0);
 
     AgentSpanContext parentContext = extractContextAndGetSpanContext(ext, GETTER);
@@ -101,7 +102,7 @@ public class RocketMqDecorator extends ClientDecorator {
         span.setTag("product_span_id", parentContext.getSpanId());
       }
     } else {
-      span = startSpan(name.toString(),name, parentContext);
+      span = startSpan(name.toString(), name, parentContext);
     }
 
     span.setResourceName(name);
@@ -131,7 +132,7 @@ public class RocketMqDecorator extends ClientDecorator {
       span.setTag(MESSAGING_ROCKETMQ_BROKER_ADDRESS, getBrokerHost(storeHost));
     }
     afterStart(span);
-    AgentScope scope = activateSpan(span);
+    ContextScope scope = activateSpan(span);
     if (log.isDebugEnabled()) {
       log.debug("consumer span start topic:{}", ext.getTopic());
     }
@@ -143,18 +144,18 @@ public class RocketMqDecorator extends ClientDecorator {
     return storeHost.toString().replace("/", "");
   }
 
-  public void end(ConsumeMessageContext context, AgentScope scope) {
+  public void end(ConsumeMessageContext context, ContextScope scope) {
     if (context == null || context.getMsgList() == null || context.getMsgList().isEmpty()) {
       return;
     }
 
-    if (null == scope.span()) {
+    if (null == spanFromScope(scope)) {
       return;
     }
 
     String status = context.getStatus();
 
-    AgentSpan span = scope.span();
+    AgentSpan span = spanFromScope(scope);
     span.setTag("status", status);
     // beforeFinish(span);
     span.finish();
@@ -163,10 +164,10 @@ public class RocketMqDecorator extends ClientDecorator {
     }
   }
 
-  public AgentScope start(SendMessageContext context) {
+  public ContextScope start(SendMessageContext context) {
     String topic = context.getMessage().getTopic();
     UTF8BytesString spanName = UTF8BytesString.create(topic + " send");
-    AgentSpan span = startSpan(ROCKETMQ,spanName);
+    AgentSpan span = startSpan(ROCKETMQ, spanName);
     span.setResourceName(spanName);
 
     span.setTag(BROKER_HOST, context.getBornHost());
@@ -192,7 +193,7 @@ public class RocketMqDecorator extends ClientDecorator {
     }
     afterStart(span);
     defaultPropagator().inject(span, context, SETTER);
-    AgentScope scope = activateSpan(span);
+    ContextScope scope = activateSpan(span);
 
     if (log.isDebugEnabled()) {
       log.debug("send span start topic:{}", topic);
@@ -200,12 +201,12 @@ public class RocketMqDecorator extends ClientDecorator {
     return scope;
   }
 
-  public void end(SendMessageContext context, AgentScope scope) {
+  public void end(SendMessageContext context, ContextScope scope) {
     if (context == null) {
       return;
     }
     Exception exception = context.getException();
-    AgentSpan span = scope.span();
+    AgentSpan span = spanFromScope(scope);
 
     if (span == null) {
       return;

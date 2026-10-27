@@ -7,9 +7,9 @@ import static datadog.trace.instrumentation.thrift.ThriftConstants.*;
 import static net.bytebuddy.matcher.ElementMatchers.*;
 
 import com.google.auto.service.AutoService;
+import datadog.context.ContextScope;
 import datadog.trace.agent.tooling.Instrumenter;
 import datadog.trace.agent.tooling.InstrumenterModule;
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import java.util.HashMap;
 import java.util.Map;
 import net.bytebuddy.asm.Advice;
@@ -73,7 +73,7 @@ public class TMultiplexedProcessorInstrumentation extends InstrumenterModule.Tra
 
   public static class TMultiplexedProcessorProcessAdvice {
     @Advice.OnMethodEnter(suppress = Throwable.class)
-    public static AgentScope onEnter(
+    public static ContextScope onEnter(
         @Advice.This final TMultiplexedProcessor processor,
         @Advice.AllArguments final Object[] args) {
       try {
@@ -88,7 +88,7 @@ public class TMultiplexedProcessorInstrumentation extends InstrumenterModule.Tra
 
   public static class TMultiplexedProcessorRegisterProcessAdvice {
     @Advice.OnMethodEnter(suppress = Throwable.class)
-    public static AgentScope onEnter(
+    public static ContextScope onEnter(
         @Advice.This final TMultiplexedProcessor obj,
         @Advice.AllArguments final Object[] allArguments) {
       Map<String, ProcessFunction> processMap = TM_M.get(obj);
@@ -102,7 +102,7 @@ public class TMultiplexedProcessorInstrumentation extends InstrumenterModule.Tra
 
   public static class TMultiplexedProcessorRegisterDefaultAdvice {
     @Advice.OnMethodEnter(suppress = Throwable.class)
-    public static AgentScope onEnter(
+    public static ContextScope onEnter(
         @Advice.This final TMultiplexedProcessor obj,
         @Advice.AllArguments final Object[] allArguments) {
       Map<String, ProcessFunction> processMap = TM_M.get(obj);

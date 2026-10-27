@@ -1,25 +1,23 @@
 package datadog.trace.instrumentation;
 
+import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.nameStartsWith;
+import static datadog.trace.bootstrap.instrumentation.api.Java8BytecodeBridge.spanFromScope;
+import static datadog.trace.instrumentation.AllMethodTraceDecorator.DECORATE;
+import static net.bytebuddy.matcher.ElementMatchers.*;
+
 import com.google.auto.service.AutoService;
+import datadog.context.ContextScope;
 import datadog.trace.agent.tooling.Instrumenter;
 import datadog.trace.agent.tooling.InstrumenterModule;
 import datadog.trace.api.InstrumenterConfig;
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;
+import java.lang.reflect.Method;
+import java.util.Set;
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.description.method.MethodDescription;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.matcher.ElementMatcher;
 
-import java.lang.reflect.Method;
-import java.util.Set;
-
-import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.nameStartsWith;
-import static datadog.trace.instrumentation.AllMethodTraceDecorator.DECORATE;
-import static net.bytebuddy.matcher.ElementMatchers.*;
-
-/**
- * Traces all methods of all classes under the specified business package names globally.
- */
+/** Traces all methods of all classes under the specified business package names globally. */
 @AutoService(InstrumenterModule.class)
 public class AllMethodInstrumentation extends InstrumenterModule.Tracing
     implements Instrumenter.ForTypeHierarchy, Instrumenter.HasMethodAdvice {
@@ -36,7 +34,7 @@ public class AllMethodInstrumentation extends InstrumenterModule.Tracing
   @Override
   public ElementMatcher<TypeDescription> hierarchyMatcher() {
     Set<String> traceMethodPackages = InstrumenterConfig.get().getTraceMethodPackages();
-    if (traceMethodPackages.size()==0){
+    if (traceMethodPackages.size() == 0) {
       return nameStartsWith("null");
     }
     ElementMatcher.Junction<TypeDescription> matcher = null;
@@ -50,11 +48,10 @@ public class AllMethodInstrumentation extends InstrumenterModule.Tracing
     }
     return matcher;
   }
+
   @Override
   public String[] helperClassNames() {
-    return new String[]{
-        packageName + ".AllMethodTraceDecorator"
-    };
+    return new String[] {packageName + ".AllMethodTraceDecorator"};
   }
 
   @Override
@@ -76,21 +73,23 @@ public class AllMethodInstrumentation extends InstrumenterModule.Tracing
 
   public static class GlobalTracingAdvice {
     @Advice.OnMethodEnter
-    public static AgentScope onEnter(@Advice.Origin("#t") String className,@Advice.Origin final Method method, @Advice.AllArguments final Object[] args) {
-      return DECORATE.buildSpan(className,method,args);
+    public static ContextScope onEnter(
+        @Advice.Origin("#t") String className,
+        @Advice.Origin final Method method,
+        @Advice.AllArguments final Object[] args) {
+      return DECORATE.buildSpan(className, method, args);
     }
+
     @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
     public static void stopSpan(
-        @Advice.Enter final AgentScope scope,  @Advice.Thrown final Throwable throwable) {
+        @Advice.Enter final ContextScope scope, @Advice.Thrown final Throwable throwable) {
       if (scope == null) {
         return;
       }
-      DECORATE.onError(scope.span(), throwable);
-      DECORATE.beforeFinish(scope.span());
+      DECORATE.onError(spanFromScope(scope), throwable);
+      DECORATE.beforeFinish(spanFromScope(scope));
       scope.close();
-      scope.span().finish();
+      spanFromScope(scope).finish();
     }
   }
-
-
 }

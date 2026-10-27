@@ -4,18 +4,17 @@ import static java.util.Collections.singletonMap;
 import static net.bytebuddy.matcher.ElementMatchers.*;
 
 import com.google.auto.service.AutoService;
+import datadog.context.ContextScope;
 import datadog.trace.agent.tooling.Instrumenter;
 import datadog.trace.agent.tooling.InstrumenterModule;
 import datadog.trace.bootstrap.InstrumentationContext;
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;
+import java.util.Map;
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.matcher.ElementMatcher;
 import org.apache.rocketmq.client.hook.SendMessageContext;
 import org.apache.rocketmq.client.impl.producer.DefaultMQProducerImpl;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
-import java.util.HashMap;
-import java.util.Map;
 
 @AutoService(InstrumenterModule.class)
 public class RocketMqSendInstrumentation extends InstrumenterModule.Tracing
@@ -40,7 +39,7 @@ public class RocketMqSendInstrumentation extends InstrumenterModule.Tracing
   @Override
   public Map<String, String> contextStore() {
     return singletonMap(
-        "org.apache.rocketmq.client.hook.SendMessageContext", AgentScope.class.getName());
+        "org.apache.rocketmq.client.hook.SendMessageContext", ContextScope.class.getName());
   }
 
   @Override
@@ -70,7 +69,7 @@ public class RocketMqSendInstrumentation extends InstrumenterModule.Tracing
 
       defaultMqProducerImpl.registerSendMessageHook(
           RocketMqHook.buildSendHook(
-              InstrumentationContext.get(SendMessageContext.class, AgentScope.class)));
+              InstrumentationContext.get(SendMessageContext.class, ContextScope.class)));
     }
   }
 }

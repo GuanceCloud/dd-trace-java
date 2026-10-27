@@ -31,16 +31,6 @@ public class LettuceAsyncCommandsInstrumentation extends InstrumenterModule.Trac
   }
 
   @Override
-  public String[] helperClassNames() {
-    return new String[] {
-      packageName + ".LettuceClientDecorator",
-      packageName + ".LettuceAsyncBiConsumer",
-      packageName + ".LettuceInstrumentationUtil",
-      packageName + ".LettuceConnectionInfo"
-    };
-  }
-
-  @Override
   public void methodAdvice(MethodTransformer transformer) {
     transformer.applyAdvice(
         isMethod()
