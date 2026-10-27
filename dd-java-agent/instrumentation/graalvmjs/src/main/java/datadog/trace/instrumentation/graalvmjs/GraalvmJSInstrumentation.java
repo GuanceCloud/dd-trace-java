@@ -2,14 +2,15 @@ package datadog.trace.instrumentation.graalvmjs;
 
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSpan;
+import static datadog.trace.bootstrap.instrumentation.api.Java8BytecodeBridge.spanFromScope;
 import static datadog.trace.instrumentation.graalvmjs.GraalvmjsDecorator.DECORATOR;
 import static net.bytebuddy.matcher.ElementMatchers.*;
 import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
 
 import com.google.auto.service.AutoService;
+import datadog.context.ContextScope;
 import datadog.trace.agent.tooling.Instrumenter;
 import datadog.trace.agent.tooling.InstrumenterModule;
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.description.type.TypeDescription;
@@ -49,52 +50,53 @@ public class GraalvmJSInstrumentation extends InstrumenterModule.Tracing
             .and(takesArgument(0, named("org.graalvm.polyglot.Source"))),
         GraalvmJSInstrumentation.class.getName() + "$GraalvmJSParseAdvice");
   }
+
   @Override
   public String[] helperClassNames() {
-    return new String[] {
-        packageName+".GraalvmjsDecorator"
-    };
+    return new String[] {packageName + ".GraalvmjsDecorator"};
   }
-  public static class GraalvmJSEvalAdvice{
+
+  public static class GraalvmJSEvalAdvice {
     @Advice.OnMethodEnter(suppress = Throwable.class)
-    public static AgentScope beginRequest(@Advice.Argument(0) final Source source) {
-      AgentSpan span = DECORATOR.createSpan("eval",source);
-      AgentScope agentScope = activateSpan(span);
+    public static ContextScope beginRequest(@Advice.Argument(0) final Source source) {
+      AgentSpan span = DECORATOR.createSpan("eval", source);
+      ContextScope agentScope = activateSpan(span);
       return agentScope;
     }
 
     @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
     public static void stopSpan(
-        @Advice.Enter final AgentScope scope, @Advice.Thrown final Throwable throwable) {
+        @Advice.Enter final ContextScope scope, @Advice.Thrown final Throwable throwable) {
       if (scope == null) {
         return;
       }
-      DECORATOR.onError(scope.span(), throwable);
-      DECORATOR.beforeFinish(scope.span());
+      DECORATOR.onError(spanFromScope(scope), throwable);
+      DECORATOR.beforeFinish(spanFromScope(scope));
 
       scope.close();
-      scope.span().finish();
+      spanFromScope(scope).finish();
     }
   }
-  public static class GraalvmJSParseAdvice{
+
+  public static class GraalvmJSParseAdvice {
     @Advice.OnMethodEnter(suppress = Throwable.class)
-    public static AgentScope beginRequest(@Advice.Argument(0) final Source source) {
-      AgentSpan span = DECORATOR.createSpan("parse",source);
-      AgentScope agentScope = activateSpan(span);
+    public static ContextScope beginRequest(@Advice.Argument(0) final Source source) {
+      AgentSpan span = DECORATOR.createSpan("parse", source);
+      ContextScope agentScope = activateSpan(span);
       return agentScope;
     }
 
     @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
     public static void stopSpan(
-        @Advice.Enter final AgentScope scope, @Advice.Thrown final Throwable throwable) {
+        @Advice.Enter final ContextScope scope, @Advice.Thrown final Throwable throwable) {
       if (scope == null) {
         return;
       }
-      DECORATOR.onError(scope.span(), throwable);
-      DECORATOR.beforeFinish(scope.span());
+      DECORATOR.onError(spanFromScope(scope), throwable);
+      DECORATOR.beforeFinish(spanFromScope(scope));
 
       scope.close();
-      scope.span().finish();
+      spanFromScope(scope).finish();
     }
   }
 }

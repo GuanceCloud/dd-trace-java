@@ -2,21 +2,22 @@ pluginManagement {
   repositories {
     mavenLocal()
 
-    if (settings.extra.has("gradlePluginProxy")) {
+    providers.gradleProperty("gradlePluginProxy").orNull?.let { proxy ->
       maven {
-        url = uri(settings.extra["gradlePluginProxy"] as String)
+        url = uri(proxy)
         isAllowInsecureProtocol = true
       }
     }
-    if (settings.extra.has("mavenRepositoryProxy")) {
+    val mavenRepositoryProxy = providers.gradleProperty("mavenRepositoryProxy").orNull
+    mavenRepositoryProxy?.let { proxy ->
       maven {
-        url = uri(settings.extra["mavenRepositoryProxy"] as String)
+        url = uri(proxy)
         isAllowInsecureProtocol = true
       }
     }
     gradlePluginPortal()
     // TODO: temporary fix for Maven Central rate limiting
-    if (!settings.extra.has("mavenRepositoryProxy")) {
+    if (mavenRepositoryProxy == null) {
       mavenCentral()
     }
     // Hosts gradle-tooling-api, a transitive dep of the build-logic:smoke-test plugin used
@@ -32,7 +33,7 @@ pluginManagement {
 }
 
 plugins {
-  id("com.gradle.develocity") version "4.5.0"
+  id("com.gradle.develocity") version "4.6.1"
   id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
 
@@ -60,6 +61,7 @@ rootProject.name = "dd-trace-java"
 
 // external apis
 include(
+  ":dd-openfeature",
   ":dd-trace-api",
   ":dd-trace-ot",
   ":dd-trace-ot:correlation-id-injection",
@@ -325,6 +327,7 @@ include(
   ":dd-java-agent:instrumentation:axis2-1.3",
   ":dd-java-agent:instrumentation:axway-api-7.5",
   ":dd-java-agent:instrumentation:azure-functions-1.2.2",
+  ":dd-java-agent:instrumentation:azure-functions-worker-2.7",
   ":dd-java-agent:instrumentation:beanshell-2.0",
   ":dd-java-agent:instrumentation:bes:bes-11.0",
   ":dd-java-agent:instrumentation:caffeine-1.0",
@@ -339,12 +342,14 @@ include(
   ":dd-java-agent:instrumentation:confluent-schema-registry:confluent-schema-registry-4.1",
   ":dd-java-agent:instrumentation:couchbase:couchbase-2.0",
   ":dd-java-agent:instrumentation:couchbase:couchbase-2.6",
+  ":dd-java-agent:instrumentation:couchbase:couchbase-3-common",
   ":dd-java-agent:instrumentation:couchbase:couchbase-3.1",
   ":dd-java-agent:instrumentation:couchbase:couchbase-3.2",
   ":dd-java-agent:instrumentation:cucumber-5.4",
   ":dd-java-agent:instrumentation:cxf-2.1",
   ":dd-java-agent:instrumentation:datadog:asm:iast-instrumenter",
   ":dd-java-agent:instrumentation:datadog:dynamic-instrumentation:span-origin",
+  ":dd-java-agent:instrumentation:datadog:openfeature:dd-openfeature-1.69",
   ":dd-java-agent:instrumentation:datadog:profiling:enable-wallclock-profiling",
   ":dd-java-agent:instrumentation:datadog:profiling:exception-profiling",
   ":dd-java-agent:instrumentation:datadog:tracing:trace-annotation",
@@ -481,6 +486,7 @@ include(
   ":dd-java-agent:instrumentation:lettuce:lettuce-5.0",
   ":dd-java-agent:instrumentation:liberty:liberty-20.0",
   ":dd-java-agent:instrumentation:liberty:liberty-23.0",
+  ":dd-java-agent:instrumentation:liberty:liberty-appsec-common",
   ":dd-java-agent:instrumentation:log4j:log4j-1.2.4",
   ":dd-java-agent:instrumentation:log4j:log4j-2.0",
   ":dd-java-agent:instrumentation:log4j:log4j-2.7",
@@ -559,6 +565,7 @@ include(
   ":dd-java-agent:instrumentation:quartz-2.0",
   ":dd-java-agent:instrumentation:rabbitmq-amqp-2.7",
   ":dd-java-agent:instrumentation:ratpack-1.5",
+  ":dd-java-agent:instrumentation:r2dbc:r2dbc-1.0",
   ":dd-java-agent:instrumentation:reactive-streams-1.0",
   ":dd-java-agent:instrumentation:reactor-core-3.1",
   ":dd-java-agent:instrumentation:reactor-netty-1.0",

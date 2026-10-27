@@ -1,23 +1,23 @@
 package datadog.trace.instrumentation.disruptor;
 
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;
+import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.*;
+
+import datadog.context.ContextScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.api.UTF8BytesString;
 import datadog.trace.bootstrap.instrumentation.decorator.BaseDecorator;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.*;
 
 public class DisruptorDecorator extends BaseDecorator {
   public static final DisruptorDecorator DECORATE = new DisruptorDecorator();
 
   private static final Logger log = LoggerFactory.getLogger(DisruptorDecorator.class);
   public static final CharSequence DISRUPTOR = UTF8BytesString.create("disruptor");
+
   @Override
   protected String[] instrumentationNames() {
-    return new String[]{"disruptor"};
+    return new String[] {"disruptor"};
   }
 
   @Override
@@ -30,14 +30,13 @@ public class DisruptorDecorator extends BaseDecorator {
     return DISRUPTOR;
   }
 
-
-  public AgentScope start() {
+  public ContextScope start() {
     AgentSpan span = startSpan("disruptor/publish");
     return activateSpan(span);
   }
 
-  public AgentScope startBySpan(AgentSpan parent) {
-    AgentSpan span = startSpan("disruptor/consumer",parent.context());
+  public ContextScope startBySpan(AgentSpan parent) {
+    AgentSpan span = startSpan("disruptor/consumer", parent.context());
     return activateSpan(span);
   }
 }

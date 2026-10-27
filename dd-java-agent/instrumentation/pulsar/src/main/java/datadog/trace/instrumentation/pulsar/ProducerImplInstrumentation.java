@@ -8,11 +8,11 @@ import static net.bytebuddy.matcher.ElementMatchers.isPublic;
 import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
 
 import com.google.auto.service.AutoService;
+import datadog.context.ContextScope;
 import datadog.trace.agent.tooling.Instrumenter;
 import datadog.trace.agent.tooling.InstrumenterModule;
 import datadog.trace.bootstrap.ContextStore;
 import datadog.trace.bootstrap.InstrumentationContext;
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import java.util.HashMap;
 import java.util.Map;
 import net.bytebuddy.asm.Advice;
@@ -26,7 +26,7 @@ import org.apache.pulsar.client.impl.SendCallback;
 
 @AutoService(InstrumenterModule.class)
 public final class ProducerImplInstrumentation extends InstrumenterModule.Tracing
-    implements Instrumenter.ForTypeHierarchy , Instrumenter.HasMethodAdvice{
+    implements Instrumenter.ForTypeHierarchy, Instrumenter.HasMethodAdvice {
 
   public static final String CLASS_NAME = "org.apache.pulsar.client.impl.ProducerImpl";
 
@@ -47,7 +47,7 @@ public final class ProducerImplInstrumentation extends InstrumenterModule.Tracin
   @Override
   public Map<String, String> contextStore() {
     Map<String, String> store = new HashMap<>(1);
-    store.put("org.apache.pulsar.client.impl.ProducerImpl", packageName+".ProducerData");
+    store.put("org.apache.pulsar.client.impl.ProducerImpl", packageName + ".ProducerData");
     return store;
   }
 
@@ -64,7 +64,6 @@ public final class ProducerImplInstrumentation extends InstrumenterModule.Tracin
       packageName + ".MessageTextMapSetter",
       packageName + ".PulsarBatchRequest",
       packageName + ".PulsarRequest",
-
     };
   }
 
@@ -109,11 +108,11 @@ public final class ProducerImplInstrumentation extends InstrumenterModule.Tracin
       ContextStore<ProducerImpl, ProducerData> contextStore =
           InstrumentationContext.get(ProducerImpl.class, ProducerData.class);
       ProducerData producerData = contextStore.get(producer);
-      
+
       PulsarRequest request =
           PulsarRequest.create(message, ProducerData.create(producerData.url, producerData.topic));
 
-      AgentScope scope = ProducerDecorator.start(request);
+      ContextScope scope = ProducerDecorator.start(request);
 
       callback = new SendCallbackWrapper(scope, request, callback);
     }

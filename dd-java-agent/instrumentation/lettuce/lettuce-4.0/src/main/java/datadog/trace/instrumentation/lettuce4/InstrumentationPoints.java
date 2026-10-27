@@ -10,6 +10,7 @@ import static com.lambdaworks.redis.protocol.CommandType.SCRIPT;
 import static com.lambdaworks.redis.protocol.CommandType.SHUTDOWN;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSpan;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.startSpan;
+import static datadog.trace.bootstrap.instrumentation.api.Java8BytecodeBridge.spanFromScope;
 import static datadog.trace.instrumentation.lettuce4.LettuceClientDecorator.DECORATE;
 import static datadog.trace.instrumentation.lettuce4.LettuceClientDecorator.REDIS_CLIENT;
 
@@ -18,11 +19,8 @@ import com.lambdaworks.redis.protocol.AsyncCommand;
 import com.lambdaworks.redis.protocol.CommandType;
 import com.lambdaworks.redis.protocol.ProtocolKeyword;
 import com.lambdaworks.redis.protocol.RedisCommand;
-import datadog.trace.api.Config;
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;
+import datadog.context.ContextScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
-
-import javax.swing.plaf.synth.SynthOptionPaneUI;
 import java.util.EnumSet;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
@@ -36,26 +34,26 @@ public final class InstrumentationPoints {
 
   public static final String AGENT_CRASHING_COMMAND_PREFIX = "COMMAND-NAME:";
 
-  public static AgentScope beforeCommand(
+  public static ContextScope beforeCommand(
       final RedisCommand<?, ?, ?> command, final RedisURI redisURI) {
     final AgentSpan span =
         startSpan(REDIS_CLIENT.toString(), LettuceClientDecorator.OPERATION_NAME);
     DECORATE.afterStart(span);
     DECORATE.onConnection(span, redisURI);
     DECORATE.onCommand(span, command);
-    if (command.getArgs()!=null){
+    if (command.getArgs() != null) {
       String args = command.getArgs().toString();
-      DECORATE.setArgs(span,args);
+      DECORATE.setArgs(span, args);
     }
     return activateSpan(span);
   }
 
   public static void afterCommand(
       final RedisCommand<?, ?, ?> command,
-      final AgentScope scope,
+      final ContextScope scope,
       final Throwable throwable,
       final AsyncCommand<?, ?, ?> asyncCommand) {
-    final AgentSpan span = scope.span();
+    final AgentSpan span = spanFromScope(scope);
     if (throwable != null) {
       DECORATE.onError(span, throwable);
       DECORATE.beforeFinish(span);
@@ -85,7 +83,7 @@ public final class InstrumentationPoints {
     // span may be finished by handleAsync call above.
   }
 
-  public static AgentScope beforeConnect(final RedisURI redisURI) {
+  public static ContextScope beforeConnect(final RedisURI redisURI) {
     final AgentSpan span =
         startSpan(REDIS_CLIENT.toString(), LettuceClientDecorator.OPERATION_NAME);
     DECORATE.afterStart(span);
@@ -94,8 +92,8 @@ public final class InstrumentationPoints {
     return activateSpan(span);
   }
 
-  public static void afterConnect(final AgentScope scope, final Throwable throwable) {
-    final AgentSpan span = scope.span();
+  public static void afterConnect(final ContextScope scope, final Throwable throwable) {
+    final AgentSpan span = spanFromScope(scope);
     if (throwable != null) {
       DECORATE.onError(span, throwable);
       DECORATE.beforeFinish(span);

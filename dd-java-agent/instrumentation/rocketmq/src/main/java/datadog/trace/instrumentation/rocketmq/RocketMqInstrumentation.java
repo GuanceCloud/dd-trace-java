@@ -3,17 +3,17 @@ package datadog.trace.instrumentation.rocketmq;
 import static java.util.Collections.singletonMap;
 import static net.bytebuddy.matcher.ElementMatchers.*;
 
-import org.apache.rocketmq.client.hook.ConsumeMessageContext;
 import com.google.auto.service.AutoService;
+import datadog.context.ContextScope;
 import datadog.trace.agent.tooling.Instrumenter;
 import datadog.trace.agent.tooling.InstrumenterModule;
-import java.util.Map;
 import datadog.trace.bootstrap.InstrumentationContext;
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;
+import java.util.Map;
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.matcher.ElementMatcher;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
+import org.apache.rocketmq.client.hook.ConsumeMessageContext;
 import org.apache.rocketmq.client.impl.consumer.DefaultMQPushConsumerImpl;
 
 @AutoService(InstrumenterModule.class)
@@ -52,7 +52,7 @@ public class RocketMqInstrumentation extends InstrumenterModule.Tracing
   @Override
   public Map<String, String> contextStore() {
     return singletonMap(
-        "org.apache.rocketmq.client.hook.ConsumeMessageContext", AgentScope.class.getName());
+        "org.apache.rocketmq.client.hook.ConsumeMessageContext", ContextScope.class.getName());
   }
 
   @Override
@@ -73,7 +73,7 @@ public class RocketMqInstrumentation extends InstrumenterModule.Tracing
 
       defaultMqPushConsumerImpl.registerConsumeMessageHook(
           RocketMqHook.buildConsumerHook(
-              InstrumentationContext.get(ConsumeMessageContext.class, AgentScope.class)));
+              InstrumentationContext.get(ConsumeMessageContext.class, ContextScope.class)));
     }
   }
 }

@@ -10,6 +10,7 @@ import datadog.environment.JavaVirtualMachine;
 import datadog.trace.api.civisibility.CIConstants;
 import datadog.trace.api.civisibility.config.TestFQN;
 import datadog.trace.api.config.CiVisibilityConfig;
+import datadog.trace.api.config.DebuggerConfig;
 import datadog.trace.api.config.GeneralConfig;
 import datadog.trace.civisibility.CiVisibilitySmokeTest;
 import datadog.trace.civisibility.CiVisibilityTableTestConverters;
@@ -39,6 +40,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.apache.maven.wrapper.MavenWrapperMain;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.condition.DisabledIf;
 import org.junit.jupiter.api.condition.EnabledForJreRange;
@@ -78,6 +80,11 @@ class MavenSmokeTest extends CiVisibilitySmokeTest {
   void resetMockBackend() {
     assumeFalse(JavaVirtualMachine.isJavaVersion(27), "JDK 27 TODO: address failing test");
     mockBackend.reset();
+  }
+
+  @AfterEach
+  void reportForkedJvmCrashes() {
+    reportJvmCrashLogs(projectHome);
   }
 
   @AfterAll
@@ -331,6 +338,7 @@ class MavenSmokeTest extends CiVisibilitySmokeTest {
     Map<String, String> agentArgs = new HashMap<>();
     agentArgs.put(CiVisibilityConfig.CIVISIBILITY_FLAKY_RETRY_COUNT, "3");
     agentArgs.put(GeneralConfig.AGENTLESS_LOG_SUBMISSION_URL, mockBackend.getIntakeUrl());
+    agentArgs.put(DebuggerConfig.DYNAMIC_INSTRUMENTATION_UPLOAD_FLUSH_INTERVAL, "999999");
 
     int exitCode =
         whenRunningMavenBuild(agentArgs, Collections.emptyList(), Collections.emptyMap(), true);
@@ -529,6 +537,7 @@ class MavenSmokeTest extends CiVisibilitySmokeTest {
     if (mavenRepositoryProxy != null) {
       processBuilder.environment().put("MAVEN_REPOSITORY_PROXY", mavenRepositoryProxy);
     }
+    disableCdsOnLinuxArm64(processBuilder.environment());
 
     return processBuilder;
   }

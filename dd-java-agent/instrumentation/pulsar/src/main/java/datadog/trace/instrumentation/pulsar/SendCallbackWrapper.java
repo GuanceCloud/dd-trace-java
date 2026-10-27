@@ -1,6 +1,6 @@
 package datadog.trace.instrumentation.pulsar;
 
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;
+import datadog.context.ContextScope;
 import java.util.concurrent.CompletableFuture;
 import org.apache.pulsar.client.api.MessageId;
 import org.apache.pulsar.client.impl.MessageImpl;
@@ -8,11 +8,11 @@ import org.apache.pulsar.client.impl.SendCallback;
 
 public class SendCallbackWrapper implements SendCallback {
 
-  private final AgentScope scope;
+  private final ContextScope scope;
   private final PulsarRequest request;
   private final SendCallback delegate;
 
-  public  SendCallbackWrapper(AgentScope scope, PulsarRequest request, SendCallback callback) {
+  public SendCallbackWrapper(ContextScope scope, PulsarRequest request, SendCallback callback) {
     this.scope = scope;
     this.request = request;
     this.delegate = callback;

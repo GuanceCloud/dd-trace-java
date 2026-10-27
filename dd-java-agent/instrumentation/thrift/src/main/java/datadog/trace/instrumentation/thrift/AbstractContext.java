@@ -1,14 +1,14 @@
 package datadog.trace.instrumentation.thrift;
 
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;
-
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
+
+import datadog.context.ContextScope;
 
 public abstract class AbstractContext {
   public String methodName;
   public long startTime = 0L;
   public boolean createdSpan = false;
-  public AgentScope agentScope;
+  public ContextScope agentScope;
 
   public abstract String getArguments();
 
@@ -27,11 +27,11 @@ public abstract class AbstractContext {
     this.createdSpan = createdSpan;
   }
 
-  public AgentScope getAgentScope() {
+  public ContextScope getAgentScope() {
     return agentScope;
   }
 
-  public void setAgentScope(AgentScope agentScope) {
+  public void setAgentScope(ContextScope agentScope) {
     this.agentScope = agentScope;
   }
 }

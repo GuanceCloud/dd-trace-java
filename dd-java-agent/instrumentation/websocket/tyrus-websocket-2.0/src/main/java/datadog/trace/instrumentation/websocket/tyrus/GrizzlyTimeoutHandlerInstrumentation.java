@@ -2,14 +2,15 @@ package datadog.trace.instrumentation.websocket.tyrus;
 
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSpan;
+import static datadog.trace.bootstrap.instrumentation.api.Java8BytecodeBridge.spanFromScope;
 import static datadog.trace.instrumentation.websocket.tyrus.TyrusClientDecorator.DECORATE;
 import static net.bytebuddy.matcher.ElementMatchers.isMethod;
 import static net.bytebuddy.matcher.ElementMatchers.isPublic;
 import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
 
+import datadog.context.ContextScope;
 import datadog.trace.agent.tooling.Instrumenter;
 import datadog.trace.bootstrap.InstrumentationContext;
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import java.util.concurrent.TimeoutException;
 import net.bytebuddy.asm.Advice;
@@ -35,7 +36,7 @@ public class GrizzlyTimeoutHandlerInstrumentation
 
   public static class HandleTimeoutAdvice {
     @Advice.OnMethodEnter(suppress = Throwable.class)
-    public static AgentScope onEnter(@Advice.This Object timeoutHandler) {
+    public static ContextScope onEnter(@Advice.This Object timeoutHandler) {
       Object engine =
           InstrumentationContext.<Object, Object>get(TIMEOUT_HANDLER, TYRUS_CLIENT_ENGINE)
               .remove(timeoutHandler);
@@ -48,11 +49,12 @@ public class GrizzlyTimeoutHandlerInstrumentation
     }
 
     @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
-    public static void onExit(@Advice.Enter AgentScope scope, @Advice.Thrown Throwable throwable) {
+    public static void onExit(
+        @Advice.Enter ContextScope scope, @Advice.Thrown Throwable throwable) {
       if (scope == null) {
         return;
       }
-      AgentSpan span = scope.span();
+      AgentSpan span = spanFromScope(scope);
       try {
         DECORATE.onError(
             span,

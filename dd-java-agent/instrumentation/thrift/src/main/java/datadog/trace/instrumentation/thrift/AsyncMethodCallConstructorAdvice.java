@@ -1,6 +1,5 @@
 package datadog.trace.instrumentation.thrift;
 
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import net.bytebuddy.asm.Advice;
 import org.apache.thrift.async.AsyncMethodCallback;
 import org.apache.thrift.async.TAsyncMethodCall;

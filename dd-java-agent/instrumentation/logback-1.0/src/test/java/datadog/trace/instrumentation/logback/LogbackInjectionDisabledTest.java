@@ -8,8 +8,8 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import datadog.context.ContextScope;
 import datadog.trace.agent.test.AbstractInstrumentationTest;
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.test.junit.utils.config.WithConfig;
 import java.util.Map;
@@ -31,7 +31,7 @@ class LogbackInjectionDisabledTest extends AbstractInstrumentationTest {
     MDC.put("dd.trace_id", "0");
     MDC.put("dd.span_id", "0");
     AgentSpan span = startSpan("test", "request");
-    try (AgentScope ignored = activateSpan(span)) {
+    try (ContextScope ignored = activateSpan(span)) {
       logger.info("message");
       Map<String, String> mdc = appender.list.get(0).getMDCPropertyMap();
       assertEquals("0", mdc.get("dd.trace_id"));

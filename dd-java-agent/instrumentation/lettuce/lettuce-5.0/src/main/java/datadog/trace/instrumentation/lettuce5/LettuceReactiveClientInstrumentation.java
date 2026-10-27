@@ -90,6 +90,11 @@ public class LettuceReactiveClientInstrumentation extends InstrumenterModule.Tra
     transformer.applyAdvice(
         isMethod().and(named("subscribe")), packageName + ".rx.RedisSubscriptionSubscribeAdvice");
     transformer.applyAdvice(
+        isMethod()
+            .and(isDeclaredBy(named("io.lettuce.core.RedisPublisher$RedisSubscription")))
+            .and(named("dispatchCommand")),
+        packageName + ".rx.RedisSubscriptionDispatchAdvice");
+    transformer.applyAdvice(
         isMethod().and(named("onNext")), packageName + ".rx.RedisSubscriptionAdvanceAdvice");
     transformer.applyAdvice(
         isMethod()

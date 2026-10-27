@@ -1,16 +1,16 @@
 package datadog.trace.instrumentation.pulsar;
 
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;
+import datadog.context.ContextScope;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.pulsar.client.api.Message;
 import org.apache.pulsar.client.impl.TopicMessageImpl;
 
 public class MessageStore {
-  private static final Map<Message<?>, AgentScope> MSG_FIELD =
-      new HashMap<Message<?>,AgentScope>();
+  private static final Map<Message<?>, ContextScope> MSG_FIELD =
+      new HashMap<Message<?>, ContextScope>();
 
-  public static void Inject(Message<?> instance, AgentScope scope){
+  public static void Inject(Message<?> instance, ContextScope scope) {
     if (instance instanceof TopicMessageImpl<?>) {
       TopicMessageImpl<?> topicMessage = (TopicMessageImpl<?>) instance;
       instance = topicMessage.getMessage();
@@ -20,7 +20,7 @@ public class MessageStore {
     }
   }
 
-  public static AgentScope extract(Message<?> instance) {
+  public static ContextScope extract(Message<?> instance) {
     if (instance instanceof TopicMessageImpl<?>) {
       TopicMessageImpl<?> topicMessage = (TopicMessageImpl<?>) instance;
       instance = topicMessage.getMessage();
@@ -28,7 +28,7 @@ public class MessageStore {
     if (instance == null) {
       return null;
     }
-    AgentScope  as =  MSG_FIELD.get(instance);
+    ContextScope as = MSG_FIELD.get(instance);
     MSG_FIELD.remove(instance);
     return as;
   }

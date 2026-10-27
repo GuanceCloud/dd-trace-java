@@ -3,10 +3,11 @@ package datadog.trace.instrumentation.dubbo_2_7x;
 import static datadog.trace.bootstrap.instrumentation.api.AgentPropagation.extractContextAndGetSpanContext;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSpan;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.startSpan;
+import static datadog.trace.bootstrap.instrumentation.api.Java8BytecodeBridge.spanFromScope;
 import static datadog.trace.instrumentation.dubbo_2_7x.DubboDecorator.DECORATE;
 import static datadog.trace.instrumentation.dubbo_2_7x.DubboHeadersExtractAdapter.GETTER;
 
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;
+import datadog.context.ContextScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpanContext;
 import net.bytebuddy.asm.Advice;
 import org.apache.dubbo.rpc.Filter;
@@ -17,34 +18,33 @@ import org.apache.dubbo.rpc.RpcInvocation;
 public class DubboInvokeAdvice {
 
   @Advice.OnMethodEnter(suppress = Throwable.class)
-  public static AgentScope beginRequest(
-      @Advice.This Filter filter,
-      @Advice.Argument(1) Invocation invocation) {
+  public static ContextScope beginRequest(
+      @Advice.This Filter filter, @Advice.Argument(1) Invocation invocation) {
     DubboTraceInfo dubboTraceInfo =
         new DubboTraceInfo((RpcInvocation) invocation, RpcContext.getContext());
 
-    if(filter.getClass().getPackage().getName().contains("org.apache.dubbo") || filter.getClass().getPackage().getName().contains("com.alibaba")){
+    if (filter.getClass().getPackage().getName().contains("org.apache.dubbo")
+        || filter.getClass().getPackage().getName().contains("com.alibaba")) {
       // skip
       return null;
     }
     AgentSpanContext parentContext = extractContextAndGetSpanContext(dubboTraceInfo, GETTER);
     if (null != parentContext) {
-      return activateSpan(startSpan("dubbo",filter.getClass().getName(), parentContext));
+      return activateSpan(startSpan("dubbo", filter.getClass().getName(), parentContext));
     }
     return null;
   }
 
   @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
   public static void stopSpan(
-      @Advice.Enter final AgentScope scope,
-      @Advice.Thrown final Throwable throwable) {
+      @Advice.Enter final ContextScope scope, @Advice.Thrown final Throwable throwable) {
     if (scope == null) {
       return;
     }
-      DECORATE.onError(scope.span(), throwable);
-      DECORATE.beforeFinish(scope.span());
+    DECORATE.onError(spanFromScope(scope), throwable);
+    DECORATE.beforeFinish(spanFromScope(scope));
 
-      scope.close();
-      scope.span().finish();
+    scope.close();
+    spanFromScope(scope).finish();
   }
 }

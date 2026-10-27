@@ -3,6 +3,7 @@ package datadog.trace.instrumentation.websocket.tyrus;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSpan;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.startSpan;
+import static datadog.trace.bootstrap.instrumentation.api.Java8BytecodeBridge.spanFromScope;
 import static datadog.trace.instrumentation.websocket.tyrus.TyrusClientDecorator.DECORATE;
 import static datadog.trace.instrumentation.websocket.tyrus.TyrusClientDecorator.WEBSOCKET_HANDSHAKE;
 import static datadog.trace.instrumentation.websocket.tyrus.TyrusHeadersInjectAdapter.SETTER;
@@ -11,10 +12,10 @@ import static net.bytebuddy.matcher.ElementMatchers.isPublic;
 import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
 import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
 
+import datadog.context.ContextScope;
 import datadog.trace.agent.tooling.Instrumenter;
 import datadog.trace.bootstrap.ContextStore;
 import datadog.trace.bootstrap.InstrumentationContext;
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import java.util.List;
 import java.util.Map;
@@ -58,7 +59,7 @@ public class TyrusClientEngineInstrumentation
 
   public static class CreateUpgradeRequestAdvice {
     @Advice.OnMethodEnter(suppress = Throwable.class)
-    public static AgentScope onEnter(
+    public static ContextScope onEnter(
         @Advice.This Object engine,
         @Advice.Argument(0) Object timeoutHandler,
         @Advice.FieldValue("timeoutHandler") Object previousTimeoutHandler) {
@@ -87,13 +88,13 @@ public class TyrusClientEngineInstrumentation
     public static void onExit(
         @Advice.This Object engine,
         @Advice.Argument(0) Object timeoutHandler,
-        @Advice.Enter AgentScope scope,
+        @Advice.Enter ContextScope scope,
         @Advice.Return UpgradeRequest request,
         @Advice.Thrown Throwable throwable) {
       if (scope == null) {
         return;
       }
-      AgentSpan span = scope.span();
+      AgentSpan span = spanFromScope(scope);
       boolean finish = false;
       try {
         if (throwable != null || request == null) {
@@ -131,7 +132,7 @@ public class TyrusClientEngineInstrumentation
 
   public static class ProcessResponseAdvice {
     @Advice.OnMethodEnter(suppress = Throwable.class)
-    public static AgentScope onEnter(@Advice.This Object engine) {
+    public static ContextScope onEnter(@Advice.This Object engine) {
       AgentSpan span =
           InstrumentationContext.<Object, AgentSpan>get(TYRUS_CLIENT_ENGINE, AGENT_SPAN)
               .get(engine);
@@ -142,7 +143,7 @@ public class TyrusClientEngineInstrumentation
     public static void onExit(
         @Advice.This Object engine,
         @Advice.FieldValue("timeoutHandler") Object timeoutHandler,
-        @Advice.Enter AgentScope scope,
+        @Advice.Enter ContextScope scope,
         @Advice.Argument(0) UpgradeResponse response,
         @Advice.Return ClientEngine.ClientUpgradeInfo upgradeInfo,
         @Advice.Thrown Throwable throwable) {
@@ -150,7 +151,7 @@ public class TyrusClientEngineInstrumentation
         return;
       }
 
-      AgentSpan span = scope.span();
+      AgentSpan span = spanFromScope(scope);
       boolean removed = false;
       try {
         boolean terminal =
@@ -189,7 +190,7 @@ public class TyrusClientEngineInstrumentation
 
   public static class ProcessErrorAdvice {
     @Advice.OnMethodEnter(suppress = Throwable.class)
-    public static AgentScope onEnter(
+    public static ContextScope onEnter(
         @Advice.This Object engine, @Advice.FieldValue("timeoutHandler") Object timeoutHandler) {
       AgentSpan span =
           InstrumentationContext.<Object, AgentSpan>get(TYRUS_CLIENT_ENGINE, AGENT_SPAN)
@@ -209,13 +210,13 @@ public class TyrusClientEngineInstrumentation
 
     @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
     public static void onExit(
-        @Advice.Enter AgentScope scope,
+        @Advice.Enter ContextScope scope,
         @Advice.Argument(0) Throwable error,
         @Advice.Thrown Throwable throwable) {
       if (scope == null) {
         return;
       }
-      AgentSpan span = scope.span();
+      AgentSpan span = spanFromScope(scope);
       try {
         DECORATE.onError(span, throwable != null ? throwable : error);
         DECORATE.beforeFinish(span);

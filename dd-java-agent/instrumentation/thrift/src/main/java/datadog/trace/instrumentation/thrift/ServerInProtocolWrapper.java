@@ -1,19 +1,18 @@
 package datadog.trace.instrumentation.thrift;
 
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
-import org.apache.thrift.TException;
-import org.apache.thrift.protocol.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
-
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSpan;
 import static datadog.trace.instrumentation.thrift.ThriftConstants.CONTEXT_THREAD;
 import static datadog.trace.instrumentation.thrift.ThriftServerDecorator.SERVER_DECORATOR;
 
+import datadog.context.ContextScope;
+import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+import org.apache.thrift.TException;
+import org.apache.thrift.protocol.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ServerInProtocolWrapper extends TProtocolDecorator {
   public static final Logger logger = LoggerFactory.getLogger(ServerInProtocolWrapper.class);
@@ -42,7 +41,7 @@ public class ServerInProtocolWrapper extends TProtocolDecorator {
         AbstractContext context = CONTEXT_THREAD.get();
         context.setCreatedSpan(true);
         AgentSpan span = SERVER_DECORATOR.createSpan(header, context);
-        AgentScope agentScope = activateSpan(span);
+        ContextScope agentScope = activateSpan(span);
         context.setAgentScope(agentScope);
         CONTEXT_THREAD.set(context);
       } catch (Throwable throwable) {
@@ -51,7 +50,7 @@ public class ServerInProtocolWrapper extends TProtocolDecorator {
       } finally {
         super.readMapEnd();
         super.readFieldEnd();
-//        readFieldEnd();
+        //        readFieldEnd();
       }
       return readFieldBegin();
     }
@@ -59,29 +58,30 @@ public class ServerInProtocolWrapper extends TProtocolDecorator {
     return field;
   }
 
-//  @Override
-//  public void readFieldEnd() {
-//    Throwable throwable = null;
-//    try {
-//      super.readFieldEnd();
-//    } catch (TException e) {
-//      e.printStackTrace();
-//      throwable = new RuntimeException(e);
-//    }
-//    logger.info("ServerInProtocolWrapper readFieldEnd time:"+System.currentTimeMillis());
-//    if (Optional.ofNullable(CONTEXT_THREAD.get()).isPresent() && CONTEXT_THREAD.get().isCreatedSpan()) {
-//      AgentScope scope  = activeScope();
-//      SERVER_DECORATOR.onError(scope.span(), throwable);
-//      SERVER_DECORATOR.beforeFinish(scope.span());
-//
-//      scope.close();
-//      scope.span().finish();
-//
-//      CONTEXT_THREAD.remove();
-//      logger.info("ServerInProtocolWrapper end span time:"+System.currentTimeMillis());
-//      logger.info("ServerInProtocolWrapper remove CONTEXT_THREAD");
-//    }
-//  }
+  //  @Override
+  //  public void readFieldEnd() {
+  //    Throwable throwable = null;
+  //    try {
+  //      super.readFieldEnd();
+  //    } catch (TException e) {
+  //      e.printStackTrace();
+  //      throwable = new RuntimeException(e);
+  //    }
+  //    logger.info("ServerInProtocolWrapper readFieldEnd time:"+System.currentTimeMillis());
+  //    if (Optional.ofNullable(CONTEXT_THREAD.get()).isPresent() &&
+  // CONTEXT_THREAD.get().isCreatedSpan()) {
+  //      ContextScope scope  = activeScope();
+  //      SERVER_DECORATOR.onError(spanFromScope(scope), throwable);
+  //      SERVER_DECORATOR.beforeFinish(spanFromScope(scope));
+  //
+  //      scope.close();
+  //      spanFromScope(scope).finish();
+  //
+  //      CONTEXT_THREAD.remove();
+  //      logger.info("ServerInProtocolWrapper end span time:"+System.currentTimeMillis());
+  //      logger.info("ServerInProtocolWrapper remove CONTEXT_THREAD");
+  //    }
+  //  }
 
   @Override
   public TMessage readMessageBegin() throws TException {
@@ -96,5 +96,4 @@ public class ServerInProtocolWrapper extends TProtocolDecorator {
     }
     return message;
   }
-
 }

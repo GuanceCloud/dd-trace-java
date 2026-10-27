@@ -17,9 +17,9 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.classic.spi.LoggingEvent;
 import ch.qos.logback.core.AppenderBase;
 import ch.qos.logback.core.read.ListAppender;
+import datadog.context.ContextScope;
 import datadog.trace.agent.test.AbstractInstrumentationTest;
 import datadog.trace.api.DDTraceId;
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.core.propagation.ExtractedContext;
 import datadog.trace.core.propagation.PropagationTags;
@@ -73,7 +73,7 @@ class LogbackCorrelationTest extends AbstractInstrumentationTest {
     AgentSpan span = startSpan("test", "request");
     String traceId;
     String spanId;
-    try (AgentScope ignored = activateSpan(span)) {
+    try (ContextScope ignored = activateSpan(span)) {
       traceId = getTraceId();
       spanId = getSpanId();
       logs.logger.debug("debug message");
@@ -102,7 +102,7 @@ class LogbackCorrelationTest extends AbstractInstrumentationTest {
     MDC.put("dd.trace_id", zeroTraceId ? "0" : "123");
     MDC.put("dd.span_id", zeroTraceId ? "456" : "0");
     AgentSpan span = startSpan("test", "request");
-    try (AgentScope ignored = activateSpan(span)) {
+    try (ContextScope ignored = activateSpan(span)) {
       logs.logger.info("message");
       Map<String, String> mdc = logs.appender.list.get(0).getMDCPropertyMap();
       assertEquals(getTraceId(), mdc.get("dd.trace_id"));
@@ -117,7 +117,7 @@ class LogbackCorrelationTest extends AbstractInstrumentationTest {
     MDC.put("dd.trace_id", "123");
     MDC.put("dd.span_id", "456");
     AgentSpan span = startSpan("test", "request");
-    try (AgentScope ignored = activateSpan(span)) {
+    try (ContextScope ignored = activateSpan(span)) {
       logs.logger.info("message");
       Map<String, String> mdc = logs.appender.list.get(0).getMDCPropertyMap();
       assertEquals("123", mdc.get("dd.trace_id"));
@@ -152,7 +152,7 @@ class LogbackCorrelationTest extends AbstractInstrumentationTest {
     String traceId;
     String spanId;
     try {
-      try (AgentScope ignored = activateSpan(span)) {
+      try (ContextScope ignored = activateSpan(span)) {
         traceId = getTraceId();
         spanId = getSpanId();
         logs.logger.info("async message");
@@ -174,7 +174,7 @@ class LogbackCorrelationTest extends AbstractInstrumentationTest {
     AgentSpan firstSpan = startSpan("test", "first-request");
     String traceId;
     String spanId;
-    try (AgentScope ignored = activateSpan(firstSpan)) {
+    try (ContextScope ignored = activateSpan(firstSpan)) {
       traceId = getTraceId();
       spanId = getSpanId();
       logs.logger.info("message");
@@ -182,7 +182,7 @@ class LogbackCorrelationTest extends AbstractInstrumentationTest {
       firstSpan.finish();
     }
     AgentSpan secondSpan = startSpan("test", "second-request");
-    try (AgentScope ignored = activateSpan(secondSpan)) {
+    try (ContextScope ignored = activateSpan(secondSpan)) {
       Map<String, String> mdc = logs.appender.list.get(0).getMDCPropertyMap();
       assertEquals(traceId, mdc.get("dd.trace_id"));
       assertEquals(spanId, mdc.get("dd.span_id"));
@@ -229,7 +229,7 @@ class LogbackCorrelationTest extends AbstractInstrumentationTest {
     MDC.put("dd.trace_id", "0");
     MDC.put("dd.span_id", "0");
     AgentSpan span = startSpan("test", "request", parent);
-    try (AgentScope ignored = activateSpan(span)) {
+    try (ContextScope ignored = activateSpan(span)) {
       logs.logger.info("captured message");
       // An event constructed outside callAppenders exercises the active-span fallback.
       LoggingEvent fallback =

@@ -3,13 +3,14 @@ package datadog.trace.instrumentation.dubbo_2_7x;
 import static datadog.context.propagation.Propagators.defaultPropagator;
 import static datadog.trace.bootstrap.instrumentation.api.AgentPropagation.extractContextAndGetSpanContext;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.*;
+import static datadog.trace.bootstrap.instrumentation.api.Java8BytecodeBridge.spanFromScope;
 import static datadog.trace.instrumentation.dubbo_2_7x.DubboConstants.*;
 import static datadog.trace.instrumentation.dubbo_2_7x.DubboHeadersExtractAdapter.GETTER;
 import static datadog.trace.instrumentation.dubbo_2_7x.DubboHeadersInjectAdapter.SETTER;
 
 import com.google.gson.Gson;
+import datadog.context.ContextScope;
 import datadog.trace.api.Config;
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpanContext;
 import datadog.trace.bootstrap.instrumentation.api.UTF8BytesString;
@@ -73,12 +74,12 @@ public class DubboDecorator extends BaseDecorator {
 
     if (isConsumer) {
       // this is consumer
-      span = startSpan("dubbo",DUBBO_REQUEST);
+      span = startSpan("dubbo", DUBBO_REQUEST);
       defaultPropagator().inject(span, dubboTraceInfo, SETTER);
     } else {
       // this is provider
       AgentSpanContext parentContext = extractContextAndGetSpanContext(dubboTraceInfo, GETTER);
-      span = startSpan("dubbo",DUBBO_REQUEST, parentContext);
+      span = startSpan("dubbo", DUBBO_REQUEST, parentContext);
       if (Config.get().isDubboProviderPropagateEnabled()) {
         defaultPropagator().inject(span, dubboTraceInfo, SETTER);
       }
@@ -162,21 +163,22 @@ public class DubboDecorator extends BaseDecorator {
     return url.getParameter(SIDE_KEY, PROVIDER_SIDE).equals(CONSUMER_SIDE);
   }
 
-  public AgentScope buildSpan(Invoker invoker, Invocation invocation) {
+  public ContextScope buildSpan(Invoker invoker, Invocation invocation) {
     AgentSpan span = startDubboSpan(invoker, invocation);
     if (span == null) {
       return activateSpan(span);
     }
-    AgentScope agentScope = activateSpan(span);
+    ContextScope agentScope = activateSpan(span);
     return agentScope;
   }
 
-  public AgentScope buildResult(AgentScope scope, Result result) {
+  public ContextScope buildResult(ContextScope scope, Result result) {
     if (Config.get().isDubboResponseEnabled()) {
-      AgentSpan span = scope.span();
+      AgentSpan span = spanFromScope(scope);
       if (!result.hasException()) {
         Gson gson = new Gson();
-        span.setTag("dubbo_response", null!=result.getValue()?gson.toJson(result.getValue()):"null");
+        span.setTag(
+            "dubbo_response", null != result.getValue() ? gson.toJson(result.getValue()) : "null");
       }
     }
     return scope;

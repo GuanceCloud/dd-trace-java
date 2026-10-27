@@ -1,7 +1,10 @@
 package datadog.trace.instrumentation.dubbo_3_2;
 
+import static datadog.trace.bootstrap.instrumentation.api.AgentPropagation.extractContextAndGetSpanContext;
+import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.*;
+import static datadog.trace.instrumentation.dubbo_3_2.DubboHeadersExtractAdapter.GETTER;
 
-import datadog.trace.bootstrap.instrumentation.api.AgentScope;
+import datadog.context.ContextScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpanContext;
 import datadog.trace.bootstrap.instrumentation.api.UTF8BytesString;
@@ -12,10 +15,6 @@ import org.apache.dubbo.rpc.protocol.tri.RequestMetadata;
 import org.apache.dubbo.rpc.protocol.tri.call.TripleClientCall;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import static datadog.trace.bootstrap.instrumentation.api.AgentPropagation.extractContextAndGetSpanContext;
-import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.*;
-import static datadog.trace.instrumentation.dubbo_3_2.DubboHeadersExtractAdapter.GETTER;
 
 public class DubboDecorator extends BaseDecorator {
   private static final Logger log = LoggerFactory.getLogger(DubboDecorator.class);
@@ -43,46 +42,49 @@ public class DubboDecorator extends BaseDecorator {
     span.setResourceName(methodName);
   }
 
-  public AgentScope clientCall(TripleClientCall tripleClientCall){
+  public ContextScope clientCall(TripleClientCall tripleClientCall) {
 
     try {
-      RequestMetadata requestMetadata = (RequestMetadata)Dubbo3Constants.getValue(TripleClientCall.class, tripleClientCall, "requestMetadata");
-      DubboMetadata metadata = new DubboMetadata(null,requestMetadata);
+      RequestMetadata requestMetadata =
+          (RequestMetadata)
+              Dubbo3Constants.getValue(TripleClientCall.class, tripleClientCall, "requestMetadata");
+      DubboMetadata metadata = new DubboMetadata(null, requestMetadata);
       AgentSpanContext parentContext = extractContextAndGetSpanContext(metadata, GETTER);
-      AgentSpan span = startSpan("dubbo","onMessage", parentContext);
-      return  activateSpan(span);
-    }catch (Exception e){
-      log.error("dubboException:",e);
+      AgentSpan span = startSpan("dubbo", "onMessage", parentContext);
+      return activateSpan(span);
+    } catch (Exception e) {
+      log.error("dubboException:", e);
     }
     return activateSpan(noopSpan());
   }
+
   //
-  public AgentScope clientComplete(RequestMetadata requestMetadata, TriRpcStatus status) {
-      DubboMetadata metadata = new DubboMetadata(null,requestMetadata);
-      AgentSpanContext parentContext = extractContextAndGetSpanContext(metadata, GETTER);
-      AgentSpan span = startSpan("dubbo","onComplete", parentContext);
-      return  activateSpan(span);
-  }
-
-  public AgentScope serverCall(RpcInvocation rpcInvocation){
-      DubboMetadata metadata = new DubboMetadata(rpcInvocation,null);
-      AgentSpanContext parentContext = extractContextAndGetSpanContext(metadata, GETTER);
-      AgentSpan span = startSpan("dubbo","onMessage", parentContext);
-//      defaultPropagator().inject(span, metadata, SETTER);
-      return  activateSpan(span);
-  }
-
-  public AgentScope serverComplete(RpcInvocation invocation) {
-    DubboMetadata metadata = new DubboMetadata(invocation,null);
+  public ContextScope clientComplete(RequestMetadata requestMetadata, TriRpcStatus status) {
+    DubboMetadata metadata = new DubboMetadata(null, requestMetadata);
     AgentSpanContext parentContext = extractContextAndGetSpanContext(metadata, GETTER);
-    AgentSpan span = startSpan("dubbo","onComplete", parentContext);
-    return  activateSpan(span);
+    AgentSpan span = startSpan("dubbo", "onComplete", parentContext);
+    return activateSpan(span);
   }
 
-  public AgentScope serverOnData(RequestMetadata httpMetadata) {
-    DubboMetadata metadata = new DubboMetadata(null,httpMetadata);
+  public ContextScope serverCall(RpcInvocation rpcInvocation) {
+    DubboMetadata metadata = new DubboMetadata(rpcInvocation, null);
     AgentSpanContext parentContext = extractContextAndGetSpanContext(metadata, GETTER);
-    AgentSpan span = startSpan("dubbo","onCompleted", parentContext);
-    return  activateSpan(span);
+    AgentSpan span = startSpan("dubbo", "onMessage", parentContext);
+    //      defaultPropagator().inject(span, metadata, SETTER);
+    return activateSpan(span);
+  }
+
+  public ContextScope serverComplete(RpcInvocation invocation) {
+    DubboMetadata metadata = new DubboMetadata(invocation, null);
+    AgentSpanContext parentContext = extractContextAndGetSpanContext(metadata, GETTER);
+    AgentSpan span = startSpan("dubbo", "onComplete", parentContext);
+    return activateSpan(span);
+  }
+
+  public ContextScope serverOnData(RequestMetadata httpMetadata) {
+    DubboMetadata metadata = new DubboMetadata(null, httpMetadata);
+    AgentSpanContext parentContext = extractContextAndGetSpanContext(metadata, GETTER);
+    AgentSpan span = startSpan("dubbo", "onCompleted", parentContext);
+    return activateSpan(span);
   }
 }
