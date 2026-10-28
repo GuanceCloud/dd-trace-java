@@ -1,6 +1,5 @@
 package datadog.trace.instrumentation.logback;
 
-import static datadog.trace.api.CorrelationIdentifier.getSpanId;
 import static datadog.trace.api.CorrelationIdentifier.getTraceId;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSpan;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.startSpan;
@@ -36,11 +35,12 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.tabletest.junit.TableTest;
 
+@WithConfig(key = "service", value = "pattern-test")
 @WithConfig(key = "logs.pattern.inject", value = "true")
 @WithConfig(key = "logs.injection.enabled", value = "true")
 class LogbackPatternLayoutTest extends AbstractInstrumentationTest {
   private static final String TRACE = "dd.trace_id=%X{dd.trace_id} ";
-  private static final String SPAN = "dd.span_id=%X{dd.span_id} ";
+  private static final String SERVICE = "dd.service=%X{dd.service} ";
 
   private LogCapture logs;
 
@@ -57,26 +57,25 @@ class LogbackPatternLayoutTest extends AbstractInstrumentationTest {
   }
 
   @TableTest({
-    "Scenario       | Pattern                                         | Add trace | Add span",
-    "plain          | %level %logger - %msg%n                         | true      | true    ",
-    "trace only     | %X{dd.trace_id} %msg%n                          | false     | true    ",
-    "span only      | %mdc{dd.span_id} %msg%n                         | true      | false   ",
-    "both           | %X{dd.trace_id} %mdc{dd.span_id} %msg%n         | false     | false   ",
-    "all MDC        | %X %msg%n                                       | false     | false   ",
-    "empty options  | %mdc{} %msg%n                                   | false     | false   ",
-    "empty MDC key  | %X{:-NA} %msg%n                                 | true      | true    ",
-    "default values | %X{dd.trace_id:-NA} %mdc{dd.span_id:-NA} %msg%n | false     | false   ",
-    "formatted      | %-32X{dd.trace_id} %20mdc{dd.span_id} %msg%n    | false     | false   ",
-    "nested         | %replace(%X{dd.trace_id}){a,b} %msg%n           | false     | true    ",
-    "escaped        | \\%X{dd.trace_id} %msg%n                        | true      | true    ",
-    "literal keys   | dd.trace_id dd.span_id %msg%n                   | true      | true    ",
-    "other MDC      | %X{business.key} %msg%n                         | true      | true    ",
-    "multiline      | %msg%nsecond line%n                             | true      | true    "
+    "Scenario       | Template                                         | Trace | Service",
+    "plain          | %level @%logger - %msg%n                         | true  | true   ",
+    "trace only     | %X{dd.trace_id} @%msg%n                          | false | true   ",
+    "service only   | %mdc{dd.service} @%msg%n                         | true  | false  ",
+    "both           | %X{dd.trace_id} @%mdc{dd.service} %msg%n         | false | false  ",
+    "all MDC        | %X @%msg%n                                       | false | false  ",
+    "empty options  | %mdc{} @%msg%n                                   | false | false  ",
+    "empty MDC key  | %X{:-NA} @%msg%n                                 | true  | true   ",
+    "default values | %X{dd.trace_id:-NA} @%mdc{dd.service:-NA} %msg%n | false | false  ",
+    "formatted      | %-32X{dd.trace_id} @%20mdc{dd.service} %msg%n    | false | false  ",
+    "nested         | %replace(%X{dd.trace_id}){a,b} @%msg%n           | false | true   ",
+    "escaped        | \\%X{dd.trace_id} @%msg%n                        | true  | true   ",
+    "literal keys   | dd.trace_id @dd.service %msg%n                   | true  | true   ",
+    "other MDC      | %X{business.key} @%msg%n                         | true  | true   "
   })
   void addsOnlyMissingFieldsAndDoesNotDuplicateOnRestart(
-      String pattern, boolean addTrace, boolean addSpan) {
-    PatternLayout layout = logs.newLayout(pattern);
-    String expected = (addTrace ? TRACE : "") + (addSpan ? SPAN : "") + pattern;
+      String template, boolean trace, boolean service) {
+    PatternLayout layout = logs.newLayout(template.replace("@", ""));
+    String expected = template.replace("@", (service ? SERVICE : "") + (trace ? TRACE : ""));
     assertEquals(expected, layout.getPattern());
     assertTrue(layout.isStarted());
 
@@ -87,8 +86,63 @@ class LogbackPatternLayoutTest extends AbstractInstrumentationTest {
 
   @Test
   void converterOptionsAreNotMistakenForMdcConverters() {
-    String pattern = "%replace(%msg){'message','%X{dd.trace_id} %X{dd.span_id}'}%n";
-    assertEquals(TRACE + SPAN + pattern, logs.newLayout(pattern).getPattern());
+    String pattern = "%replace(%msg){'message','%X{dd.trace_id} %X{dd.service}'}%n";
+    assertEquals(
+        "%replace(%msg){'message','%X{dd.trace_id} %X{dd.service}'} "
+            + (SERVICE + TRACE).trim()
+            + "%n",
+        logs.newLayout(pattern).getPattern());
+  }
+
+  @TableTest({
+    "Scenario    | First field                        ",
+    "date spaces | %d{yyyy-MM-dd HH:mm:ss.SSS,UTC}    ",
+    "date alias  | %date{yyyy-MM-dd HH:mm:ss.SSS,UTC} ",
+    "brackets    | '[%d{yyyy-MM-dd HH:mm:ss.SSS,UTC}]'",
+    "composite   | %replace(%d{HH:mm:ss,UTC}){'a','b'}",
+    "color       | %cyan(%d{HH:mm:ss,UTC})            ",
+    "grouped     | %(%d{HH:mm:ss,UTC} %level)         "
+  })
+  void keepsEntireDateFieldBeforeCorrelationFields(String firstField) {
+    String pattern = firstField + " [%thread] %msg%n";
+    PatternLayout layout = logs.newLayout(pattern);
+    assertTrue(layout.isStarted());
+    assertEquals(firstField + " " + SERVICE + TRACE + "[%thread] %msg%n", layout.getPattern());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"|", " | ", ",", ";", "\t", "  "})
+  void preservesOriginalFirstFieldSeparator(String separator) {
+    String date = "%d{yyyy-MM-dd HH:mm:ss,UTC}";
+    assertEquals(
+        date + separator + SERVICE + TRACE + "%msg%n",
+        logs.newLayout(date + separator + "%msg%n").getPattern());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"%n", "%nsecond line%n", "\nsecond line\n", ""})
+  void addsIdsBeforeTheFirstLineBreak(String suffix) {
+    assertEquals(
+        "%msg " + (SERVICE + TRACE).trim() + suffix, logs.newLayout("%msg" + suffix).getPattern());
+  }
+
+  @Test
+  void dateAndThreadPrefixesStayIntactInActualOutput() {
+    PatternLayout layout = logs.newLayout("[%d{yyyy-MM-dd HH:mm:ss.SSS,UTC}] [%thread] %msg%n");
+    LoggingEvent event = logs.event("message");
+    event.setTimeStamp(0);
+    event.setThreadName("worker");
+    AgentSpan span = startSpan("test", "request");
+    try (ContextScope ignored = activateSpan(span)) {
+      assertEquals(
+          "[1970-01-01 00:00:00.000] dd.service=pattern-test dd.trace_id="
+              + getTraceId()
+              + " [worker] message"
+              + System.lineSeparator(),
+          layout.doLayout(event));
+    } finally {
+      span.finish();
+    }
   }
 
   @Test
@@ -107,7 +161,7 @@ class LogbackPatternLayoutTest extends AbstractInstrumentationTest {
   }
 
   @Test
-  void encoderIncludesActiveSpanIdsAndPreservesOriginalLogContent() throws Exception {
+  void encoderIncludesTraceIdAndServiceAndPreservesOriginalLogContent() throws Exception {
     ByteArrayOutputStream output = new ByteArrayOutputStream();
     PatternLayoutEncoder encoder = new PatternLayoutEncoder();
     encoder.setContext(logs.context);
@@ -122,10 +176,8 @@ class LogbackPatternLayoutTest extends AbstractInstrumentationTest {
 
     AgentSpan span = startSpan("test", "request");
     String traceId;
-    String spanId;
     try (ContextScope ignored = activateSpan(span)) {
       traceId = getTraceId();
-      spanId = getSpanId();
       logs.logger.info("message");
     } finally {
       span.finish();
@@ -133,17 +185,15 @@ class LogbackPatternLayoutTest extends AbstractInstrumentationTest {
       encoder.stop();
     }
     assertEquals(
-        "dd.trace_id="
+        "INFO dd.service=pattern-test dd.trace_id="
             + traceId
-            + " dd.span_id="
-            + spanId
-            + " INFO - message"
+            + " - message"
             + System.lineSeparator(),
         output.toString("UTF-8"));
   }
 
   @Test
-  void asyncAppenderFormatsOriginatingSpanIds() throws InterruptedException {
+  void asyncAppenderFormatsOriginatingTraceIdAndService() throws InterruptedException {
     PatternLayout layout = logs.newLayout("%msg%n");
     CountDownLatch received = new CountDownLatch(1);
     AtomicReference<String> output = new AtomicReference<>();
@@ -165,23 +215,16 @@ class LogbackPatternLayoutTest extends AbstractInstrumentationTest {
 
     AgentSpan span = startSpan("test", "request");
     String traceId;
-    String spanId;
     try {
       try (ContextScope ignored = activateSpan(span)) {
         traceId = getTraceId();
-        spanId = getSpanId();
         logs.logger.info("async message");
       } finally {
         span.finish();
       }
       assertTrue(received.await(10, TimeUnit.SECONDS), "async appender did not receive the log");
       assertEquals(
-          "dd.trace_id="
-              + traceId
-              + " dd.span_id="
-              + spanId
-              + " async message"
-              + System.lineSeparator(),
+          "async message dd.service=pattern-test dd.trace_id=" + traceId + System.lineSeparator(),
           output.get());
     } finally {
       async.stop();
@@ -192,8 +235,16 @@ class LogbackPatternLayoutTest extends AbstractInstrumentationTest {
   @Test
   void doesNotInventIdsWithoutActiveSpan() {
     assertEquals(
-        "dd.trace_id= dd.span_id= background" + System.lineSeparator(),
+        "background dd.service=pattern-test dd.trace_id=" + System.lineSeparator(),
         logs.newLayout("%msg%n").doLayout(logs.event("background")));
+  }
+
+  @Test
+  void preservesAnApplicationProvidedServiceName() {
+    MDC.put("dd.service", "application-service");
+    assertEquals(
+        "message dd.service=application-service dd.trace_id=" + System.lineSeparator(),
+        logs.newLayout("%msg%n").doLayout(logs.event("message")));
   }
 
   private static class LogCapture {

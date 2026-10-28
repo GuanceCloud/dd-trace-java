@@ -24,7 +24,7 @@ public class PatternLayoutStartAdvice {
     }
 
     boolean missingTraceId = true;
-    boolean missingSpanId = true;
+    boolean missingService = true;
     ArrayDeque<Node> pending = new ArrayDeque<>();
     Node root;
     try {
@@ -50,7 +50,7 @@ public class PatternLayoutStartAdvice {
           List<String> options = ((SimpleKeywordNode) node).getOptions();
           if (options == null || options.isEmpty()) {
             missingTraceId = false;
-            missingSpanId = false;
+            missingService = false;
             break scan;
           }
           String key = options.get(0);
@@ -60,24 +60,113 @@ public class PatternLayoutStartAdvice {
           }
           if ("dd.trace_id".equals(key)) {
             missingTraceId = false;
-          } else if ("dd.span_id".equals(key)) {
-            missingSpanId = false;
+          } else if ("dd.service".equals(key)) {
+            missingService = false;
           }
-          if (!missingTraceId && !missingSpanId) {
+          if (!missingTraceId && !missingService) {
             break scan;
           }
         }
       }
     }
-    if (missingTraceId || missingSpanId) {
+    if (missingTraceId || missingService) {
+      // Preserve the first complete field, including date options and presentation wrappers.
+      int insertion = pattern.length();
+      int optionsDepth = 0;
+      int compositeDepth = 0;
+      int bracketDepth = 0;
+      char quote = 0;
+      boolean fieldStarted = false;
+      for (int i = 0; i < pattern.length(); i++) {
+        char c = pattern.charAt(i);
+        if (c == '\\') {
+          fieldStarted = true;
+          i++;
+          continue;
+        }
+        if (optionsDepth > 0) {
+          if (quote != 0) {
+            if (c == quote) {
+              quote = 0;
+            }
+          } else if (c == '\'' || c == '"') {
+            quote = c;
+          } else if (c == '{') {
+            optionsDepth++;
+          } else if (c == '}') {
+            optionsDepth--;
+          }
+          continue;
+        }
+        if (c == '{') {
+          optionsDepth++;
+        } else if (c == '(') {
+          compositeDepth++;
+        } else if (c == ')' && compositeDepth > 0) {
+          compositeDepth--;
+        } else if (compositeDepth == 0 && c == '[') {
+          bracketDepth++;
+        } else if (compositeDepth == 0 && c == ']' && bracketDepth > 0) {
+          bracketDepth--;
+        }
+        if (compositeDepth == 0 && fieldStarted) {
+          if ((c == '%' && i + 1 < pattern.length() && pattern.charAt(i + 1) == 'n')
+              || c == '\n'
+              || c == '\r') {
+            insertion = i;
+            break;
+          }
+          if (bracketDepth == 0
+              && (Character.isWhitespace(c) || c == '|' || c == ',' || c == ';')) {
+            insertion = i;
+            // Keep the original separator before the new fields, including delimited logs.
+            while (insertion < pattern.length()
+                && Character.isWhitespace(pattern.charAt(insertion))
+                && pattern.charAt(insertion) != '\n'
+                && pattern.charAt(insertion) != '\r') {
+              insertion++;
+            }
+            if (insertion < pattern.length()
+                && (pattern.charAt(insertion) == '|'
+                    || pattern.charAt(insertion) == ','
+                    || pattern.charAt(insertion) == ';')) {
+              insertion++;
+              while (insertion < pattern.length()
+                  && Character.isWhitespace(pattern.charAt(insertion))
+                  && pattern.charAt(insertion) != '\n'
+                  && pattern.charAt(insertion) != '\r') {
+                insertion++;
+              }
+            }
+            break;
+          }
+        }
+        fieldStarted |= !Character.isWhitespace(c);
+      }
       StringBuilder result = new StringBuilder();
+      result.append(pattern, 0, insertion);
+      if (insertion > 0) {
+        char previous = pattern.charAt(insertion - 1);
+        if (!Character.isWhitespace(previous)
+            && previous != '|'
+            && previous != ','
+            && previous != ';') {
+          result.append(' ');
+        }
+      }
+      if (missingService) {
+        result.append("dd.service=%X{dd.service} ");
+      }
       if (missingTraceId) {
         result.append("dd.trace_id=%X{dd.trace_id} ");
       }
-      if (missingSpanId) {
-        result.append("dd.span_id=%X{dd.span_id} ");
+      if (insertion == pattern.length()
+          || pattern.startsWith("%n", insertion)
+          || pattern.charAt(insertion) == '\n'
+          || pattern.charAt(insertion) == '\r') {
+        result.setLength(result.length() - 1);
       }
-      layout.setPattern(result.append(pattern).toString());
+      layout.setPattern(result.append(pattern, insertion, pattern.length()).toString());
     }
   }
 }
