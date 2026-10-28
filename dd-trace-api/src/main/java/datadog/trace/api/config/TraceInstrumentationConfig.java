@@ -117,6 +117,7 @@ public final class TraceInstrumentationConfig {
   public static final String LOGS_INJECTION = "logs.injection";
 
   public static final String LOGS_PATTERN = "logs.pattern";
+  public static final String LOGS_PATTERN_INJECT = "logs.pattern.inject";
   public static final String LOGS_PATTERN_REPLACE = "logs.pattern.replace";
   public static final String LOGS_MDC_TAGS_INJECTION_ENABLED = "logs.mdc.tags.injection";
   public static final String TRACE_128_BIT_TRACEID_LOGGING_ENABLED =

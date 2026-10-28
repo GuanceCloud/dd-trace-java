@@ -2428,6 +2428,14 @@
         "aliases": []
       }
     ],
+    "DD_LOGS_PATTERN_INJECT": [
+      {
+        "version": "A",
+        "type": "boolean",
+        "default": "false",
+        "aliases": []
+      }
+    ],
     "DD_LOGS_PATTERN_REPLACE": [
       {
         "version": "A",
