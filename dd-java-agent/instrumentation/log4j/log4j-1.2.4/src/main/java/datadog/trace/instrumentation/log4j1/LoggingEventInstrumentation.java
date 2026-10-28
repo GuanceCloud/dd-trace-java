@@ -130,26 +130,28 @@ public class LoggingEventInstrumentation extends InstrumenterModule.Tracing
     public static void onExit(
         @Advice.This LoggingEvent event,
         @Advice.Enter() boolean injectionRequired,
-        @Advice.FieldValue(value = "mdcCopy") Hashtable mdc) {
+        @Advice.FieldValue(value = "mdcCopy", readOnly = false) Hashtable mdc) {
       if (!injectionRequired) {
         return;
       }
       if (mdc == null) {
-        // this.mdcCopy can be null when MDC.getContext() returns null
-        return;
+        if (!Config.get().isLogPatternInject()) {
+          return;
+        }
+        // Auto-injected full-MDC patterns also need values when no application MDC exists.
+        mdc = new Hashtable();
       }
-      // at this point the mdc has been shallow copied. No need to replace with a new hashtable.
-      // Just add our info
+      // Preserve application-provided correlation values in the captured MDC.
       String serviceName = Config.get().getServiceName();
-      if (null != serviceName && !serviceName.isEmpty()) {
+      if (null != serviceName && !serviceName.isEmpty() && !mdc.containsKey(Tags.DD_SERVICE)) {
         mdc.put(Tags.DD_SERVICE, serviceName);
       }
       String env = Config.get().getEnv();
-      if (null != env && !env.isEmpty()) {
+      if (null != env && !env.isEmpty() && !mdc.containsKey(Tags.DD_ENV)) {
         mdc.put(Tags.DD_ENV, env);
       }
       String version = Config.get().getVersion();
-      if (null != version && !version.isEmpty()) {
+      if (null != version && !version.isEmpty() && !mdc.containsKey(Tags.DD_VERSION)) {
         mdc.put(Tags.DD_VERSION, version);
       }
 
@@ -157,13 +159,17 @@ public class LoggingEventInstrumentation extends InstrumenterModule.Tracing
           InstrumentationContext.get(LoggingEvent.class, AgentSpanContext.class).get(event);
 
       if (context != null) {
-        DDTraceId traceId = context.getTraceId();
-        String traceIdValue =
-            Config.get().isLogs128bitTraceIdEnabled() && traceId.toHighOrderLong() != 0
-                ? traceId.toHexString()
-                : traceId.toString();
-        mdc.put(CorrelationIdentifier.getTraceIdKey(), traceIdValue);
-        mdc.put(CorrelationIdentifier.getSpanIdKey(), DDSpanId.toString(context.getSpanId()));
+        if (!mdc.containsKey(CorrelationIdentifier.getTraceIdKey())) {
+          DDTraceId traceId = context.getTraceId();
+          String traceIdValue =
+              Config.get().isLogs128bitTraceIdEnabled() && traceId.toHighOrderLong() != 0
+                  ? traceId.toHexString()
+                  : traceId.toString();
+          mdc.put(CorrelationIdentifier.getTraceIdKey(), traceIdValue);
+        }
+        if (!mdc.containsKey(CorrelationIdentifier.getSpanIdKey())) {
+          mdc.put(CorrelationIdentifier.getSpanIdKey(), DDSpanId.toString(context.getSpanId()));
+        }
       }
     }
   }

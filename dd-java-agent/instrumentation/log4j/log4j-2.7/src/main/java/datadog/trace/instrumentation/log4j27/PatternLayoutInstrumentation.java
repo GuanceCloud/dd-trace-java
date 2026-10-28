@@ -1,15 +1,8 @@
-/*
- * Copyright The OpenTelemetry Authors
- * SPDX-License-Identifier: Apache-2.0
- */
-
 package datadog.trace.instrumentation.log4j27;
 
 import static datadog.trace.agent.tooling.bytebuddy.matcher.ClassLoaderMatchers.hasClassNamed;
-import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
-import static net.bytebuddy.matcher.ElementMatchers.isMethod;
-import static net.bytebuddy.matcher.ElementMatchers.isPublic;
-import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
+import static net.bytebuddy.matcher.ElementMatchers.isConstructor;
+import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
 
 import com.google.auto.service.AutoService;
 import datadog.trace.agent.tooling.Instrumenter;
@@ -26,7 +19,7 @@ public class PatternLayoutInstrumentation extends InstrumenterModule.Tracing
 
   @Override
   protected boolean defaultEnabled() {
-    return Config.get().isLogPatternReplace();
+    return Config.get().isLogPatternInject() || Config.get().isLogPatternReplace();
   }
 
   @Override
@@ -36,18 +29,13 @@ public class PatternLayoutInstrumentation extends InstrumenterModule.Tracing
 
   @Override
   public String instrumentedType() {
-    return "org.apache.logging.log4j.core.layout.PatternLayout$Builder";
-  }
-
-  @Override
-  public String[] helperClassNames() {
-    return new String[] {packageName + ".PatternLayoutBuildAdvice"};
+    return "org.apache.logging.log4j.core.layout.PatternLayout";
   }
 
   @Override
   public void methodAdvice(MethodTransformer transformer) {
     transformer.applyAdvice(
-        isMethod().and(isPublic()).and(named("build")).and(takesArguments(0)),
-        packageName + ".PatternLayoutBuildAdvice");
+        isConstructor().and(takesArgument(2, String.class)),
+        packageName + ".PatternLayoutConstructorAdvice");
   }
 }

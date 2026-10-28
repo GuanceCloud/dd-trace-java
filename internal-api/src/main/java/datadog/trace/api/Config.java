@@ -128,6 +128,7 @@ import static datadog.trace.api.ConfigDefaults.DEFAULT_LOGS_OTEL_INTERVAL;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_LOGS_OTEL_QUEUE_SIZE;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_LOGS_OTEL_TIMEOUT;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_LOG_PATTERN;
+import static datadog.trace.api.ConfigDefaults.DEFAULT_LOG_PATTERN_INJECT;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_LOG_PATTERN_REPLACE;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_METRICS_OTEL_CARDINALITY_LIMIT;
 import static datadog.trace.api.ConfigDefaults.DEFAULT_METRICS_OTEL_EXPERIMENTAL_ENABLED;
@@ -648,6 +649,7 @@ import static datadog.trace.api.config.TraceInstrumentationConfig.LOGS_INJECTION
 import static datadog.trace.api.config.TraceInstrumentationConfig.LOGS_INJECTION_ENABLED;
 import static datadog.trace.api.config.TraceInstrumentationConfig.LOGS_MDC_TAGS_INJECTION_ENABLED;
 import static datadog.trace.api.config.TraceInstrumentationConfig.LOGS_PATTERN;
+import static datadog.trace.api.config.TraceInstrumentationConfig.LOGS_PATTERN_INJECT;
 import static datadog.trace.api.config.TraceInstrumentationConfig.LOGS_PATTERN_REPLACE;
 import static datadog.trace.api.config.TraceInstrumentationConfig.MESSAGE_BROKER_SPLIT_BY_DESTINATION;
 import static datadog.trace.api.config.TraceInstrumentationConfig.MONGO_OBFUSCATION;
@@ -1106,6 +1108,7 @@ public class Config {
   private final boolean reportHostName;
   private final String logPattern;
   private final boolean logPatternReplace;
+  private final boolean logPatternInject;
 
   private final boolean traceAnalyticsEnabled;
   private final String traceClientIpHeader;
@@ -2464,6 +2467,7 @@ public class Config {
     logPattern = configProvider.getString(LOGS_PATTERN, DEFAULT_LOG_PATTERN);
     logPatternReplace =
         configProvider.getBoolean(LOGS_PATTERN_REPLACE, DEFAULT_LOG_PATTERN_REPLACE);
+    logPatternInject = configProvider.getBoolean(LOGS_PATTERN_INJECT, DEFAULT_LOG_PATTERN_INJECT);
 
     logsMDCTagsInjectionEnabled = configProvider.getBoolean(LOGS_MDC_TAGS_INJECTION_ENABLED, true);
 
@@ -4276,6 +4280,10 @@ public class Config {
 
   public boolean isLogPatternReplace() {
     return logPatternReplace;
+  }
+
+  public boolean isLogPatternInject() {
+    return logPatternInject;
   }
 
   public boolean isLogsMDCTagsInjectionEnabled() {
@@ -7107,6 +7115,8 @@ public class Config {
         + logPattern
         + ", logPatternReplace="
         + logPatternReplace
+        + ", logPatternInject="
+        + logPatternInject
         + ", reportHostName="
         + reportHostName
         + ", traceAnalyticsEnabled="

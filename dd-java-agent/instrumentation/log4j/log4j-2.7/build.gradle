@@ -16,3 +16,11 @@ dependencies {
 
   testImplementation group: 'org.apache.logging.log4j', name: 'log4j-core', version: '2.7'
 }
+
+sourceSets.test.java.srcDir "${projectDir}/../log4j-2.0/src/sharedTest/java"
+addTestSuiteForDir('latestDepTest', 'test')
+sourceSets.latestDepTest.java.srcDir "${projectDir}/../log4j-2.0/src/sharedTest/java"
+
+dependencies {
+  latestDepTestImplementation group: 'org.apache.logging.log4j', name: 'log4j-core', version: '2.26.1'
+}

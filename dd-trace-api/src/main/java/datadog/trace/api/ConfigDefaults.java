@@ -359,6 +359,7 @@ public final class ConfigDefaults {
       "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger - [%method,%line] %X{dd.service} %X{dd.trace_id} %X{dd.span_id} - %msg%n";
 
   static final boolean DEFAULT_LOG_PATTERN_REPLACE = false;
+  static final boolean DEFAULT_LOG_PATTERN_INJECT = false;
 
   static final boolean DEFAULT_TRACE_HEADER_ENABLED = false;
 
