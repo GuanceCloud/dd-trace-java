@@ -33,7 +33,8 @@ class LogbackPatternLayoutLogsInjectionDisabledTest extends AbstractInstrumentat
       LoggingEvent event =
           new LoggingEvent(getClass().getName(), logger, Level.INFO, "message", null, null);
       assertEquals(
-          "message dd.service= dd.trace_id=" + System.lineSeparator(), layout.doLayout(event));
+          "message dd.service= dd.trace_id= dd.span_id=" + System.lineSeparator(),
+          layout.doLayout(event));
     } finally {
       span.finish();
       layout.stop();

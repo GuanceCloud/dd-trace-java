@@ -1,17 +1,15 @@
-/*
- * Copyright The OpenTelemetry Authors
- * SPDX-License-Identifier: Apache-2.0
- */
-
 package datadog.trace.instrumentation.log4j2;
 
-import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
-import static net.bytebuddy.matcher.ElementMatchers.*;
+import static datadog.trace.agent.tooling.bytebuddy.matcher.ClassLoaderMatchers.hasClassNamed;
+import static net.bytebuddy.matcher.ElementMatchers.isConstructor;
+import static net.bytebuddy.matcher.ElementMatchers.not;
+import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
 
 import com.google.auto.service.AutoService;
 import datadog.trace.agent.tooling.Instrumenter;
 import datadog.trace.agent.tooling.InstrumenterModule;
 import datadog.trace.api.Config;
+import net.bytebuddy.matcher.ElementMatcher;
 
 @AutoService(InstrumenterModule.class)
 public class PatternLayoutInstrumentation extends InstrumenterModule.Tracing
@@ -22,23 +20,28 @@ public class PatternLayoutInstrumentation extends InstrumenterModule.Tracing
 
   @Override
   protected boolean defaultEnabled() {
-    return Config.get().isLogPatternReplace();
+    return Config.get().isLogPatternInject() || Config.get().isLogPatternReplace();
+  }
+
+  @Override
+  public ElementMatcher.Junction<ClassLoader> classLoaderMatcher() {
+    return not(hasClassNamed("org.apache.logging.log4j.core.impl.ContextDataInjectorFactory"));
   }
 
   @Override
   public String instrumentedType() {
-    return "org.apache.logging.log4j.core.layout.PatternLayout$Builder";
+    return "org.apache.logging.log4j.core.layout.PatternLayout";
   }
 
   @Override
-  public void methodAdvice(MethodTransformer transformation) {
-    transformation.applyAdvice(
-        isMethod().and(isPublic()).and(named("build")).and(takesArguments(0)),
-        packageName + ".PatternLayoutBuildAdvice");
+  public void methodAdvice(MethodTransformer transformer) {
+    transformer.applyAdvice(
+        isConstructor().and(takesArgument(2, String.class)),
+        packageName + ".PatternLayoutConstructorAdvice");
   }
 
   @Override
-  public String[] helperClassNames() {
-    return new String[] {packageName + ".PatternLayoutBuildAdvice"};
+  public String muzzleDirective() {
+    return "pattern-layout";
   }
 }

@@ -15,6 +15,13 @@ configurations {
 
 muzzle {
   pass {
+    name = 'pattern-layout'
+    group = 'org.apache.logging.log4j'
+    module = 'log4j-core'
+    versions = '[2.0,2.7)'
+  }
+
+  pass {
     name = "default"
     group = 'org.apache.logging.log4j'
     module = 'log4j-core'
@@ -41,4 +48,12 @@ dependencies {
   compileOnly group: 'org.apache.logging.log4j', name: 'log4j-core', version: log4jVersion
 
   testImplementation group: 'org.apache.logging.log4j', name: 'log4j-core', version: log4jVersion
+}
+
+sourceSets.test.java.srcDir "${projectDir}/src/sharedTest/java"
+addTestSuiteForDir('log4j26Test', 'test')
+sourceSets.log4j26Test.java.srcDir "${projectDir}/src/sharedTest/java"
+
+dependencies {
+  log4j26TestImplementation group: 'org.apache.logging.log4j', name: 'log4j-core', version: '2.6.2'
 }

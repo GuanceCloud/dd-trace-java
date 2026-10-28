@@ -247,6 +247,7 @@
 2 org.apache.log4j.*
 0 org.apache.log4j.Category
 0 org.apache.log4j.MDC
+0 org.apache.log4j.PatternLayout
 0 org.apache.log4j.spi.LoggingEvent
 2 org.apache.lucene.*
 2 org.apache.regexp.*

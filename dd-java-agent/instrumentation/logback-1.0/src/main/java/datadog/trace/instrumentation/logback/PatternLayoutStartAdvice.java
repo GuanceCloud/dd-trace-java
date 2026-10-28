@@ -7,6 +7,7 @@ import ch.qos.logback.core.pattern.parser.Node;
 import ch.qos.logback.core.pattern.parser.Parser;
 import ch.qos.logback.core.pattern.parser.SimpleKeywordNode;
 import datadog.trace.api.Config;
+import datadog.trace.bootstrap.instrumentation.log.LogPatternInjector;
 import java.util.ArrayDeque;
 import java.util.List;
 import net.bytebuddy.asm.Advice;
@@ -23,8 +24,7 @@ public class PatternLayoutStartAdvice {
       return;
     }
 
-    boolean missingTraceId = true;
-    boolean missingService = true;
+    int presentFields = 0;
     ArrayDeque<Node> pending = new ArrayDeque<>();
     Node root;
     try {
@@ -36,7 +36,7 @@ public class PatternLayoutStartAdvice {
     if (root != null) {
       pending.push(root);
     }
-    // Keep traversal inline so bootstrap-loaded layouts do not need an injected helper.
+    // Use the native parser to distinguish nested converters from literal option text.
     scan:
     while (!pending.isEmpty()) {
       for (Node node = pending.pop(); node != null; node = node.getNext()) {
@@ -49,8 +49,7 @@ public class PatternLayoutStartAdvice {
             && ("X".equals(node.getValue()) || "mdc".equals(node.getValue()))) {
           List<String> options = ((SimpleKeywordNode) node).getOptions();
           if (options == null || options.isEmpty()) {
-            missingTraceId = false;
-            missingService = false;
+            presentFields = LogPatternInjector.ALL;
             break scan;
           }
           String key = options.get(0);
@@ -59,114 +58,21 @@ public class PatternLayoutStartAdvice {
             key = key.substring(0, defaultSeparator);
           }
           if ("dd.trace_id".equals(key)) {
-            missingTraceId = false;
+            presentFields |= LogPatternInjector.TRACE_ID;
           } else if ("dd.service".equals(key)) {
-            missingService = false;
+            presentFields |= LogPatternInjector.SERVICE;
           }
-          if (!missingTraceId && !missingService) {
+          if ("dd.span_id".equals(key)) {
+            presentFields |= LogPatternInjector.SPAN_ID;
+          }
+          if (presentFields == LogPatternInjector.ALL) {
             break scan;
           }
         }
       }
     }
-    if (missingTraceId || missingService) {
-      // Preserve the first complete field, including date options and presentation wrappers.
-      int insertion = pattern.length();
-      int optionsDepth = 0;
-      int compositeDepth = 0;
-      int bracketDepth = 0;
-      char quote = 0;
-      boolean fieldStarted = false;
-      for (int i = 0; i < pattern.length(); i++) {
-        char c = pattern.charAt(i);
-        if (c == '\\') {
-          fieldStarted = true;
-          i++;
-          continue;
-        }
-        if (optionsDepth > 0) {
-          if (quote != 0) {
-            if (c == quote) {
-              quote = 0;
-            }
-          } else if (c == '\'' || c == '"') {
-            quote = c;
-          } else if (c == '{') {
-            optionsDepth++;
-          } else if (c == '}') {
-            optionsDepth--;
-          }
-          continue;
-        }
-        if (c == '{') {
-          optionsDepth++;
-        } else if (c == '(') {
-          compositeDepth++;
-        } else if (c == ')' && compositeDepth > 0) {
-          compositeDepth--;
-        } else if (compositeDepth == 0 && c == '[') {
-          bracketDepth++;
-        } else if (compositeDepth == 0 && c == ']' && bracketDepth > 0) {
-          bracketDepth--;
-        }
-        if (compositeDepth == 0 && fieldStarted) {
-          if ((c == '%' && i + 1 < pattern.length() && pattern.charAt(i + 1) == 'n')
-              || c == '\n'
-              || c == '\r') {
-            insertion = i;
-            break;
-          }
-          if (bracketDepth == 0
-              && (Character.isWhitespace(c) || c == '|' || c == ',' || c == ';')) {
-            insertion = i;
-            // Keep the original separator before the new fields, including delimited logs.
-            while (insertion < pattern.length()
-                && Character.isWhitespace(pattern.charAt(insertion))
-                && pattern.charAt(insertion) != '\n'
-                && pattern.charAt(insertion) != '\r') {
-              insertion++;
-            }
-            if (insertion < pattern.length()
-                && (pattern.charAt(insertion) == '|'
-                    || pattern.charAt(insertion) == ','
-                    || pattern.charAt(insertion) == ';')) {
-              insertion++;
-              while (insertion < pattern.length()
-                  && Character.isWhitespace(pattern.charAt(insertion))
-                  && pattern.charAt(insertion) != '\n'
-                  && pattern.charAt(insertion) != '\r') {
-                insertion++;
-              }
-            }
-            break;
-          }
-        }
-        fieldStarted |= !Character.isWhitespace(c);
-      }
-      StringBuilder result = new StringBuilder();
-      result.append(pattern, 0, insertion);
-      if (insertion > 0) {
-        char previous = pattern.charAt(insertion - 1);
-        if (!Character.isWhitespace(previous)
-            && previous != '|'
-            && previous != ','
-            && previous != ';') {
-          result.append(' ');
-        }
-      }
-      if (missingService) {
-        result.append("dd.service=%X{dd.service} ");
-      }
-      if (missingTraceId) {
-        result.append("dd.trace_id=%X{dd.trace_id} ");
-      }
-      if (insertion == pattern.length()
-          || pattern.startsWith("%n", insertion)
-          || pattern.charAt(insertion) == '\n'
-          || pattern.charAt(insertion) == '\r') {
-        result.setLength(result.length() - 1);
-      }
-      layout.setPattern(result.append(pattern, insertion, pattern.length()).toString());
+    if (presentFields != LogPatternInjector.ALL) {
+      layout.setPattern(LogPatternInjector.injectLogback(pattern, presentFields));
     }
   }
 }
