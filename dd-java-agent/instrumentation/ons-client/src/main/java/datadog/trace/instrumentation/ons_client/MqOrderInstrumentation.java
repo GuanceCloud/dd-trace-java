@@ -2,7 +2,9 @@ package datadog.trace.instrumentation.ons_client;
 
 import static datadog.trace.agent.tooling.bytebuddy.matcher.HierarchyMatchers.implementsInterface;
 import static datadog.trace.instrumentation.ons_client.MqDecorator.DECORATOR;
-import static net.bytebuddy.matcher.ElementMatchers.*;
+import static net.bytebuddy.matcher.ElementMatchers.isMethod;
+import static net.bytebuddy.matcher.ElementMatchers.named;
+import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
 
 import com.aliyun.openservices.ons.api.Message;
 import com.aliyun.openservices.ons.api.order.OrderAction;
@@ -50,7 +52,7 @@ public class MqOrderInstrumentation extends InstrumenterModule.Tracing
   }
 
   public static class AdviceStart {
-    @Advice.OnMethodEnter
+    @Advice.OnMethodEnter(suppress = Throwable.class)
     public static ContextScope onEnter(@Advice.Argument(0) Message message) {
       return DECORATOR.OnStart(message);
     }
@@ -61,17 +63,8 @@ public class MqOrderInstrumentation extends InstrumenterModule.Tracing
       if (scope == null) {
         return;
       }
-      String status;
-      switch (action) {
-        case Success:
-          status = "success";
-          break;
-        case Suspend:
-          status = "suspend";
-          break;
-        default:
-          status = "unknown";
-      }
+      String status =
+          action == null ? "unknown" : action == OrderAction.Success ? "success" : "suspend";
       DECORATOR.OnEnd(scope, status);
     }
   }

@@ -2,7 +2,8 @@ package datadog.trace.instrumentation.rocketmq5;
 
 import static datadog.context.propagation.Propagators.defaultPropagator;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
-import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.*;
+import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSpan;
+import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.startSpan;
 import static datadog.trace.bootstrap.instrumentation.api.Java8BytecodeBridge.spanFromScope;
 import static datadog.trace.instrumentation.rocketmq5.MessageMapSetter.SETTER;
 import static net.bytebuddy.matcher.ElementMatchers.isMethod;
@@ -61,20 +62,34 @@ public class MessageImplInstrumentation extends InstrumenterModule.Tracing
     public static ContextScope onEnter(@Advice.This MessageBuilderImpl impl) {
       AgentSpan span = startSpan("rocketmq", "message build send");
       span.setSpanType("rocketmq");
-      ContextScope scope = activateSpan(span);
       defaultPropagator().inject(span, impl, SETTER);
-      return scope;
+      return activateSpan(span);
     }
 
-    @Advice.OnMethodExit(suppress = Throwable.class)
-    public static void onExit(@Advice.Enter ContextScope scope, @Advice.Return Message message) {
-      spanFromScope(scope).setServiceName("rocketmq-producer");
-      spanFromScope(scope).setTag("topic", message.getTopic());
-      spanFromScope(scope).setTag("tag", message.getTag());
-      spanFromScope(scope).setTag("messageGroup", message.getMessageGroup());
-      spanFromScope(scope).setTag("keys", message.getKeys());
-      scope.close();
-      spanFromScope(scope).finish();
+    @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
+    public static void onExit(
+        @Advice.Enter ContextScope scope,
+        @Advice.Return Message message,
+        @Advice.Thrown Throwable throwable) {
+      if (scope == null) {
+        return;
+      }
+      AgentSpan span = spanFromScope(scope);
+      try {
+        span.setServiceName("rocketmq-producer");
+        if (message != null) {
+          span.setTag("topic", message.getTopic());
+          span.setTag("tag", message.getTag());
+          span.setTag("messageGroup", message.getMessageGroup());
+          span.setTag("keys", message.getKeys());
+        }
+        if (throwable != null) {
+          span.addThrowable(throwable);
+        }
+      } finally {
+        scope.close();
+        span.finish();
+      }
     }
   }
 }

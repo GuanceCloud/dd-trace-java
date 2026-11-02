@@ -50,7 +50,7 @@ public class MqNormalInstrumentation extends InstrumenterModule.Tracing
   }
 
   public static class AdviceStart {
-    @Advice.OnMethodEnter
+    @Advice.OnMethodEnter(suppress = Throwable.class)
     public static ContextScope onEnter(@Advice.Argument(0) Message message) {
       return DECORATOR.OnStart(message);
     }

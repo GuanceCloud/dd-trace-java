@@ -2,7 +2,9 @@ package datadog.trace.instrumentation.ons_client;
 
 import static datadog.trace.agent.tooling.bytebuddy.matcher.HierarchyMatchers.implementsInterface;
 import static datadog.trace.instrumentation.ons_client.MqDecorator.DECORATOR;
-import static net.bytebuddy.matcher.ElementMatchers.*;
+import static net.bytebuddy.matcher.ElementMatchers.isMethod;
+import static net.bytebuddy.matcher.ElementMatchers.named;
+import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
 
 import com.aliyun.openservices.ons.api.Message;
 import com.google.auto.service.AutoService;
@@ -49,7 +51,7 @@ public class MqBatchInstrumentation extends InstrumenterModule.Tracing
   }
 
   public static class AdviceStart {
-    @Advice.OnMethodEnter
+    @Advice.OnMethodEnter(suppress = Throwable.class)
     public static ContextScope onEnter(@Advice.Argument(0) List<Message> messages) {
       return DECORATOR.OnStart(messages);
     }

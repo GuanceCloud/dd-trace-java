@@ -1,8 +1,8 @@
 package datadog.trace.instrumentation.rocketmq5;
 
 import static datadog.trace.bootstrap.instrumentation.api.AgentPropagation.extractContextAndGetSpanContext;
-import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.*;
-import static datadog.trace.bootstrap.instrumentation.api.Java8BytecodeBridge.spanFromScope;
+import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSpan;
+import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.startSpan;
 import static datadog.trace.instrumentation.rocketmq5.MessageViewGetter.GetterView;
 
 import datadog.context.ContextScope;
@@ -21,7 +21,6 @@ public class MessageListenerWrapper implements MessageListener {
 
   @Override
   public ConsumeResult consume(MessageView messageView) {
-    ConsumeResult consumeResult = null;
     // todo  start span and end
     AgentSpanContext parentContext = extractContextAndGetSpanContext(messageView, GetterView);
 
@@ -39,10 +38,14 @@ public class MessageListenerWrapper implements MessageListener {
     span.setTag("keys", messageView.getKeys());
     span.setTag("message_group", messageView.getMessageGroup());
     ContextScope scope = activateSpan(span);
-    consumeResult = delegator.consume(messageView);
-    scope.close();
-    spanFromScope(scope).finish();
-
-    return consumeResult;
+    try {
+      return delegator.consume(messageView);
+    } catch (Throwable throwable) {
+      span.addThrowable(throwable);
+      throw throwable;
+    } finally {
+      scope.close();
+      span.finish();
+    }
   }
 }

@@ -9,6 +9,15 @@ public abstract class AbstractContext {
   public long startTime = 0L;
   public boolean createdSpan = false;
   public ContextScope agentScope;
+  private AbstractContext previous;
+
+  public AbstractContext getPrevious() {
+    return previous;
+  }
+
+  public void setPrevious(AbstractContext previous) {
+    this.previous = previous;
+  }
 
   public abstract String getArguments();
 

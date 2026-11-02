@@ -1,5 +1,6 @@
 package datadog.trace.instrumentation.rocketmq;
 
+import static datadog.trace.bootstrap.instrumentation.api.Java8BytecodeBridge.spanFromScope;
 import static datadog.trace.instrumentation.rocketmq.RocketMqDecorator.CONSUMER_DECORATE;
 
 import datadog.context.ContextScope;
@@ -36,13 +37,20 @@ public final class TracingConsumeMessageHookImpl implements ConsumeMessageHook {
 
   @Override
   public void consumeMessageAfter(ConsumeMessageContext context) {
-    ContextScope scope = store.get(context);
+    if (context == null) {
+      return;
+    }
+    ContextScope scope = store.remove(context);
 
     if (scope == null) {
       return;
     }
 
-    rocketMqDecorator.end(context, scope);
-    scope.close();
+    try {
+      rocketMqDecorator.end(context, scope);
+    } finally {
+      scope.close();
+      spanFromScope(scope).finish();
+    }
   }
 }

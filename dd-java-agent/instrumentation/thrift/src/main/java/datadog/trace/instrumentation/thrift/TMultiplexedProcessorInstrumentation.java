@@ -1,13 +1,16 @@
 package datadog.trace.instrumentation.thrift;
 
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
-import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSpan;
-import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.noopSpan;
-import static datadog.trace.instrumentation.thrift.ThriftConstants.*;
-import static net.bytebuddy.matcher.ElementMatchers.*;
+import static datadog.trace.instrumentation.thrift.ThriftConstants.INSTRUMENTATION_NAME;
+import static datadog.trace.instrumentation.thrift.ThriftConstants.INSTRUMENTATION_NAME_SERVER;
+import static datadog.trace.instrumentation.thrift.ThriftConstants.TM_M;
+import static datadog.trace.instrumentation.thrift.ThriftConstants.T_MULTIPLEXED_PROCESSOR;
+import static datadog.trace.instrumentation.thrift.ThriftServerDecorator.SERVER_DECORATOR;
+import static net.bytebuddy.matcher.ElementMatchers.isConstructor;
+import static net.bytebuddy.matcher.ElementMatchers.isMethod;
+import static net.bytebuddy.matcher.ElementMatchers.isPublic;
 
 import com.google.auto.service.AutoService;
-import datadog.context.ContextScope;
 import datadog.trace.agent.tooling.Instrumenter;
 import datadog.trace.agent.tooling.InstrumenterModule;
 import java.util.HashMap;
@@ -73,22 +76,27 @@ public class TMultiplexedProcessorInstrumentation extends InstrumenterModule.Tra
 
   public static class TMultiplexedProcessorProcessAdvice {
     @Advice.OnMethodEnter(suppress = Throwable.class)
-    public static ContextScope onEnter(
+    public static AbstractContext onEnter(
         @Advice.This final TMultiplexedProcessor processor,
         @Advice.AllArguments final Object[] args) {
       try {
         TProtocol protocol = (TProtocol) args[0];
-        ((ServerInProtocolWrapper) protocol).initial(new Context(TM_M.get(processor)));
+        return ((ServerInProtocolWrapper) protocol).initial(new Context(TM_M.get(processor)));
       } catch (Exception e) {
         throw e;
       }
-      return activateSpan(noopSpan());
+    }
+
+    @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
+    public static void onExit(
+        @Advice.Enter AbstractContext context, @Advice.Thrown Throwable throwable) {
+      SERVER_DECORATOR.finish(context, throwable);
     }
   }
 
   public static class TMultiplexedProcessorRegisterProcessAdvice {
     @Advice.OnMethodEnter(suppress = Throwable.class)
-    public static ContextScope onEnter(
+    public static void onEnter(
         @Advice.This final TMultiplexedProcessor obj,
         @Advice.AllArguments final Object[] allArguments) {
       Map<String, ProcessFunction> processMap = TM_M.get(obj);
@@ -96,20 +104,18 @@ public class TMultiplexedProcessorInstrumentation extends InstrumenterModule.Tra
       TProcessor processor = (TProcessor) allArguments[1];
       processMap.putAll(ThriftConstants.getProcessMap(serviceName, processor));
       TM_M.put(obj, processMap);
-      return activateSpan(noopSpan());
     }
   }
 
   public static class TMultiplexedProcessorRegisterDefaultAdvice {
     @Advice.OnMethodEnter(suppress = Throwable.class)
-    public static ContextScope onEnter(
+    public static void onEnter(
         @Advice.This final TMultiplexedProcessor obj,
         @Advice.AllArguments final Object[] allArguments) {
       Map<String, ProcessFunction> processMap = TM_M.get(obj);
       TProcessor processor = (TProcessor) allArguments[0];
       processMap.putAll(ThriftConstants.getProcessMap(processor));
       TM_M.put(obj, processMap);
-      return activateSpan(noopSpan());
     }
   }
 }

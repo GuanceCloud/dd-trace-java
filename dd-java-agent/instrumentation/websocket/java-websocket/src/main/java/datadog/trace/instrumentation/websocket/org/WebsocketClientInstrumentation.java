@@ -81,6 +81,9 @@ public class WebsocketClientInstrumentation
       if (callDepth > 0) {
         return null;
       }
+      if (InstrumentationContext.get(WebSocketClient.class, AgentSpan.class).get(client) != null) {
+        return null;
+      }
       // 创建握手 Span
       ContextScope scope = CLIENT_DECORATE.startHandshakeSpan(client);
       InstrumentationContext.get(WebSocketClient.class, AgentSpan.class)
@@ -90,24 +93,27 @@ public class WebsocketClientInstrumentation
 
     @Advice.OnMethodExit(suppress = Throwable.class, onThrowable = Throwable.class)
     public static void onExit(
-        @Advice.Enter ContextScope scope, @Advice.Thrown Throwable throwable) {
+        @Advice.Enter ContextScope scope,
+        @Advice.This WebSocketClient client,
+        @Advice.Thrown Throwable throwable) {
 
       CallDepthThreadLocalMap.decrementCallDepth(WebSocketClient.class);
       if (scope == null) {
         return;
       }
-      // // 如果 connect() 抛出异常（同步失败），立即结束 span
-      if (throwable != null) {
-        AgentSpan span = spanFromScope(scope);
-        CLIENT_DECORATE.onError(spanFromScope(scope), throwable);
-        CLIENT_DECORATE.beforeFinish(spanFromScope(scope));
-
+      AgentSpan span = spanFromScope(scope);
+      try {
+        if (throwable != null) {
+          InstrumentationContext.get(WebSocketClient.class, AgentSpan.class).remove(client);
+          CLIENT_DECORATE.onError(span, throwable);
+          CLIENT_DECORATE.beforeFinish(span);
+        }
+      } finally {
         scope.close();
-        spanFromScope(scope).finish();
+        if (throwable != null) {
+          span.finish();
+        }
       }
-      System.out.println("exit...............");
-      // 不要在这里关闭 scope，因为握手是异步的，onOpen 时才结束
-      // scope.close() 应该在 onOpen 或 onError 中调用
     }
   }
 
@@ -136,15 +142,12 @@ public class WebsocketClientInstrumentation
         @Advice.This WebSocketClient client) {
       // 从 context 中获取之前创建的 span
       AgentSpan span =
-          InstrumentationContext.get(WebSocketClient.class, AgentSpan.class).get(client);
-      System.out.println("open...............");
+          InstrumentationContext.get(WebSocketClient.class, AgentSpan.class).remove(client);
       if (span == null) {
         return NoopScope.INSTANCE;
       }
       span.setOperationName(WEBSOCKET_OPEN);
       CLIENT_DECORATE.onHandshakeSuccess(span, ((ServerHandshake) handshake).getHttpStatus());
-      // 清理 context
-      InstrumentationContext.get(WebSocketClient.class, AgentSpan.class).remove(client);
       WebsocketAgentSpanContext spanContext =
           new WebsocketAgentSpanContext(span.spanContext(), span.getTag(Tags.SPAN_KIND));
       // defaultPropagator().inject(span, headers, SETTER);
@@ -159,11 +162,13 @@ public class WebsocketClientInstrumentation
       if (scope == null) {
         return;
       }
-      CLIENT_DECORATE.onError(spanFromScope(scope), throwable);
-      CLIENT_DECORATE.beforeFinish(spanFromScope(scope));
-
-      scope.close();
-      spanFromScope(scope).finish();
+      try {
+        CLIENT_DECORATE.onError(spanFromScope(scope), throwable);
+        CLIENT_DECORATE.beforeFinish(spanFromScope(scope));
+      } finally {
+        scope.close();
+        spanFromScope(scope).finish();
+      }
     }
   }
 
@@ -171,7 +176,6 @@ public class WebsocketClientInstrumentation
     @Advice.OnMethodEnter(suppress = Throwable.class)
     public static ContextScope onEnter(
         @Advice.Argument(value = 0) WebSocket engine, @Advice.Argument(value = 1) Object message) {
-      System.out.println("message...............");
       WebsocketAgentSpanContext context =
           InstrumentationContext.get(WebSocket.class, WebsocketAgentSpanContext.class).get(engine);
       if (context == null) {
@@ -187,11 +191,13 @@ public class WebsocketClientInstrumentation
       if (scope == null) {
         return;
       }
-      CLIENT_DECORATE.onError(spanFromScope(scope), throwable);
-      CLIENT_DECORATE.beforeFinish(spanFromScope(scope));
-
-      scope.close();
-      spanFromScope(scope).finish();
+      try {
+        CLIENT_DECORATE.onError(spanFromScope(scope), throwable);
+        CLIENT_DECORATE.beforeFinish(spanFromScope(scope));
+      } finally {
+        scope.close();
+        spanFromScope(scope).finish();
+      }
     }
   }
 
@@ -203,7 +209,6 @@ public class WebsocketClientInstrumentation
         @Advice.Argument(value = 1) int code,
         @Advice.Argument(value = 2) String message,
         @Advice.Argument(value = 3) boolean remote) {
-      System.out.println("close...............");
       WebsocketAgentSpanContext context =
           InstrumentationContext.get(WebSocket.class, WebsocketAgentSpanContext.class).get(conn);
       if (context == null) {
@@ -229,27 +234,30 @@ public class WebsocketClientInstrumentation
       if (scope == null) {
         return;
       }
-      CLIENT_DECORATE.onError(spanFromScope(scope), throwable);
-      CLIENT_DECORATE.beforeFinish(spanFromScope(scope));
-      scope.close();
-      spanFromScope(scope).finish();
+      try {
+        CLIENT_DECORATE.onError(spanFromScope(scope), throwable);
+        CLIENT_DECORATE.beforeFinish(spanFromScope(scope));
+      } finally {
+        scope.close();
+        spanFromScope(scope).finish();
+      }
     }
   }
 
   public static class ErrorAdvice {
-    @Advice.OnMethodExit
+    @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
     public static void onExit(
-        @Advice.This WebSocketClient client,
-        @Advice.Argument(value = 0) WebSocket conn,
-        @Advice.Argument(value = 1) Exception ex) {
-      AgentSpan agentSpan =
-          InstrumentationContext.get(WebSocketClient.class, AgentSpan.class).get(client);
-      if (agentSpan == null) {
-        return;
+        @Advice.This WebSocketClient client, @Advice.Argument(value = 1) Exception ex) {
+      AgentSpan span =
+          InstrumentationContext.get(WebSocketClient.class, AgentSpan.class).remove(client);
+      if (span != null) {
+        try {
+          CLIENT_DECORATE.onError(span, ex);
+          CLIENT_DECORATE.beforeFinish(span);
+        } finally {
+          span.finish();
+        }
       }
-      System.out.println("onerror...............");
-      CLIENT_DECORATE.onError(agentSpan, ex);
-      // InstrumentationContext.get(WebSocketClient.class, AgentSpan.class).put(client,agentSpan);
     }
   }
 }

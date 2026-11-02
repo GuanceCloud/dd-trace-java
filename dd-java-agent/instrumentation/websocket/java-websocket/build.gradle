@@ -12,5 +12,6 @@ muzzle {
 
 
 dependencies {
+  testImplementation group: 'org.java-websocket', name: 'Java-WebSocket', version: '1.5.3'
   compileOnly group: 'org.java-websocket', name: 'Java-WebSocket', version: '1.5.3'
 }

@@ -18,11 +18,12 @@ muzzle {
 addTestSuiteForDir('latestDepTest','test')
 
 dependencies {
+  testImplementation group: 'org.apache.thrift', name: 'libthrift', version: '0.9.3'
   compileOnly(group: 'org.apache.thrift', name: 'libthrift', version: '0.9.3')
   //main_java8CompileOnly(group: 'org.apache.thrift', name: 'libthrift', version: '0.9.3')
-//  testImplementation group: 'org.apache.thrift', name: 'libthrift', version: '0.11.0'
+  //  testImplementation group: 'org.apache.thrift', name: 'libthrift', version: '0.11.0'
 }
 
 test {
-    useJUnitPlatform()
+  useJUnitPlatform()
 }

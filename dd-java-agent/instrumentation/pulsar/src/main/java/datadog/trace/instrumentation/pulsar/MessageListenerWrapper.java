@@ -38,12 +38,15 @@ public class MessageListenerWrapper<T> implements MessageListener<T> {
       return;
     }
 
+    ContextScope scope = start(parentContext, message);
+    Throwable error = null;
     try {
-      ContextScope scope = start(parentContext, message);
       this.delegate.received(consumer, message);
-      end(scope, null);
     } catch (Throwable t) {
-      log.warn(t.toString());
+      error = t;
+      throw t;
+    } finally {
+      end(scope, error);
     }
   }
 
@@ -67,14 +70,15 @@ public class MessageListenerWrapper<T> implements MessageListener<T> {
   }
 
   public void end(ContextScope scope, Throwable throwable) {
-    // todo error
-    if (throwable != null) {
-      spanFromScope(scope).setError(true);
-      spanFromScope(scope).setErrorMessage(throwable.getMessage());
+    AgentSpan span = spanFromScope(scope);
+    try {
+      if (throwable != null) {
+        span.addThrowable(throwable);
+      }
+    } finally {
+      scope.close();
+      span.finish();
     }
-
-    spanFromScope(scope).finish();
-    scope.close();
   }
 
   @Override

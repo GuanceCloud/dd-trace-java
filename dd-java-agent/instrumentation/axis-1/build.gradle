@@ -12,6 +12,10 @@ muzzle {
 
 
 dependencies {
+  testImplementation 'axis:axis-jaxrpc:1.4'
+  testImplementation 'commons-discovery:commons-discovery:0.2'
+  testImplementation 'wsdl4j:wsdl4j:1.6.2'
+  testImplementation group: 'org.apache.axis', name: 'axis', version: '1.4'
   compileOnly group: 'org.apache.axis', name: 'axis', version: '1.4'
   compileOnly group: 'axis', name: 'axis-jaxrpc', version: '1.4'
 }

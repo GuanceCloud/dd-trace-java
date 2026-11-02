@@ -14,6 +14,7 @@ muzzle {
 addTestSuiteForDir('latestDepTest','test')
 
 dependencies {
+  testImplementation group: 'org.apache.rocketmq', name: 'rocketmq-client', version: '4.8.0'
   compileOnly group: 'org.apache.rocketmq', name: 'rocketmq-client', version: '4.8.0'
 }
 

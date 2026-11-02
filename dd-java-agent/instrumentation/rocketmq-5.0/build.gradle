@@ -13,6 +13,7 @@ muzzle {
 
 
 dependencies {
+  testImplementation group: 'org.apache.rocketmq', name: 'rocketmq-client-java', version: '5.0.0'
   compileOnly group: 'org.apache.rocketmq', name: 'rocketmq-client-java', version: '5.0.0'
 }
 

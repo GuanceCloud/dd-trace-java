@@ -1,11 +1,20 @@
 package datadog.trace.instrumentation.thrift;
 
 import static datadog.trace.agent.tooling.bytebuddy.matcher.HierarchyMatchers.extendsClass;
-import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.*;
+import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSpan;
 import static datadog.trace.bootstrap.instrumentation.api.Java8BytecodeBridge.spanFromScope;
 import static datadog.trace.instrumentation.thrift.ThriftClientDecorator.CLIENT_DECORATOR;
-import static datadog.trace.instrumentation.thrift.ThriftConstants.*;
-import static net.bytebuddy.matcher.ElementMatchers.*;
+import static datadog.trace.instrumentation.thrift.ThriftConstants.CLIENT_INJECT_THREAD;
+import static datadog.trace.instrumentation.thrift.ThriftConstants.INSTRUMENTATION_NAME;
+import static datadog.trace.instrumentation.thrift.ThriftConstants.INSTRUMENTATION_NAME_CLIENT;
+import static datadog.trace.instrumentation.thrift.ThriftConstants.TSERVICE_CLIENT;
+import static net.bytebuddy.matcher.ElementMatchers.isConstructor;
+import static net.bytebuddy.matcher.ElementMatchers.isMethod;
+import static net.bytebuddy.matcher.ElementMatchers.isPrivate;
+import static net.bytebuddy.matcher.ElementMatchers.isProtected;
+import static net.bytebuddy.matcher.ElementMatchers.named;
+import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
+import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
 
 import com.google.auto.service.AutoService;
 import datadog.context.ContextScope;
@@ -79,61 +88,67 @@ public class TServiceClientInstrumentation extends InstrumenterModule.Tracing
 
   @Override
   public Map<String, String> contextStore() {
-    return Collections.singletonMap(
-        "org.apache.thrift.TServiceClient", ContextScope.class.getName());
+    return Collections.singletonMap("org.apache.thrift.TServiceClient", AgentSpan.class.getName());
   }
 
   public static class SendBaseAdvice {
-
     @Advice.OnMethodEnter(suppress = Throwable.class)
     public static ContextScope onEnter(
-        @Advice.This TServiceClient tServiceClient,
-        @Advice.Argument(0) String methodName,
-        @Advice.Argument(1) TBase tb) {
-      AgentSpan span = CLIENT_DECORATOR.createSpan(methodName, tb);
-      ContextScope agentScope = activateSpan(span);
-      InstrumentationContext.get(TServiceClient.class, ContextScope.class)
-          .put(tServiceClient, agentScope);
-      return agentScope;
+        @Advice.Argument(0) String methodName, @Advice.Argument(1) TBase tb) {
+      return activateSpan(CLIENT_DECORATOR.createSpan(methodName, tb));
     }
 
-    //    @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
-    //    public static void onExit(
-    //        @Advice.Enter final ContextScope scope, @Advice.Thrown final Throwable throwable) {
-    //      if (scope == null) {
-    //        return;
-    //      }
-    //      System.out.println("SendBaseAdvice: onExit close span ");
-    //      CLIENT_DECORATOR.onError(spanFromScope(scope), throwable);
-    //      CLIENT_DECORATOR.beforeFinish(spanFromScope(scope));
-    //      scope.close();
-    //      spanFromScope(scope).finish();
-    //      CLIENT_INJECT_THREAD.remove();
-    //      System.out.println("CLIENT_INJECT_THREAD remove");
-    //    }
-  }
-
-  public static class ReceiveBaseAdvice {
-
     @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
-    public static void stopSpan(
-        @Advice.This TServiceClient tServiceClient, @Advice.Thrown final Throwable throwable) {
-      ContextScope scope =
-          InstrumentationContext.get(TServiceClient.class, ContextScope.class).get(tServiceClient);
+    public static void onExit(
+        @Advice.This TServiceClient client,
+        @Advice.Enter ContextScope scope,
+        @Advice.Argument(2) byte messageType,
+        @Advice.Thrown Throwable throwable) {
       if (scope == null) {
         return;
       }
       AgentSpan span = spanFromScope(scope);
-      // ContextScope scope = activeScope();
-      if (span == null) {
+      boolean finish =
+          throwable != null || messageType == org.apache.thrift.protocol.TMessageType.ONEWAY;
+      try {
+        if (finish) {
+          CLIENT_DECORATOR.onError(span, throwable);
+          CLIENT_DECORATOR.beforeFinish(span);
+        } else {
+          InstrumentationContext.get(TServiceClient.class, AgentSpan.class).put(client, span);
+        }
+      } finally {
+        CLIENT_INJECT_THREAD.remove();
+        scope.close();
+        if (finish) {
+          span.finish();
+        }
+      }
+    }
+  }
+
+  public static class ReceiveBaseAdvice {
+    @Advice.OnMethodEnter(suppress = Throwable.class)
+    public static ContextScope onEnter(@Advice.This TServiceClient client) {
+      AgentSpan span =
+          InstrumentationContext.get(TServiceClient.class, AgentSpan.class).remove(client);
+      return span == null ? null : activateSpan(span);
+    }
+
+    @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
+    public static void stopSpan(
+        @Advice.Enter ContextScope scope, @Advice.Thrown Throwable throwable) {
+      if (scope == null) {
         return;
       }
-      CLIENT_DECORATOR.onError(span, throwable);
-      CLIENT_DECORATOR.beforeFinish(span);
-      span.finish();
-      CLIENT_INJECT_THREAD.remove();
-      scope.close();
-      InstrumentationContext.get(TServiceClient.class, ContextScope.class).remove(tServiceClient);
+      AgentSpan span = spanFromScope(scope);
+      try {
+        CLIENT_DECORATOR.onError(span, throwable);
+        CLIENT_DECORATOR.beforeFinish(span);
+      } finally {
+        scope.close();
+        span.finish();
+      }
     }
   }
 }

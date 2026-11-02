@@ -2,6 +2,7 @@ package datadog.trace.instrumentation.rocketmq;
 
 import datadog.context.ContextScope;
 import datadog.trace.bootstrap.ContextStore;
+import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import org.apache.rocketmq.client.hook.ConsumeMessageContext;
 import org.apache.rocketmq.client.hook.ConsumeMessageHook;
 import org.apache.rocketmq.client.hook.SendMessageContext;
@@ -13,8 +14,7 @@ public final class RocketMqHook {
     return new TracingConsumeMessageHookImpl(store);
   }
 
-  public static SendMessageHook buildSendHook(
-      ContextStore<SendMessageContext, ContextScope> store) {
+  public static SendMessageHook buildSendHook(ContextStore<SendMessageContext, AgentSpan> store) {
     return new TracingSendMessageHookImpl(store);
   }
 }

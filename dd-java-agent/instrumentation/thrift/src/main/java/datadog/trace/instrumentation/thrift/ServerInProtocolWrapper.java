@@ -10,7 +10,12 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import org.apache.thrift.TException;
-import org.apache.thrift.protocol.*;
+import org.apache.thrift.protocol.TField;
+import org.apache.thrift.protocol.TMap;
+import org.apache.thrift.protocol.TMessage;
+import org.apache.thrift.protocol.TProtocol;
+import org.apache.thrift.protocol.TProtocolDecorator;
+import org.apache.thrift.protocol.TType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,8 +26,10 @@ public class ServerInProtocolWrapper extends TProtocolDecorator {
     super(protocol);
   }
 
-  public void initial(AbstractContext context) {
+  public AbstractContext initial(AbstractContext context) {
+    context.setPrevious(CONTEXT_THREAD.get());
     CONTEXT_THREAD.set(context);
+    return context;
   }
 
   @Override
@@ -39,11 +46,12 @@ public class ServerInProtocolWrapper extends TProtocolDecorator {
           header.put(key, value);
         }
         AbstractContext context = CONTEXT_THREAD.get();
-        context.setCreatedSpan(true);
-        AgentSpan span = SERVER_DECORATOR.createSpan(header, context);
-        ContextScope agentScope = activateSpan(span);
-        context.setAgentScope(agentScope);
-        CONTEXT_THREAD.set(context);
+        if (context != null && !context.isCreatedSpan()) {
+          AgentSpan span = SERVER_DECORATOR.createSpan(header, context);
+          ContextScope agentScope = activateSpan(span);
+          context.setCreatedSpan(true);
+          context.setAgentScope(agentScope);
+        }
       } catch (Throwable throwable) {
         logger.error("readFieldBegin exception", throwable);
         throw throwable;

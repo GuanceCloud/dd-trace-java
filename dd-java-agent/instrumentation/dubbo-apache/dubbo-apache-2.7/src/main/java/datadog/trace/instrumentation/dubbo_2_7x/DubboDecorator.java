@@ -2,9 +2,20 @@ package datadog.trace.instrumentation.dubbo_2_7x;
 
 import static datadog.context.propagation.Propagators.defaultPropagator;
 import static datadog.trace.bootstrap.instrumentation.api.AgentPropagation.extractContextAndGetSpanContext;
-import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.*;
+import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSpan;
+import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.startSpan;
 import static datadog.trace.bootstrap.instrumentation.api.Java8BytecodeBridge.spanFromScope;
-import static datadog.trace.instrumentation.dubbo_2_7x.DubboConstants.*;
+import static datadog.trace.instrumentation.dubbo_2_7x.DubboConstants.CONSUMER_SIDE;
+import static datadog.trace.instrumentation.dubbo_2_7x.DubboConstants.GROUP_KEY;
+import static datadog.trace.instrumentation.dubbo_2_7x.DubboConstants.META_RESOURCE;
+import static datadog.trace.instrumentation.dubbo_2_7x.DubboConstants.PROVIDER_SIDE;
+import static datadog.trace.instrumentation.dubbo_2_7x.DubboConstants.SIDE_KEY;
+import static datadog.trace.instrumentation.dubbo_2_7x.DubboConstants.TAG_METHOD;
+import static datadog.trace.instrumentation.dubbo_2_7x.DubboConstants.TAG_SHORT_URL;
+import static datadog.trace.instrumentation.dubbo_2_7x.DubboConstants.TAG_SIDE;
+import static datadog.trace.instrumentation.dubbo_2_7x.DubboConstants.TAG_URL;
+import static datadog.trace.instrumentation.dubbo_2_7x.DubboConstants.TAG_VERSION;
+import static datadog.trace.instrumentation.dubbo_2_7x.DubboConstants.VERSION;
 import static datadog.trace.instrumentation.dubbo_2_7x.DubboHeadersExtractAdapter.GETTER;
 import static datadog.trace.instrumentation.dubbo_2_7x.DubboHeadersInjectAdapter.SETTER;
 
@@ -17,7 +28,11 @@ import datadog.trace.bootstrap.instrumentation.api.UTF8BytesString;
 import datadog.trace.bootstrap.instrumentation.decorator.BaseDecorator;
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.utils.StringUtils;
-import org.apache.dubbo.rpc.*;
+import org.apache.dubbo.rpc.Invocation;
+import org.apache.dubbo.rpc.Invoker;
+import org.apache.dubbo.rpc.Result;
+import org.apache.dubbo.rpc.RpcContext;
+import org.apache.dubbo.rpc.RpcInvocation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,7 +69,7 @@ public class DubboDecorator extends BaseDecorator {
     String resourceName = generateOperationName(invoker, url, invocation);
     if (!isConsumer && META_RESOURCE.equals(invoker.getInterface().getName())) {
       log.debug("skip span because dubbo resourceName:{}", META_RESOURCE);
-      return activeSpan();
+      return null;
     }
     String shortUrl = generateRequestURL(invoker, url, invocation);
     if (log.isDebugEnabled()) {
@@ -166,14 +181,14 @@ public class DubboDecorator extends BaseDecorator {
   public ContextScope buildSpan(Invoker invoker, Invocation invocation) {
     AgentSpan span = startDubboSpan(invoker, invocation);
     if (span == null) {
-      return activateSpan(span);
+      return null;
     }
     ContextScope agentScope = activateSpan(span);
     return agentScope;
   }
 
   public ContextScope buildResult(ContextScope scope, Result result) {
-    if (Config.get().isDubboResponseEnabled()) {
+    if (result != null && Config.get().isDubboResponseEnabled()) {
       AgentSpan span = spanFromScope(scope);
       if (!result.hasException()) {
         Gson gson = new Gson();
@@ -185,7 +200,7 @@ public class DubboDecorator extends BaseDecorator {
   }
 
   public void onError(Result result, AgentSpan span, Throwable throwable) {
-    if (result.hasException()) {
+    if (throwable == null && result != null && result.hasException()) {
       throwable = result.getException();
     }
     super.onError(span, throwable);

@@ -1,6 +1,7 @@
 package datadog.trace.instrumentation.pulsar;
 
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
+import static datadog.trace.bootstrap.instrumentation.api.Java8BytecodeBridge.spanFromScope;
 import static net.bytebuddy.matcher.ElementMatchers.hasSuperType;
 import static net.bytebuddy.matcher.ElementMatchers.isConstructor;
 import static net.bytebuddy.matcher.ElementMatchers.isMethod;
@@ -100,7 +101,7 @@ public final class ProducerImplInstrumentation extends InstrumenterModule.Tracin
   //  ------------------------------------- 发送消息 --------------------------
   public static class ProducerSendAsyncMethodAdvice {
     @Advice.OnMethodEnter(suppress = Throwable.class)
-    public static void onEnter(
+    public static ContextScope onEnter(
         @Advice.This ProducerImpl<?> producer,
         @Advice.Argument(0) Message<?> message,
         @Advice.Argument(value = 1, readOnly = false) SendCallback callback) {
@@ -109,12 +110,35 @@ public final class ProducerImplInstrumentation extends InstrumenterModule.Tracin
           InstrumentationContext.get(ProducerImpl.class, ProducerData.class);
       ProducerData producerData = contextStore.get(producer);
 
+      if (producerData == null || callback == null) {
+        return null;
+      }
+
       PulsarRequest request =
           PulsarRequest.create(message, ProducerData.create(producerData.url, producerData.topic));
 
       ContextScope scope = ProducerDecorator.start(request);
 
-      callback = new SendCallbackWrapper(scope, request, callback);
+      callback = new SendCallbackWrapper(spanFromScope(scope), callback);
+      return scope;
+    }
+
+    @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
+    public static void onExit(
+        @Advice.Enter ContextScope scope,
+        @Advice.Argument(1) SendCallback callback,
+        @Advice.Thrown Throwable throwable) {
+      if (scope == null) {
+        return;
+      }
+      try {
+        if (throwable != null) {
+          ((SendCallbackWrapper) callback).onSendError(throwable);
+        }
+      } finally {
+        scope.close();
+        ((SendCallbackWrapper) callback).onSendExit();
+      }
     }
   }
 }

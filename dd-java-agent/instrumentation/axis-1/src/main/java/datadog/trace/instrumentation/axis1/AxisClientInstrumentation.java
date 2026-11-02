@@ -4,7 +4,9 @@ import static datadog.trace.agent.tooling.bytebuddy.matcher.HierarchyMatchers.im
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSpan;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activeSpan;
+import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.startSpan;
 import static datadog.trace.bootstrap.instrumentation.api.Java8BytecodeBridge.spanFromScope;
+import static datadog.trace.instrumentation.axis1.AxisMessageDecorator.AXIS2_MESSAGE;
 import static datadog.trace.instrumentation.axis1.AxisMessageDecorator.DECORATE;
 import static net.bytebuddy.matcher.ElementMatchers.isMethod;
 import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
@@ -64,22 +66,14 @@ public final class AxisClientInstrumentation extends InstrumenterModule.Tracing
         return null;
       }
 
-      AgentSpan span = activeSpan();
-      if (null != span && !DECORATE.sameTrace(span, message)) {
-        DECORATE.afterStart(span);
-        DECORATE.onMessage(span, message);
-        activateSpan(span);
+      AgentSpan parent = activeSpan();
+      if (parent != null && DECORATE.sameTrace(parent, message)) {
+        return null;
       }
-
-      /*      if (null != scope) {
-        if (!DECORATE.sameTrace(spanFromScope(scope), message)) {
-          AgentSpan  span = startSpan(AXIS2_MESSAGE);
-          DECORATE.afterStart(span);
-          DECORATE.onMessage(span, message);
-          return activateSpan(span);
-        }
-      }*/
-      return null;
+      AgentSpan span = startSpan("axis1", AXIS2_MESSAGE);
+      DECORATE.afterStart(span);
+      DECORATE.onMessage(span, message);
+      return activateSpan(span);
     }
 
     @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
@@ -87,20 +81,17 @@ public final class AxisClientInstrumentation extends InstrumenterModule.Tracing
         @Advice.Enter final ContextScope scope,
         @Advice.Argument(0) final MessageContext message,
         @Advice.Thrown final Throwable error) {
-      if (null == message) {
-        return;
-      }
       if (null == scope) {
         return;
       }
-      System.out.println("getSoapAction name" + message.getOperation().getSoapAction());
       AgentSpan span = spanFromScope(scope);
-      if (null != error) {
+      try {
         DECORATE.onError(span, error);
+        DECORATE.beforeFinish(span, message);
+      } finally {
+        scope.close();
+        span.finish();
       }
-      DECORATE.beforeFinish(span, message);
-      scope.close();
-      span.finish();
     }
   }
 }

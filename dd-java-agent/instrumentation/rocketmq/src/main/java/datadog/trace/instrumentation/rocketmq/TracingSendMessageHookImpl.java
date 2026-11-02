@@ -1,9 +1,11 @@
 package datadog.trace.instrumentation.rocketmq;
 
+import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSpan;
 import static datadog.trace.instrumentation.rocketmq.RocketMqDecorator.PRODUCER_DECORATE;
 
 import datadog.context.ContextScope;
 import datadog.trace.bootstrap.ContextStore;
+import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import org.apache.rocketmq.client.hook.SendMessageContext;
 import org.apache.rocketmq.client.hook.SendMessageHook;
 import org.slf4j.Logger;
@@ -13,9 +15,9 @@ public final class TracingSendMessageHookImpl implements SendMessageHook {
 
   private final RocketMqDecorator rocketMqDecorator;
   private static final Logger log = LoggerFactory.getLogger(TracingSendMessageHookImpl.class);
-  private final ContextStore<SendMessageContext, ContextScope> store;
+  private final ContextStore<SendMessageContext, AgentSpan> store;
 
-  TracingSendMessageHookImpl(ContextStore<SendMessageContext, ContextScope> store) {
+  TracingSendMessageHookImpl(ContextStore<SendMessageContext, AgentSpan> store) {
     this.rocketMqDecorator = PRODUCER_DECORATE;
     this.store = store;
   }
@@ -30,24 +32,24 @@ public final class TracingSendMessageHookImpl implements SendMessageHook {
     if (context == null) {
       return;
     }
-    ContextScope scope = store.get(context);
-    if (scope == null) {
-      scope = rocketMqDecorator.start(context);
-      store.getOrPut(context, scope);
+    if (store.get(context) == null) {
+      store.put(context, rocketMqDecorator.start(context));
     }
   }
 
   @Override
   public void sendMessageAfter(SendMessageContext context) {
-    ContextScope scope = store.get(context);
-    if (scope == null) {
+    if (context == null) {
       return;
     }
-
-    rocketMqDecorator.end(context, scope);
-    scope.close();
-    if (log.isDebugEnabled()) {
-      log.debug("scope close");
+    AgentSpan span = store.remove(context);
+    if (span == null) {
+      return;
+    }
+    try (ContextScope ignored = activateSpan(span)) {
+      rocketMqDecorator.end(context, span);
+    } finally {
+      span.finish();
     }
   }
 }

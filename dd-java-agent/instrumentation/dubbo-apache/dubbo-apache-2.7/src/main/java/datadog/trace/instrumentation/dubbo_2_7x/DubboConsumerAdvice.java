@@ -25,11 +25,13 @@ public class DubboConsumerAdvice {
     if (scope == null) {
       return;
     }
-    DECORATE.buildResult(scope, result);
-    DECORATE.onError(result, spanFromScope(scope), throwable);
-    DECORATE.beforeFinish(spanFromScope(scope));
-
-    scope.close();
-    spanFromScope(scope).finish();
+    try {
+      DECORATE.buildResult(scope, result);
+      DECORATE.onError(result, spanFromScope(scope), throwable);
+      DECORATE.beforeFinish(spanFromScope(scope));
+    } finally {
+      scope.close();
+      spanFromScope(scope).finish();
+    }
   }
 }

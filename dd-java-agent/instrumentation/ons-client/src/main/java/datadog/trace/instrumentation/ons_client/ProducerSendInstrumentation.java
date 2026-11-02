@@ -2,8 +2,10 @@ package datadog.trace.instrumentation.ons_client;
 
 import static datadog.trace.agent.tooling.bytebuddy.matcher.HierarchyMatchers.implementsInterface;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
+import static datadog.trace.bootstrap.instrumentation.api.Java8BytecodeBridge.spanFromScope;
 import static datadog.trace.instrumentation.ons_client.ProducerDecorator.PRODUCER_DECORATOR;
-import static net.bytebuddy.matcher.ElementMatchers.*;
+import static net.bytebuddy.matcher.ElementMatchers.isMethod;
+import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
 
 import com.aliyun.openservices.ons.api.Message;
 import com.aliyun.openservices.ons.api.SendCallback;
@@ -65,7 +67,7 @@ public class ProducerSendInstrumentation extends InstrumenterModule.Tracing
   }
 
   public static class SendAdvice {
-    @Advice.OnMethodEnter
+    @Advice.OnMethodEnter(suppress = Throwable.class)
     public static ContextScope onEnter(@Advice.Argument(0) Message message) {
       // 有返回值
       return PRODUCER_DECORATOR.OnStart(message);
@@ -82,7 +84,7 @@ public class ProducerSendInstrumentation extends InstrumenterModule.Tracing
   }
 
   public static class SendOnewayAdvice {
-    @Advice.OnMethodEnter
+    @Advice.OnMethodEnter(suppress = Throwable.class)
     public static ContextScope onEnter(@Advice.Argument(0) Message message) {
       return PRODUCER_DECORATOR.OnStart(message);
     }
@@ -98,13 +100,34 @@ public class ProducerSendInstrumentation extends InstrumenterModule.Tracing
   }
 
   public static class sendAsyncAdvice {
-    @Advice.OnMethodEnter
-    public static void onEnter(
+    @Advice.OnMethodEnter(suppress = Throwable.class)
+    public static ContextScope onEnter(
         @Advice.Argument(0) Message message,
         @Advice.Argument(value = 1, readOnly = false) SendCallback callback) {
-      // callback
+      if (callback == null) {
+        return null;
+      }
       ContextScope scope = PRODUCER_DECORATOR.OnStart(message);
-      callback = new WrappingSendCallback(callback, scope);
+      callback = new WrappingSendCallback(callback, spanFromScope(scope));
+      return scope;
+    }
+
+    @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
+    public static void onExit(
+        @Advice.Enter ContextScope scope,
+        @Advice.Argument(1) SendCallback callback,
+        @Advice.Thrown Throwable throwable) {
+      if (scope == null) {
+        return;
+      }
+      try {
+        if (throwable != null) {
+          ((WrappingSendCallback) callback).onSendError(throwable);
+        }
+      } finally {
+        scope.close();
+        ((WrappingSendCallback) callback).onSendExit();
+      }
     }
   }
 }

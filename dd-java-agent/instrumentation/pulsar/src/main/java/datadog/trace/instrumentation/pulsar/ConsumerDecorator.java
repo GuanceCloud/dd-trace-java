@@ -1,12 +1,10 @@
 package datadog.trace.instrumentation.pulsar;
 
 import static datadog.trace.bootstrap.instrumentation.api.AgentPropagation.extractContextAndGetSpanContext;
-import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.*;
-import static datadog.trace.bootstrap.instrumentation.api.Java8BytecodeBridge.spanFromScope;
+import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.startSpan;
 import static datadog.trace.instrumentation.pulsar.MessageTextMapGetter.GETTER;
-import static datadog.trace.instrumentation.pulsar.PulsarRequest.*;
+import static datadog.trace.instrumentation.pulsar.PulsarRequest.create;
 
-import datadog.context.ContextScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpanContext;
 import datadog.trace.bootstrap.instrumentation.api.UTF8BytesString;
@@ -64,11 +62,7 @@ public class ConsumerDecorator extends BaseDecorator {
       span.setErrorMessage(throwable.getMessage());
     }
 
-    ContextScope scope = activateSpan(span);
-
-    // beforeFinish(scope);
-    spanFromScope(scope).finish();
-    scope.close();
+    span.finish();
     if (log.isDebugEnabled()) {
       log.debug("out startAndEnd");
     }

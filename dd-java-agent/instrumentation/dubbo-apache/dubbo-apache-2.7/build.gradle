@@ -12,5 +12,6 @@ muzzle {
 
 
 dependencies {
+  testImplementation group: 'org.apache.dubbo', name: 'dubbo', version: '2.7.0'
   compileOnly group: 'org.apache.dubbo', name: 'dubbo', version: '2.7.0'
 }

@@ -3,7 +3,6 @@ package datadog.trace.instrumentation.pulsar;
 import static datadog.context.propagation.Propagators.defaultPropagator;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSpan;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.startSpan;
-import static datadog.trace.bootstrap.instrumentation.api.Java8BytecodeBridge.spanFromScope;
 import static datadog.trace.instrumentation.pulsar.MessageTextMapSetter.SETTER;
 
 import datadog.context.ContextScope;
@@ -48,15 +47,5 @@ public class ProducerDecorator extends BaseDecorator {
     span.setSpanType("queue");
     defaultPropagator().inject(span, request, SETTER);
     return activateSpan(span);
-  }
-
-  public void end(ContextScope scope, PulsarRequest request, Exception e) {
-    if (e != null) {
-      spanFromScope(scope).setError(true);
-      spanFromScope(scope).setErrorMessage(e.getMessage());
-    }
-    beforeFinish(scope);
-    spanFromScope(scope).finish();
-    scope.close();
   }
 }

@@ -31,10 +31,9 @@ public class WebSocketClientDecorator extends WebSocketDecorator {
     AgentSpan span = startSpan("websocket.handshake", OPERATION_NAME);
     span.setTag(Tags.HTTP_URL, uri);
     span.setTag(Tags.HTTP_METHOD, "GET"); // WebSocket 握手是 GET
-    ContextScope scope = activateSpan(span);
-    defaultPropagator().inject(scope.context(), client, SETTER);
+    defaultPropagator().inject(span, client, SETTER);
     afterStart(span);
-    return scope;
+    return activateSpan(span);
   }
 
   /** 在 onOpen 中标记握手成功并结束 Span */

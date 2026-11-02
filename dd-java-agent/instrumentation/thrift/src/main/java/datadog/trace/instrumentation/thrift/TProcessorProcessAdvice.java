@@ -1,12 +1,7 @@
 package datadog.trace.instrumentation.thrift;
 
-import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.*;
-import static datadog.trace.bootstrap.instrumentation.api.Java8BytecodeBridge.spanFromScope;
-import static datadog.trace.instrumentation.thrift.ThriftConstants.CONTEXT_THREAD;
 import static datadog.trace.instrumentation.thrift.ThriftServerDecorator.SERVER_DECORATOR;
 
-import datadog.context.ContextScope;
-import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import net.bytebuddy.asm.Advice;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,31 +13,23 @@ public class TProcessorProcessAdvice {
   public static final Logger logger = LoggerFactory.getLogger(TProcessorProcessAdvice.class);
 
   @Advice.OnMethodEnter(suppress = Throwable.class)
-  public static ContextScope onEnter(
+  public static AbstractContext onEnter(
       @Advice.This final Object obj, @Advice.AllArguments final Object[] args) {
     logger.info("TProcessorProcessAdvice : " + obj.getClass().getName());
     try {
       Object in = args[0];
       if (in instanceof ServerInProtocolWrapper) {
-        ((ServerInProtocolWrapper) in).initial(new Context(null));
+        return ((ServerInProtocolWrapper) in).initial(new Context(null));
       }
     } catch (Exception e) {
       e.printStackTrace();
     }
-    return activateSpan(noopSpan());
+    return null;
   }
 
   @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
-  public static void after(@Advice.Thrown final Throwable throwable) {
-    ContextScope scope = CONTEXT_THREAD.get().getAgentScope();
-    if (scope == null) {
-      return;
-    }
-    AgentSpan span = spanFromScope(scope);
-    SERVER_DECORATOR.onError(span, throwable);
-    SERVER_DECORATOR.beforeFinish(span);
-    span.finish();
-    scope.close();
-    CONTEXT_THREAD.remove();
+  public static void after(
+      @Advice.Enter AbstractContext context, @Advice.Thrown final Throwable throwable) {
+    SERVER_DECORATOR.finish(context, throwable);
   }
 }
