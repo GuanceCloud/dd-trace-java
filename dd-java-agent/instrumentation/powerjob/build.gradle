@@ -9,7 +9,7 @@ muzzle {
     group = "tech.powerjob"
     module = "powerjob-worker"
     versions = "[4.0.0,)"
-//    assertInverse = true
+    //    assertInverse = true
   }
 }
 

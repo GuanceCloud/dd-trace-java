@@ -81,7 +81,7 @@ public class MqttDecorator extends ClientDecorator {
   }
 
   public AgentSpan createSpan(String topic, MqttMessage message) {
-    AgentSpan span = startSpan(topic);
+    AgentSpan span = startSpan(INSTRUMENTATION, topic);
     afterStart(span);
     span.setResourceName("/publish/" + topic);
 
@@ -101,7 +101,7 @@ public class MqttDecorator extends ClientDecorator {
     MqttProperties properties = message.getProperties();
     AgentSpanContext parentContext =
         extractContextAndGetSpanContext(properties.getUserProperties(), GETTER);
-    AgentSpan span = startSpan(topic, parentContext);
+    AgentSpan span = startSpan(INSTRUMENTATION, topic, parentContext);
     afterStart(span);
     span.setResourceName("/subscribe/" + topic);
     span.setTag(TAG_TOPIC_KEY, topic);

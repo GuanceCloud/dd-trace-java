@@ -1,12 +1,12 @@
 package datadog.trace.instrumentation.axis1;
 
+import static datadog.trace.bootstrap.instrumentation.api.InternalSpanTypes.SOAP;
+
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
 import datadog.trace.bootstrap.instrumentation.api.UTF8BytesString;
 import datadog.trace.bootstrap.instrumentation.decorator.BaseDecorator;
 import org.apache.axis.MessageContext;
 import org.apache.axis.description.OperationDesc;
-
-import static datadog.trace.bootstrap.instrumentation.api.InternalSpanTypes.SOAP;
 
 public class AxisMessageDecorator extends BaseDecorator {
   public static final AxisMessageDecorator DECORATE = new AxisMessageDecorator();
@@ -44,9 +44,9 @@ public class AxisMessageDecorator extends BaseDecorator {
 
   private static String soapAction(final MessageContext message) {
     OperationDesc operation = message.getOperation();
-    if(null != operation){
-           return operation.getName();
-     }
+    if (null != operation) {
+      return operation.getName();
+    }
     String action = message.getSOAPActionURI();
     if (null != action && !action.isEmpty()) {
       return action;

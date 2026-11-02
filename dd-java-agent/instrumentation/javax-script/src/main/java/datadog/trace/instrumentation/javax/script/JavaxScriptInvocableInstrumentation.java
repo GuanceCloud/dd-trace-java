@@ -1,18 +1,20 @@
 package datadog.trace.instrumentation.javax.script;
 
+import static datadog.trace.agent.tooling.bytebuddy.matcher.HierarchyMatchers.implementsInterface;
+import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
+import static net.bytebuddy.matcher.ElementMatchers.isMethod;
+import static net.bytebuddy.matcher.ElementMatchers.isPublic;
+import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
+
 import com.google.auto.service.AutoService;
 import datadog.trace.agent.tooling.Instrumenter;
 import datadog.trace.agent.tooling.InstrumenterModule;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.matcher.ElementMatcher;
 
-import static datadog.trace.agent.tooling.bytebuddy.matcher.HierarchyMatchers.implementsInterface;
-import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
-import static net.bytebuddy.matcher.ElementMatchers.*;
-
 @AutoService(InstrumenterModule.class)
 public class JavaxScriptInvocableInstrumentation extends InstrumenterModule.Tracing
-    implements  Instrumenter.ForTypeHierarchy, Instrumenter.HasMethodAdvice{
+    implements Instrumenter.ForTypeHierarchy, Instrumenter.HasMethodAdvice {
   public JavaxScriptInvocableInstrumentation() {
     super("javax-script");
   }
@@ -32,16 +34,17 @@ public class JavaxScriptInvocableInstrumentation extends InstrumenterModule.Trac
     transformer.applyAdvice(
         isMethod()
             .and(named("invokeFunction"))
-            .and(takesArgument(0,named("java.lang.String")))
+            .and(takesArgument(0, named("java.lang.String")))
             .and(isPublic()),
         packageName + ".JavaxScriptInvokeAdvice");
   }
+
   @Override
   public String[] helperClassNames() {
-    return new String[]{
-        packageName + ".JavaxScriptDecorator",
-        packageName + ".JavaxScriptEngineEvalAdvice",
-        packageName + ".JavaxScriptInvokeAdvice",
+    return new String[] {
+      packageName + ".JavaxScriptDecorator",
+      packageName + ".JavaxScriptEngineEvalAdvice",
+      packageName + ".JavaxScriptInvokeAdvice",
     };
   }
 }

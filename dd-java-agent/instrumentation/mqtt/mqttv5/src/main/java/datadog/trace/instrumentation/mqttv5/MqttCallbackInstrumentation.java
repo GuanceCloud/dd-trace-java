@@ -1,19 +1,20 @@
 package datadog.trace.instrumentation.mqttv5;
 
+import static datadog.trace.agent.tooling.bytebuddy.matcher.HierarchyMatchers.implementsInterface;
+import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
+import static net.bytebuddy.matcher.ElementMatchers.isMethod;
+import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
+import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
+
 import com.google.auto.service.AutoService;
 import datadog.trace.agent.tooling.Instrumenter;
 import datadog.trace.agent.tooling.InstrumenterModule;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.matcher.ElementMatcher;
 
-import static datadog.trace.agent.tooling.bytebuddy.matcher.HierarchyMatchers.implementsInterface;
-import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
-import static net.bytebuddy.matcher.ElementMatchers.*;
-import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
-
 @AutoService(InstrumenterModule.class)
 public class MqttCallbackInstrumentation extends InstrumenterModule.Tracing
-    implements Instrumenter.ForTypeHierarchy , Instrumenter.HasMethodAdvice{
+    implements Instrumenter.ForTypeHierarchy, Instrumenter.HasMethodAdvice {
 
   public MqttCallbackInstrumentation() {
     super("mqtt");
@@ -39,13 +40,14 @@ public class MqttCallbackInstrumentation extends InstrumenterModule.Tracing
             .and(takesArgument(1, named("org.eclipse.paho.mqttv5.common.MqttMessage"))),
         packageName + ".MqttCallBackAdvice");
   }
+
   @Override
   public String[] helperClassNames() {
-    return new String[]{
-        packageName + ".MqttCallBackAdvice",
-        packageName + ".MqttDecorator",
-        packageName + ".UserPropertyInjectAdapter",
-        packageName + ".UserPropertyExtractAdapter"
+    return new String[] {
+      packageName + ".MqttCallBackAdvice",
+      packageName + ".MqttDecorator",
+      packageName + ".UserPropertyInjectAdapter",
+      packageName + ".UserPropertyExtractAdapter"
     };
   }
 }

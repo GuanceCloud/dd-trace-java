@@ -1,6 +1,7 @@
 package datadog.trace.instrumentation.disruptor;
 
-import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.*;
+import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSpan;
+import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.startSpan;
 
 import datadog.context.ContextScope;
 import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
@@ -31,12 +32,12 @@ public class DisruptorDecorator extends BaseDecorator {
   }
 
   public ContextScope start() {
-    AgentSpan span = startSpan("disruptor/publish");
+    AgentSpan span = startSpan("disruptor", "disruptor/publish");
     return activateSpan(span);
   }
 
   public ContextScope startBySpan(AgentSpan parent) {
-    AgentSpan span = startSpan("disruptor/consumer", parent.context());
+    AgentSpan span = startSpan("disruptor", "disruptor/consumer", parent.spanContext());
     return activateSpan(span);
   }
 }

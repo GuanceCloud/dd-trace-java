@@ -1,19 +1,18 @@
 package datadog.trace.instrumentation.disruptor;
 
-import com.google.auto.service.AutoService;
-import datadog.trace.agent.tooling.Instrumenter;
-import datadog.trace.agent.tooling.InstrumenterModule;
-import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
-import net.bytebuddy.matcher.ElementMatcher;
-
-import java.util.Collections;
-import java.util.Map;
-
 import static datadog.trace.agent.tooling.bytebuddy.matcher.HierarchyMatchers.implementsInterface;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.nameStartsWith;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
 import static net.bytebuddy.matcher.ElementMatchers.isMethod;
 import static net.bytebuddy.matcher.ElementMatchers.isPublic;
+
+import com.google.auto.service.AutoService;
+import datadog.trace.agent.tooling.Instrumenter;
+import datadog.trace.agent.tooling.InstrumenterModule;
+import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
+import java.util.Collections;
+import java.util.Map;
+import net.bytebuddy.matcher.ElementMatcher;
 
 @AutoService(InstrumenterModule.class)
 public class RingBufferInstrumentation extends InstrumenterModule.Tracing
@@ -38,23 +37,19 @@ public class RingBufferInstrumentation extends InstrumenterModule.Tracing
   @Override
   public void methodAdvice(MethodTransformer transformation) {
     transformation.applyAdvice(
-        isMethod()
-            .and(isPublic())
-            .and(nameStartsWith("publish")),
+        isMethod().and(isPublic()).and(nameStartsWith("publish")),
         packageName + ".RingBufferPublishAdvice");
   }
 
   @Override
   public String[] helperClassNames() {
-    return new String[]{
-        packageName + ".RingBufferPublishAdvice",
-        packageName + ".DisruptorDecorator",
+    return new String[] {
+      packageName + ".RingBufferPublishAdvice", packageName + ".DisruptorDecorator",
     };
   }
 
   @Override
   public Map<String, String> contextStore() {
-    return Collections.singletonMap(
-        Long.class.getName(), AgentSpan.class.getName());
+    return Collections.singletonMap(Long.class.getName(), AgentSpan.class.getName());
   }
 }

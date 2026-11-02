@@ -12,7 +12,8 @@ import net.bytebuddy.asm.Advice;
 public class JavaxScriptInvokeAdvice {
   @Advice.OnMethodEnter(suppress = Throwable.class)
   public static ContextScope methodEnter(@Advice.Argument(0) String name) {
-    final AgentSpan span = startSpan(JavaxScriptDecorator.OPERATION_NAME + "/invoke");
+    final AgentSpan span =
+        startSpan("javax-script", JavaxScriptDecorator.OPERATION_NAME + "/invoke");
     span.setTag("invoke_function", name);
     final ContextScope scope = activateSpan(span);
 

@@ -12,7 +12,7 @@ public class JavaxScriptDecorator extends BaseDecorator {
 
   @Override
   protected String[] instrumentationNames() {
-    return new String[]{"javax-script"};
+    return new String[] {"javax-script"};
   }
 
   @Override

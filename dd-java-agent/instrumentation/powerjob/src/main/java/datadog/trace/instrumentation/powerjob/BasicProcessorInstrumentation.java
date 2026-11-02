@@ -6,8 +6,13 @@ import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
 import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSpan;
 import static datadog.trace.bootstrap.instrumentation.api.Java8BytecodeBridge.spanFromScope;
 import static datadog.trace.instrumentation.powerjob.PowJobDecorator.DECORATOR;
-import static datadog.trace.instrumentation.powerjob.PowerjobConstants.ProcessType.*;
-import static net.bytebuddy.matcher.ElementMatchers.*;
+import static datadog.trace.instrumentation.powerjob.PowerjobConstants.ProcessType.BASE;
+import static datadog.trace.instrumentation.powerjob.PowerjobConstants.ProcessType.BROADCAST;
+import static datadog.trace.instrumentation.powerjob.PowerjobConstants.ProcessType.MAP;
+import static datadog.trace.instrumentation.powerjob.PowerjobConstants.ProcessType.MAP_REDUCE;
+import static net.bytebuddy.matcher.ElementMatchers.isMethod;
+import static net.bytebuddy.matcher.ElementMatchers.isPublic;
+import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
 
 import com.google.auto.service.AutoService;
 import datadog.context.ContextScope;

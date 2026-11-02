@@ -12,7 +12,7 @@ import net.bytebuddy.asm.Advice;
 public class JavaxScriptEngineEvalAdvice {
   @Advice.OnMethodEnter(suppress = Throwable.class)
   public static ContextScope methodEnter() {
-    final AgentSpan span = startSpan(JavaxScriptDecorator.OPERATION_NAME + "/eval");
+    final AgentSpan span = startSpan("javax-script", JavaxScriptDecorator.OPERATION_NAME + "/eval");
     final ContextScope scope = activateSpan(span);
 
     DECORATE.afterStart(span);

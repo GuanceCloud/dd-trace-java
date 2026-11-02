@@ -13,5 +13,4 @@ muzzle {
 
 dependencies {
   compileOnly group: 'org.graalvm.js', name: 'js-scriptengine', version: '21.1.0'
-
 }
