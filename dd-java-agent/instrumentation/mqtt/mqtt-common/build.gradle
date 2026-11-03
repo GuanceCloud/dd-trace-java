@@ -1,0 +1,7 @@
+plugins {
+  id 'dd-trace-java.module.instrumentation'
+}
+
+dependencies {
+  testImplementation libs.bundles.junit5
+}

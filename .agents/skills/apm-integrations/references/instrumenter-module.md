@@ -27,7 +27,7 @@
   - Include inner classes (`Foo$Bar`), anonymous classes (`Foo$1`), and enum synthetic classes — for enums, each constant with an anonymous body generates its own synthetic class (`MyEnum$1`, `MyEnum$2`, …), each must be listed individually
 - Declare `contextStore()` entries if context stores are needed (key class → value class)
 - **Null-check before every `ContextStore` key** — `ContextStore` does not support null keys. Always guard with a null check before calling `store.put(obj, ...)` or `store.get(obj)`. Passing null throws at runtime; with `suppress = Throwable.class` this silently drops the span.
-- Keep method matchers as narrow as possible (name, parameter types, visibility)
+- Keep method matchers as narrow as possible (name, parameter types, visibility). Match library argument types with `takesArgument(0, named("library.Type"))`, never a library class literal in `methodAdvice()`. The agent index generator loads instrumenters without compile-only application libraries, so a literal can pass instrumentation tests yet fail `generateInstrumenterIndex` with `NoClassDefFoundError`.
 - **Hook a single dispatch chokepoint, not each public operation, when a client funnels all operations through one method.** Many clients expose dozens of public operation methods (`get`, `set`, `query`, `send`, …) that all delegate to one low-level dispatch/send/execute method. Instrument that one chokepoint and read the operation name from its argument for the resource — do NOT add advice to each public method. One chokepoint hook covers every operation (including ones you didn't enumerate) and avoids duplicate/nested spans from a call that passes through several instrumented methods.
   - *Worked example:* a Redis client's `get`/`set`/`hget`/… all call one `dispatch(RedisCommand)` (or `sendCommand(...)`) on a base client class. Hook `dispatch` once, matched by name + first-argument type, and derive the resource from the command object — rather than matching each command method. Confirm the chokepoint by tracing a couple of the public operations to the shared method they delegate to.
 
@@ -143,9 +143,9 @@ For complex frameworks with multiple version-specific or feature-specific instru
 
 See `docs/how_instrumentations_work.md` section "Grouping Instrumentations" for details.
 
-## Enrichment helpers must be declared in `helperClassNames()`
+## Verify helper discovery across shared modules
 
-If your advice delegates to a helper class (e.g. `SparkJavaRouteEnricher.enrich(...)` from inside `RoutesAdvice`), the helper's fully-qualified class name MUST be listed in `helperClassNames()` on the `InstrumenterModule` — unless the helper is supplied on the boot-class-path (e.g. from `agent-bootstrap`), in which case it is already available without injection:
+Direct bytecode references normally allow automatic helper discovery. When a shared instrumentation dependency's nested helpers are missing from the generated helper set, declare the complete helper set in `helperClassNames()`; a manual list replaces discovery. Bootstrap classes do not require injection. For example:
 
 ```java
 @Override
@@ -156,4 +156,4 @@ public String[] helperClassNames() {
 }
 ```
 
-Without this, the helper class is not loaded into the target application's classloader at instrumentation time, and the advice will `NoClassDefFoundError` at runtime. This is checked by muzzle; a missing helper reference is a common failure mode when refactoring advice.
+Check nested classes as well as top-level helpers. For Java 8, private nested constructors can introduce synthetic accessors that affect muzzle validation; use explicit accessible members when these helpers cross injection boundaries. Run both muzzle and an agent-JAR smoke test without instrumentation project classes on the application classpath to verify discovery and injection.
