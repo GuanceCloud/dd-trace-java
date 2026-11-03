@@ -12,5 +12,6 @@ muzzle {
 }
 
 dependencies {
+  testImplementation 'org.eclipse.paho:org.eclipse.paho.mqttv5.client:1.2.5'
   compileOnly group: 'org.eclipse.paho', name: 'org.eclipse.paho.mqttv5.client', version: '1.2.5'
 }

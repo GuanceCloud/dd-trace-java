@@ -1,15 +1,17 @@
 package datadog.trace.instrumentation.disruptor;
 
 import static datadog.trace.agent.tooling.bytebuddy.matcher.HierarchyMatchers.implementsInterface;
-import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.nameStartsWith;
 import static datadog.trace.agent.tooling.bytebuddy.matcher.NameMatchers.named;
+import static net.bytebuddy.matcher.ElementMatchers.isBridge;
 import static net.bytebuddy.matcher.ElementMatchers.isMethod;
 import static net.bytebuddy.matcher.ElementMatchers.isPublic;
+import static net.bytebuddy.matcher.ElementMatchers.not;
+import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
 
 import com.google.auto.service.AutoService;
 import datadog.trace.agent.tooling.Instrumenter;
 import datadog.trace.agent.tooling.InstrumenterModule;
-import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
+import datadog.trace.bootstrap.WeakMap;
 import java.util.Collections;
 import java.util.Map;
 import net.bytebuddy.matcher.ElementMatcher;
@@ -37,7 +39,11 @@ public class EventHandlerInstrumentation extends InstrumenterModule.Tracing
   @Override
   public void methodAdvice(MethodTransformer transformation) {
     transformation.applyAdvice(
-        isMethod().and(isPublic()).and(nameStartsWith("onEvent")),
+        isMethod()
+            .and(isPublic())
+            .and(named("onEvent"))
+            .and(takesArguments(3))
+            .and(not(isBridge())),
         packageName + ".EventHandlerAdvice");
   }
 
@@ -50,6 +56,6 @@ public class EventHandlerInstrumentation extends InstrumenterModule.Tracing
 
   @Override
   public Map<String, String> contextStore() {
-    return Collections.singletonMap(Long.class.getName(), AgentSpan.class.getName());
+    return Collections.singletonMap(Class.class.getName(), WeakMap.class.getName());
   }
 }

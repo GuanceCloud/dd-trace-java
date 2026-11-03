@@ -1,40 +1,31 @@
 package datadog.trace.instrumentation.disruptor;
 
-import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activateSpan;
-import static datadog.trace.bootstrap.instrumentation.api.AgentTracer.activeSpan;
 import static datadog.trace.bootstrap.instrumentation.api.Java8BytecodeBridge.spanFromScope;
 import static datadog.trace.instrumentation.disruptor.DisruptorDecorator.DECORATE;
 
+import com.lmax.disruptor.RingBuffer;
 import datadog.context.ContextScope;
 import datadog.trace.bootstrap.InstrumentationContext;
-import datadog.trace.bootstrap.instrumentation.api.AgentSpan;
+import datadog.trace.bootstrap.WeakMap;
 import net.bytebuddy.asm.Advice;
 
 public class RingBufferPublishAdvice {
-
   @Advice.OnMethodEnter(suppress = Throwable.class)
-  public static ContextScope beginRequest(@Advice.Argument(0) Long sequence) {
-
-    ContextScope scope = DECORATE.start();
-    if (scope == null) {
-      // scope = activeSpan();
-      AgentSpan agentSpan = activeSpan();
-      scope = activateSpan(agentSpan);
-    }
-    InstrumentationContext.get(Long.class, AgentSpan.class).put(sequence, spanFromScope(scope));
-    return scope;
+  public static ContextScope beginRequest(
+      @Advice.This RingBuffer<?> ring, @Advice.Argument(0) long sequence) {
+    return DECORATE.start(
+        ring, sequence, sequence, InstrumentationContext.get(Class.class, WeakMap.class));
   }
 
   @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
-  public static void stopSpan(
-      @Advice.Enter final ContextScope scope, @Advice.Thrown final Throwable throwable) {
-    if (scope == null) {
-      return;
+  public static void stopSpan(@Advice.Enter ContextScope scope, @Advice.Thrown Throwable error) {
+    if (scope == null) return;
+    try {
+      DECORATE.onError(spanFromScope(scope), error);
+      DECORATE.beforeFinish(spanFromScope(scope));
+    } finally {
+      scope.close();
+      spanFromScope(scope).finish();
     }
-    DECORATE.onError(spanFromScope(scope), throwable);
-    DECORATE.beforeFinish(spanFromScope(scope));
-
-    scope.close();
-    spanFromScope(scope).finish();
   }
 }

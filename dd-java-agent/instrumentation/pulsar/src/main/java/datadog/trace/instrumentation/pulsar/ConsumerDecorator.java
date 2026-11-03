@@ -49,20 +49,23 @@ public class ConsumerDecorator extends BaseDecorator {
     String topic = pr.getMessage().getTopicName();
     UTF8BytesString spanName = UTF8BytesString.create(topic + " receive");
     final AgentSpan span = startSpan("pulsar", spanName, parentContext);
-    span.setResourceName(spanName);
-    span.setTag(TOPIC, pr.getMessage().getTopicName());
-    span.setTag("destination", pr.getDestination());
-    span.setTag("broker_url", brokerUrl);
-    span.setTag(MESSAGING_SYSTEM, LOCAL_SERVICE_NAME);
-    span.setSpanType(PULSAR_NAME);
-    span.setTag(MESSAGING_ID, pr.getMessage().getMessageId());
-    span.setServiceName(LOCAL_SERVICE_NAME);
-    if (throwable != null) {
-      span.setError(true);
-      span.setErrorMessage(throwable.getMessage());
-    }
+    try {
+      span.setResourceName(spanName);
+      span.setTag(TOPIC, pr.getMessage().getTopicName());
+      span.setTag("destination", pr.getDestination());
+      span.setTag("broker_url", brokerUrl);
+      span.setTag(MESSAGING_SYSTEM, LOCAL_SERVICE_NAME);
+      span.setSpanType(PULSAR_NAME);
+      span.setTag(MESSAGING_ID, pr.getMessage().getMessageId());
+      span.setServiceName(LOCAL_SERVICE_NAME);
+      if (throwable != null) {
+        span.setError(true);
+        span.setErrorMessage(throwable.getMessage());
+      }
 
-    span.finish();
+    } finally {
+      span.finish();
+    }
     if (log.isDebugEnabled()) {
       log.debug("out startAndEnd");
     }
@@ -70,64 +73,40 @@ public class ConsumerDecorator extends BaseDecorator {
 
   public static CompletableFuture<Message<?>> wrap(
       CompletableFuture<Message<?>> future, String brokerUrl) {
-    if (log.isDebugEnabled()) {
-      log.debug("into wrap");
+    if (future != null) {
+      future.whenComplete(
+          (message, throwable) -> {
+            if (throwable == null && message != null) {
+              try {
+                startAndEnd(create(message), null, brokerUrl);
+              } catch (Throwable error) {
+                log.debug("Unable to trace received Pulsar message", error);
+              }
+            }
+          });
     }
-    CompletableFuture<Message<?>> result = new CompletableFuture<>();
-    future.whenComplete(
-        (message, throwable) -> {
-          // consumer 用来获取 url
-          if (message == null) {
-            return;
-          }
-          startAndEnd(create(message), throwable, brokerUrl);
-          runWithContext(
-              () -> {
-                if (throwable != null) {
-                  result.completeExceptionally(throwable);
-                } else {
-                  result.complete(message);
-                }
-              });
-        });
-    if (log.isDebugEnabled()) {
-      log.debug("out wrap");
-    }
-    return result;
+    // Observe the SDK future without changing completion or cancellation semantics.
+    return future;
   }
 
   public static CompletableFuture<Messages<?>> wrapBatch(
       CompletableFuture<Messages<?>> future, String brokerUrl) {
-    CompletableFuture<Messages<?>> result = new CompletableFuture<>();
-    future.whenComplete(
-        (messages, throwable) -> {
-          if (messages == null) {
-            return;
-          }
-
-          for (Message<?> m : messages) {
-            if (m != null) {
-              startAndEnd(create(m), throwable, brokerUrl);
-            }
-          }
-
-          runWithContext(
-              () -> {
-                if (throwable != null) {
-                  result.completeExceptionally(throwable);
-                } else {
-                  result.complete(messages);
+    if (future != null) {
+      future.whenComplete(
+          (messages, throwable) -> {
+            if (throwable == null && messages != null) {
+              try {
+                for (Message<?> message : messages) {
+                  if (message != null) {
+                    startAndEnd(create(message), null, brokerUrl);
+                  }
                 }
-              });
-        });
-
-    return result;
-  }
-
-  private static void runWithContext(Runnable runnable) {
-    runnable.run();
-    if (log.isDebugEnabled()) {
-      log.debug("out runWithContext");
+              } catch (Throwable error) {
+                log.debug("Unable to trace received Pulsar batch", error);
+              }
+            }
+          });
     }
+    return future;
   }
 }

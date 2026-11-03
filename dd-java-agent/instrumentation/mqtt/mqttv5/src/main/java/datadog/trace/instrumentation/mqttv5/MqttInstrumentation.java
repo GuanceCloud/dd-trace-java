@@ -53,6 +53,7 @@ public class MqttInstrumentation extends InstrumenterModule.Tracing
       packageName + ".MqttCallBackAdvice",
       packageName + ".MqttDecorator",
       packageName + ".UserPropertyInjectAdapter",
+      packageName + ".UserPropertyInjectAdapter$InjectedProperty",
       packageName + ".UserPropertyExtractAdapter"
     };
   }

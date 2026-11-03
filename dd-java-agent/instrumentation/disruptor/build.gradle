@@ -12,5 +12,6 @@ muzzle {
 }
 
 dependencies {
+  testImplementation 'com.lmax:disruptor:3.4.4'
   compileOnly group: 'com.lmax', name: 'disruptor', version: '3.4.4'
 }

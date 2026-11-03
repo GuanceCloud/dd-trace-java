@@ -13,8 +13,11 @@ public class UserPropertyExtractAdapter
 
   @Override
   public void forEachKey(List<UserProperty> carriers, AgentPropagation.KeyClassifier classifier) {
+    if (carriers == null) {
+      return;
+    }
     for (UserProperty carrier : carriers) {
-      if (null != carrier.getValue()) {
+      if (carrier != null && carrier.getValue() != null) {
         if (!classifier.accept(carrier.getKey(), carrier.getValue())) {
           return;
         }

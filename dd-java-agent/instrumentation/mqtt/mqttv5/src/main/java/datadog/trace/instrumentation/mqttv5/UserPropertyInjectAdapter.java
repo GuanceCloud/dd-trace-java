@@ -15,6 +15,13 @@ public class UserPropertyInjectAdapter implements CarrierSetter<List<UserPropert
     if (log.isDebugEnabled()) {
       log.debug("UserPropertyInjectAdapter Inject {} :\t {}", key, value);
     }
-    carriers.add(new UserProperty(key, value));
+    carriers.removeIf(property -> property != null && key.equals(property.getKey()));
+    carriers.add(new InjectedProperty(key, value));
+  }
+
+  public static final class InjectedProperty extends UserProperty {
+    public InjectedProperty(String key, String value) {
+      super(key, value);
+    }
   }
 }

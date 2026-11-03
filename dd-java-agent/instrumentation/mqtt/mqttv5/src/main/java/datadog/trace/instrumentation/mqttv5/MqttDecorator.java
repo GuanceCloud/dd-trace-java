@@ -86,11 +86,15 @@ public class MqttDecorator extends ClientDecorator {
     span.setResourceName("/publish/" + topic);
 
     MqttProperties properties = message.getProperties();
-    List<UserProperty> userProperties = new ArrayList<>();
-    defaultPropagator().inject(span, userProperties, SETTER);
     if (properties == null) {
       properties = new MqttProperties();
     }
+    List<UserProperty> existing = properties.getUserProperties();
+    List<UserProperty> userProperties =
+        existing == null ? new ArrayList<>() : new ArrayList<>(existing);
+    userProperties.removeIf(
+        property -> property instanceof UserPropertyInjectAdapter.InjectedProperty);
+    defaultPropagator().inject(span, userProperties, SETTER);
     properties.setUserProperties(userProperties);
     message.setProperties(properties);
     span.setTag(TAG_TOPIC_KEY, topic);
