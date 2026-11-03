@@ -37,7 +37,6 @@ import org.slf4j.MDC;
 import org.tabletest.junit.TableTest;
 
 @WithConfig(key = "service", value = "pattern-test")
-@WithConfig(key = "logs.pattern.inject", value = "true")
 @WithConfig(key = "logs.injection.enabled", value = "true")
 class LogbackPatternLayoutTest extends AbstractInstrumentationTest {
   private static final String SPAN = "dd.span_id=%X{dd.span_id} ";

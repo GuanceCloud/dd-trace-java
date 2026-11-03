@@ -19,7 +19,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-@WithConfig(key = "logs.pattern.inject", value = "true")
 @WithConfig(key = "service", value = "pattern-test")
 class Log4jPatternLayoutTest extends AbstractInstrumentationTest {
   private static final String FIELDS =

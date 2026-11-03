@@ -11,8 +11,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 @ExtendWith(WithConfigExtension.class)
 class LogPatternConfigTest {
   @Test
-  void injectionIsDisabledByDefault() {
-    assertFalse(Config.get().isLogPatternInject());
+  void injectionIsEnabledByDefault() {
+    assertTrue(Config.get().isLogPatternInject());
+    assertFalse(Config.get().isLogPatternReplace());
   }
 
   @Test
@@ -26,6 +27,18 @@ class LogPatternConfigTest {
   @WithConfig(key = "LOGS_PATTERN_INJECT", value = "true", env = true)
   void enablesInjectionWithEnvironmentVariable() {
     assertTrue(Config.get().isLogPatternInject());
+  }
+
+  @Test
+  @WithConfig(key = "logs.pattern.inject", value = "false")
+  void disablesInjectionWithSystemProperty() {
+    assertFalse(Config.get().isLogPatternInject());
+  }
+
+  @Test
+  @WithConfig(key = "LOGS_PATTERN_INJECT", value = "false", env = true)
+  void disablesInjectionWithEnvironmentVariable() {
+    assertFalse(Config.get().isLogPatternInject());
   }
 
   @Test

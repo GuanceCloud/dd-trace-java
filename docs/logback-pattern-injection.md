@@ -1,15 +1,15 @@
 # 日志 pattern 自动注入
 
-开启下列 Agent 配置后，无需修改日志配置文件，即可为 Logback、Log4j 1.x 和 Log4j2 纯文本日志补充链路关联字段：
+Agent 默认开启日志 pattern 自动注入，无需修改日志配置文件，即可为 Logback、Log4j 1.x 和 Log4j2 纯文本日志补充链路关联字段：
 
 ```shell
 java -javaagent:dd-java-agent.jar \
-  -Ddd.logs.pattern.inject=true \
   -jar app.jar
 ```
 
-也可以设置环境变量 `DD_LOGS_PATTERN_INJECT=true`。
-`dd.logs.pattern.inject` 默认关闭，适用于 Logback classic 的 `PatternLayout`（包括 `PatternLayoutEncoder`）、Log4j 1.x 的 `PatternLayout` 和 Log4j2 的 `PatternLayout`。
+`dd.logs.pattern.inject` 和对应环境变量 `DD_LOGS_PATTERN_INJECT` 的默认值均为 `true`。
+如需关闭，可设置 `-Ddd.logs.pattern.inject=false` 或环境变量 `DD_LOGS_PATTERN_INJECT=false`。
+该功能适用于 Logback classic 的 `PatternLayout`（包括 `PatternLayoutEncoder`）、Log4j 1.x 的 `PatternLayout` 和 Log4j2 的 `PatternLayout`。
 提供 MDC 关联值的 `dd.logs.injection` 默认开启；如果已有配置关闭了日志关联，需要先重新开启。
 
 例如，Logback 的原 pattern 为：
@@ -46,7 +46,7 @@ Log4j 1.x 的早期版本不支持全量 `%X`，这类 converter 不会阻止自
 
 Logback 在 layout 启动时改写，Log4j 1.x 覆盖构造和 `setConversionPattern`，Log4j2 覆盖 Builder 和旧 `createLayout` 工厂最终使用的构造入口。
 此配置只增强文本 event pattern，Log4j2 的 `PatternSelector` 自定义分支不在此范围。
-JSON 日志通常只需开启 MDC 关联，无需启用此开关。
+JSON 日志通常只需 MDC 关联；此开关仅作用于文本 pattern。
 Log4j2 显式整段替换配置 `dd.logs.pattern.replace=true` / `dd.logs.pattern` 优先于自动补充，替换结果不会再追加字段。
 
 需求跟踪：[Issue #184](https://github.com/GuanceCloud/dd-trace-java/issues/184)。
