@@ -70,6 +70,7 @@ Read [Context-Tracking Instrumentation](references/context-tracking.md) and deci
 
 - Extend the most specific available base decorator:
   - `HttpClientDecorator`, `DatabaseClientDecorator`, `ServerDecorator`, `MessagingClientDecorator`, etc.
+- `MessagingClientDecorator` reads `DD_TRACE_<NAME>_E2E_DURATION_ENABLED` during construction. Register that configuration when supporting end-to-end timing; for broker dispatch spans without end-to-end semantics, use `ClientDecorator` instead.
 - One `public static final DECORATE` instance
 - Define `UTF8BytesString` constants for the component name and operation name
 - Keep all tag/naming/error logic here — not in the Advice class
@@ -85,7 +86,7 @@ Read [Context-Tracking Instrumentation](references/context-tracking.md) and deci
 
 For context propagation to and from upstream services, like HTTP headers,
 implement `AgentPropagation.Setter` / `AgentPropagation.Getter` adapters that wrap the framework's specific header API.
-Place them in the helpers package, declare them in `helperClassNames()`.
+Place them in the helpers package. Direct bytecode dependencies are discovered automatically (see `docs/how_instrumentations_work.md`); declare `helperClassNames()` only when discovery cannot see reflective or string-based references. A manual list replaces the discovered list.
 
 ## Step 9 – Write tests
 

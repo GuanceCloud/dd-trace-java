@@ -1,0 +1,32 @@
+plugins {
+  id 'dd-trace-java.module.instrumentation'
+  id 'dd-trace-java.instrumentation.netty-concurrent-tests'
+}
+
+repositories {
+  maven {
+    url = 'https://maven.aliyun.com/repository/jcenter/'
+    content { includeGroup 'io.moquette' }
+  }
+}
+
+muzzle {
+  pass {
+    group = 'org.eclipse.paho'
+    module = 'org.eclipse.paho.client.mqttv3'
+    versions = '[1.2.5,)'
+  }
+}
+
+addTestSuiteForDir('latestDepTest', 'test')
+addTestSuiteExtendingForDir('payloadPropagationTest', 'test', 'payloadPropagationTest')
+
+dependencies {
+  implementation project(':dd-java-agent:instrumentation:mqtt:mqtt-common')
+  compileOnly 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5'
+  testImplementation 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5'
+  testImplementation 'io.moquette:moquette-broker:0.13'
+  latestDepTestImplementation 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:+'
+  payloadPropagationTestImplementation sourceSets.test.output
+  payloadPropagationTestImplementation project(':dd-java-agent:instrumentation:moquette:moquette-0.13')
+}
