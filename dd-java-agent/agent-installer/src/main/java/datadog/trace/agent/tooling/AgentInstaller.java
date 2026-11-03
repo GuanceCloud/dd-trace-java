@@ -58,10 +58,9 @@ public class AgentInstaller {
   static {
     enableByteBuddyRawTypes();
     disableByteBuddyNexus();
-    if (InstrumenterConfig.get().isRuntimeContextMapPerStore()) {
-      // register weak map supplier as early as possible
-      WeakMaps.registerAsSupplier();
-    }
+    // Instrumentation helpers also use weak maps with the native context-store backend.
+    // Register the factory early; maps and their cleanup tasks are created only on demand.
+    WeakMaps.registerAsSupplier();
     circularityErrorWorkaround();
   }
 
