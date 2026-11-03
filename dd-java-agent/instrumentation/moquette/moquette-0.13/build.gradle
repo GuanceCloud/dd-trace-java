@@ -1,0 +1,39 @@
+plugins {
+  id 'dd-trace-java.module.instrumentation'
+  id 'dd-trace-java.instrumentation.netty-concurrent-tests'
+}
+
+// Moquette 0.13 was published to the retired JCenter repository, not Maven Central.
+repositories {
+  maven {
+    url = 'https://maven.aliyun.com/repository/jcenter/'
+    content { includeGroup 'io.moquette' }
+  }
+}
+
+muzzle {
+  extraRepository('jcenter-mirror', 'https://maven.aliyun.com/repository/jcenter/')
+  pass {
+    group = 'io.moquette'
+    module = 'moquette-broker'
+    versions = '[0.13,0.16)'
+    // The 0.14 broker POM references moquette-parent:0.14, absent from Central and JCenter's mirror.
+    skipVersions = ['0.14']
+  }
+  // 0.16 changes processPublish from void to asynchronous RouteResult.
+  fail {
+    group = 'io.moquette'
+    module = 'moquette-broker'
+    versions = '[0.16,)'
+  }
+}
+
+addTestSuiteForDir('latestDepTest', 'test')
+
+dependencies {
+  implementation project(':dd-java-agent:instrumentation:mqtt:mqtt-common')
+  compileOnly 'io.moquette:moquette-broker:0.13'
+  testImplementation 'io.moquette:moquette-broker:0.13'
+  testImplementation 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5'
+  latestDepTestImplementation 'io.moquette:moquette-broker:[0.13,0.16)'
+}

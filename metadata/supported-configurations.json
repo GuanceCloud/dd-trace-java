@@ -8580,6 +8580,38 @@
         "aliases": ["DD_TRACE_INTEGRATION_MONGO_REACTIVESTREAMS_ENABLED", "DD_INTEGRATION_MONGO_REACTIVESTREAMS_ENABLED"]
       }
     ],
+    "DD_TRACE_MOQUETTE_ANALYTICS_ENABLED": [
+      {
+        "version": "A",
+        "type": "boolean",
+        "default": "false",
+        "aliases": ["DD_MOQUETTE_ANALYTICS_ENABLED"]
+      }
+    ],
+    "DD_TRACE_MOQUETTE_ANALYTICS_SAMPLE_RATE": [
+      {
+        "version": "A",
+        "type": "decimal",
+        "default": "1.0",
+        "aliases": ["DD_MOQUETTE_ANALYTICS_SAMPLE_RATE"]
+      }
+    ],
+    "DD_TRACE_MOQUETTE_ENABLED": [
+      {
+        "version": "A",
+        "type": "boolean",
+        "default": "true",
+        "aliases": ["DD_TRACE_INTEGRATION_MOQUETTE_ENABLED", "DD_INTEGRATION_MOQUETTE_ENABLED"]
+      }
+    ],
+    "DD_TRACE_MQTT_PAYLOAD_PROPAGATION_ENABLED": [
+      {
+        "version": "A",
+        "type": "boolean",
+        "default": "false",
+        "aliases": []
+      }
+    ],
     "DD_TRACE_MULE_ANALYTICS_ENABLED": [
       {
         "version": "A",
@@ -9146,6 +9178,30 @@
         "type": "array",
         "default": null,
         "aliases": []
+      }
+    ],
+    "DD_TRACE_PAHO_MQTT_ANALYTICS_ENABLED": [
+      {
+        "version": "A",
+        "type": "boolean",
+        "default": "false",
+        "aliases": ["DD_PAHO_MQTT_ANALYTICS_ENABLED"]
+      }
+    ],
+    "DD_TRACE_PAHO_MQTT_ANALYTICS_SAMPLE_RATE": [
+      {
+        "version": "A",
+        "type": "decimal",
+        "default": "1.0",
+        "aliases": ["DD_PAHO_MQTT_ANALYTICS_SAMPLE_RATE"]
+      }
+    ],
+    "DD_TRACE_PAHO_MQTT_ENABLED": [
+      {
+        "version": "A",
+        "type": "boolean",
+        "default": "true",
+        "aliases": ["DD_TRACE_INTEGRATION_PAHO_MQTT_ENABLED", "DD_INTEGRATION_PAHO_MQTT_ENABLED"]
       }
     ],
     "DD_TRACE_PARTIAL_FLUSH_ENABLED": [
