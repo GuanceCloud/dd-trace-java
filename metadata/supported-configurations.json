@@ -2524,12 +2524,74 @@
         "aliases": []
       }
     ],
+    "DD_TRACE_FUSESOURCE_MQTT_ANALYTICS_ENABLED": [
+      {
+        "version": "A",
+        "type": "boolean",
+        "default": "false",
+        "aliases": [
+          "DD_FUSESOURCE_MQTT_ANALYTICS_ENABLED"
+        ]
+      }
+    ],
+    "DD_TRACE_FUSESOURCE_MQTT_ANALYTICS_SAMPLE_RATE": [
+      {
+        "version": "A",
+        "type": "decimal",
+        "default": "1.0",
+        "aliases": [
+          "DD_FUSESOURCE_MQTT_ANALYTICS_SAMPLE_RATE"
+        ]
+      }
+    ],
+    "DD_TRACE_FUSESOURCE_MQTT_ENABLED": [
+      {
+        "version": "A",
+        "type": "boolean",
+        "default": "true",
+        "aliases": [
+          "DD_TRACE_INTEGRATION_FUSESOURCE_MQTT_ENABLED",
+          "DD_INTEGRATION_FUSESOURCE_MQTT_ENABLED"
+        ]
+      }
+    ],
     "DD_TRACE_HEADERS_ENABLED": [
       {
         "version": "A",
         "type": "boolean",
         "default": "false",
         "aliases": []
+      }
+    ],
+    "DD_TRACE_HIVEMQ_MQTT_ANALYTICS_ENABLED": [
+      {
+        "version": "A",
+        "type": "boolean",
+        "default": "false",
+        "aliases": [
+          "DD_HIVEMQ_MQTT_ANALYTICS_ENABLED"
+        ]
+      }
+    ],
+    "DD_TRACE_HIVEMQ_MQTT_ANALYTICS_SAMPLE_RATE": [
+      {
+        "version": "A",
+        "type": "decimal",
+        "default": "1.0",
+        "aliases": [
+          "DD_HIVEMQ_MQTT_ANALYTICS_SAMPLE_RATE"
+        ]
+      }
+    ],
+    "DD_TRACE_HIVEMQ_MQTT_ENABLED": [
+      {
+        "version": "A",
+        "type": "boolean",
+        "default": "true",
+        "aliases": [
+          "DD_TRACE_INTEGRATION_HIVEMQ_MQTT_ENABLED",
+          "DD_INTEGRATION_HIVEMQ_MQTT_ENABLED"
+        ]
       }
     ],
     "DD_TRACE_REQUEST_BODY_ENABLED": [

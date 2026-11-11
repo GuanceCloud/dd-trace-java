@@ -513,6 +513,8 @@ include(
   ":dd-java-agent:instrumentation:mongo:mongo-test:mongo-test-core-3.7",
   ":dd-java-agent:instrumentation:mongo:mongo-test:mongo-test-sync-3.10",
   ":dd-java-agent:instrumentation:moquette:moquette-0.13",
+  ":dd-java-agent:instrumentation:mqtt:fusesource-mqtt-1.12",
+  ":dd-java-agent:instrumentation:mqtt:hivemq-mqtt-1.3",
   ":dd-java-agent:instrumentation:mqtt:mqtt-common",
   ":dd-java-agent:instrumentation:mqtt:mqttv5",
   ":dd-java-agent:instrumentation:mqtt:paho-mqtt-1.2.5",

@@ -68,6 +68,11 @@ class TagsAssert {
     defaultTags(distributedRootSpan, false)
   }
 
+  /** Checks explicitly supplied peer identity even when schema defaults are disabled. */
+  def defaultTagsWithExplicitPeerService(boolean distributedRootSpan = false) {
+    defaultTags(distributedRootSpan, true, true)
+  }
+
   def isPresent(String name) {
     tag(name, { it != null })
   }
@@ -91,7 +96,7 @@ class TagsAssert {
   /**
    * @param distributedRootSpan set to true if current span has a parent span but still considered 'root' for current service
    */
-  def defaultTags(boolean distributedRootSpan = false, boolean checkPeerService = true) {
+  def defaultTags(boolean distributedRootSpan = false, boolean checkPeerService = true, boolean explicitPeerService = false) {
     tag("dd_ext_version", { it == null || it == DDTraceCoreInfo.VERSION })
     assertedTags.add("thread.name")
     assertedTags.add("thread.id")
@@ -147,7 +152,7 @@ class TagsAssert {
       assert tags[DDTags.LANGUAGE_TAG_KEY] == null
     }
     boolean shouldSetPeerService = checkPeerService && (spanKind == Tags.SPAN_KIND_CLIENT || spanKind == Tags.SPAN_KIND_PRODUCER)
-    if (shouldSetPeerService && SpanNaming.instance().namingSchema().peerService().supports()) {
+    if (explicitPeerService || (shouldSetPeerService && SpanNaming.instance().namingSchema().peerService().supports())) {
       assertedTags.add(Tags.PEER_SERVICE)
       assertedTags.add(DDTags.PEER_SERVICE_SOURCE)
       assert tags[Tags.PEER_SERVICE] != null

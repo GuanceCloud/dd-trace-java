@@ -76,10 +76,14 @@ class PahoMqttTest extends PahoBrokerTest {
           parent()
           errored true
           tags {
-            defaultTags()
+            defaultTagsWithExplicitPeerService()
             "$Tags.COMPONENT" "paho-mqtt"
             "$Tags.SPAN_KIND" Tags.SPAN_KIND_PRODUCER
             "messaging.system" "mqtt"
+            "messaging.destination.name" "client/error"
+            "peer.hostname" "127.0.0.1"
+            "peer.port" broker.port
+            "peer.service" "127.0.0.1:" + broker.port
             "mqtt.topic" "client/error"
             "mqtt.clientid" "disconnected"
             "mqtt.serverURI" "tcp://127.0.0.1:" + broker.port
@@ -236,10 +240,14 @@ class PahoMqttTest extends PahoBrokerTest {
       }
       errored (failure != null)
       tags {
-        defaultTags()
+        defaultTagsWithExplicitPeerService()
         "$Tags.COMPONENT" "paho-mqtt"
         "$Tags.SPAN_KIND" (operation == "mqtt.publish" ? Tags.SPAN_KIND_PRODUCER : Tags.SPAN_KIND_CONSUMER)
         "messaging.system" "mqtt"
+        "messaging.destination.name" topic
+        "peer.hostname" "127.0.0.1"
+        "peer.port" broker.port
+        "peer.service" "127.0.0.1:" + broker.port
         "mqtt.topic" topic
         "mqtt.clientid" clientId
         "mqtt.serverURI" "tcp://127.0.0.1:" + broker.port
