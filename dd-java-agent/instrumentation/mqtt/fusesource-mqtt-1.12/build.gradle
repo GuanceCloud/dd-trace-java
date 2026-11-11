@@ -1,0 +1,46 @@
+plugins {
+  id 'dd-trace-java.module.instrumentation'
+  id 'dd-trace-java.instrumentation.netty-concurrent-tests'
+}
+
+repositories {
+  maven {
+    url = 'https://maven.aliyun.com/repository/jcenter/'
+    content { includeGroup 'io.moquette' }
+  }
+}
+
+muzzle {
+  pass {
+    group = 'org.fusesource.mqtt-client'
+    module = 'mqtt-client'
+    versions = '[1.12,)'
+  }
+  pass {
+    group = 'org.fusesource.mqtt-client'
+    module = 'mqtt-client-java1.4-uber'
+    versions = '[1.12,)'
+  }
+}
+
+addTestSuiteForDir('latestDepTest', 'test')
+addTestSuiteForDir('uberTest', 'test')
+addTestSuiteExtendingForDir('uberLatestDepTest', 'uberTest', 'test')
+
+dependencies {
+  implementation project(':dd-java-agent:instrumentation:mqtt:mqtt-common')
+  compileOnly 'org.fusesource.mqtt-client:mqtt-client:1.12'
+  testImplementation 'org.fusesource.mqtt-client:mqtt-client:1.12'
+  testImplementation testFixtures(project(':dd-java-agent:instrumentation:mqtt:mqtt-common'))
+  // Central's version listing stops at 1.12 even though 1.16 artifacts are published.
+  latestDepTestImplementation 'org.fusesource.mqtt-client:mqtt-client:1.16'
+  uberTestImplementation 'org.fusesource.mqtt-client:mqtt-client-java1.4-uber:1.12'
+  uberLatestDepTestImplementation 'org.fusesource.mqtt-client:mqtt-client-java1.4-uber:1.16'
+}
+
+configurations.uberTestImplementation {
+  exclude group: 'org.fusesource.mqtt-client', module: 'mqtt-client'
+  exclude group: 'org.fusesource.hawtdispatch', module: 'hawtdispatch'
+  exclude group: 'org.fusesource.hawtdispatch', module: 'hawtdispatch-transport'
+  exclude group: 'org.fusesource.hawtbuf', module: 'hawtbuf'
+}

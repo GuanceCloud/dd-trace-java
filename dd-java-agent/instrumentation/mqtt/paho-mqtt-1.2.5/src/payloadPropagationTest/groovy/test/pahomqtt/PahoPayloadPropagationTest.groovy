@@ -205,7 +205,11 @@ class PahoPayloadPropagationTest extends PahoBrokerTest {
         childOf parentSpan
       }
       tags {
-        defaultTags(distributed)
+        if (operation.startsWith("moquette.")) {
+          defaultTags(distributed)
+        } else {
+          defaultTagsWithExplicitPeerService(distributed)
+        }
         "$Tags.COMPONENT" (operation.startsWith("moquette.") ? "moquette" : "paho-mqtt")
         "$Tags.SPAN_KIND" (operation == "moquette.receive" ? Tags.SPAN_KIND_SERVER :
           (operation == "mqtt.consume" || operation == "moquette.on_publish") ? Tags.SPAN_KIND_CONSUMER : Tags.SPAN_KIND_PRODUCER)
@@ -213,6 +217,12 @@ class PahoPayloadPropagationTest extends PahoBrokerTest {
           "async_entry" true
         }
         "messaging.system" "mqtt"
+        if (!operation.startsWith("moquette.")) {
+          "messaging.destination.name" topic
+          "peer.hostname" "127.0.0.1"
+          "peer.port" broker.port
+          "peer.service" "127.0.0.1:" + broker.port
+        }
         "mqtt.topic" topic
         "mqtt.clientid" clientId
         if (!operation.startsWith("moquette.")) {

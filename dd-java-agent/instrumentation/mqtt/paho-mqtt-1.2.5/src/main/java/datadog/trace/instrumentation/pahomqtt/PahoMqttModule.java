@@ -23,6 +23,8 @@ public class PahoMqttModule extends InstrumenterModule.Tracing implements Exclud
   @Override
   public String[] helperClassNames() {
     return new String[] {
+      "datadog.trace.instrumentation.mqtt.MqttBrokerInfo",
+      "datadog.trace.instrumentation.mqtt.MqttClientDecorator",
       "datadog.trace.instrumentation.mqtt.payload.MqttPayload$Decoded",
       "datadog.trace.instrumentation.mqtt.payload.MqttPayload$HeadersSetter",
       "datadog.trace.instrumentation.mqtt.payload.MqttPayload",

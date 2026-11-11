@@ -1,7 +1,19 @@
 plugins {
   id 'dd-trace-java.module.instrumentation'
+  id 'java-test-fixtures'
+}
+
+repositories {
+  maven {
+    url = 'https://maven.aliyun.com/repository/jcenter/'
+    content { includeGroup 'io.moquette' }
+  }
 }
 
 dependencies {
   testImplementation libs.bundles.junit5
+  testImplementation libs.bundles.mockito
+  testFixturesApi project(':dd-java-agent:instrumentation-testing')
+  testFixturesApi libs.bundles.spock
+  testFixturesApi 'io.moquette:moquette-broker:0.13'
 }

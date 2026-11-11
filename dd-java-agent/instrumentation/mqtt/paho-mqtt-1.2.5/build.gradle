@@ -25,7 +25,7 @@ dependencies {
   implementation project(':dd-java-agent:instrumentation:mqtt:mqtt-common')
   compileOnly 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5'
   testImplementation 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5'
-  testImplementation 'io.moquette:moquette-broker:0.13'
+  testImplementation testFixtures(project(':dd-java-agent:instrumentation:mqtt:mqtt-common'))
   latestDepTestImplementation 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:+'
   payloadPropagationTestImplementation sourceSets.test.output
   payloadPropagationTestImplementation project(':dd-java-agent:instrumentation:moquette:moquette-0.13')
