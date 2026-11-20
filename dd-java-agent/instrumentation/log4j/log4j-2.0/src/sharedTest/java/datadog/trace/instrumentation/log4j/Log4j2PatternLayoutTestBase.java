@@ -26,6 +26,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 @WithConfig(key = "service", value = "pattern-test")
+@WithConfig(key = "logs.pattern.inject", value = "true")
 public abstract class Log4j2PatternLayoutTestBase extends AbstractInstrumentationTest {
   private static final String FIELDS =
       "dd.service=%X{dd.service} dd.trace_id=%X{dd.trace_id} dd.span_id=%X{dd.span_id}";
