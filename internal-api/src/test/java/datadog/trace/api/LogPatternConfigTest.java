@@ -11,8 +11,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 @ExtendWith(WithConfigExtension.class)
 class LogPatternConfigTest {
   @Test
-  void injectionIsEnabledByDefault() {
-    assertTrue(Config.get().isLogPatternInject());
+  void injectionIsDisabledByDefault() {
+    assertFalse(Config.get().isLogPatternInject());
     assertFalse(Config.get().isLogPatternReplace());
   }
 

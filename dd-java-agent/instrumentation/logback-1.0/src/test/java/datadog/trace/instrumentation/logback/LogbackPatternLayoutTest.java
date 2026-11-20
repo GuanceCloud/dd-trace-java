@@ -38,6 +38,7 @@ import org.tabletest.junit.TableTest;
 
 @WithConfig(key = "service", value = "pattern-test")
 @WithConfig(key = "logs.injection.enabled", value = "true")
+@WithConfig(key = "logs.pattern.inject", value = "true")
 class LogbackPatternLayoutTest extends AbstractInstrumentationTest {
   private static final String SPAN = "dd.span_id=%X{dd.span_id} ";
   private static final String TRACE = "dd.trace_id=%X{dd.trace_id} ";

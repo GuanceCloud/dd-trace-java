@@ -1,14 +1,13 @@
 # 日志 pattern 自动注入
 
-Agent 默认开启日志 pattern 自动注入，无需修改日志配置文件，即可为 Logback、Log4j 1.x 和 Log4j2 纯文本日志补充链路关联字段：
+日志 pattern 自动注入默认关闭。如需为纯文本日志补充链路关联字段，可设置环境变量 `DD_LOGS_PATTERN_INJECT=true`，或在启动应用时设置 JVM 参数。
 
 ```shell
 java -javaagent:dd-java-agent.jar \
+  -Ddd.logs.pattern.inject=true \
   -jar app.jar
 ```
 
-`dd.logs.pattern.inject` 和对应环境变量 `DD_LOGS_PATTERN_INJECT` 的默认值均为 `true`。
-如需关闭，可设置 `-Ddd.logs.pattern.inject=false` 或环境变量 `DD_LOGS_PATTERN_INJECT=false`。
 该功能适用于 Logback classic 的 `PatternLayout`（包括 `PatternLayoutEncoder`）、Log4j 1.x 的 `PatternLayout` 和 Log4j2 的 `PatternLayout`。
 提供 MDC 关联值的 `dd.logs.injection` 默认开启；如果已有配置关闭了日志关联，需要先重新开启。
 
